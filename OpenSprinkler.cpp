@@ -515,12 +515,6 @@ byte OpenSprinkler::start_ether() {
 #endif	
 	Ethernet.init(PIN_ETHER_CS);	// make sure to call this before any Ethernet calls
 	load_hardware_mac((uint8_t*)tmp_buffer, true);
-	// detect if Enc28J60 exists
-	Enc28J60Network::init((uint8_t*)tmp_buffer);
-	uint8_t erevid = Enc28J60Network::geterevid();
-	// a valid chip must have erevid > 0 and < 255
-	if(erevid==0 || erevid==255) return 0;
-
 	lcd_print_line_clear_pgm(PSTR("Start wired link"), 1);
 	
 	if (iopts[IOPT_USE_DHCP]) {
@@ -2010,7 +2004,7 @@ void OpenSprinkler::options_setup() {
 			lcd_print_pgm(PSTR(" AC"));
 		}
 		delay(1500);
-		#if defined(ESP8266)
+		#if defined(ARDUINO)
 		lcd.setCursor(2, 1);
 		lcd_print_pgm(PSTR("FW "));
 		lcd.print((char)('0'+(OS_FW_VERSION/100)));

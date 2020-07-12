@@ -87,9 +87,9 @@ static void getweather_callback(char* buffer) {
 	}
 
 	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("eip"), true)) {
-		uint32_t l = atol(tmp_buffer);
+		uint32_t l = strtoul(tmp_buffer, NULL, 0);
 		if(l != os.nvdata.external_ip) {
-			os.nvdata.external_ip = atol(tmp_buffer);
+			os.nvdata.external_ip = l;
 			save_nvdata = true;			
 			os.weather_update_flag |= WEATHER_UPDATE_EIP;
 		}

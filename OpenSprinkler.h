@@ -35,7 +35,7 @@
 	#include <Arduino.h>
 	#include <Wire.h>
 	#include <SPI.h>
-	#include <UIPEthernet.h>
+	#include <Ethernet.h>
 	#include "I2CRTC.h"
 
 	#if defined(ESP8266)
