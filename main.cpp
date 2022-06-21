@@ -1185,7 +1185,7 @@ void process_dynamic_events(ulong curr_time) {
 			if(qid==255) continue;
 			RuntimeQueueStruct *q = pd.queue + qid;
 
-			if(q->pid>=99) continue;	// if this is a manually started program, proceed
+			if(q->pid>=PROG_ID_MANUAL) continue;	// if this is a manually started program, proceed
 			if(!en)	turn_off_station(sid, curr_time);	// if system is disabled, turn off zone
 			if(rd && !(igrd&(1<<s))) turn_off_station(sid, curr_time);	// if rain delay is on and zone does not ignore rain delay, turn it off
 			if(sn1&& !(igs &(1<<s))) turn_off_station(sid, curr_time);	// if sensor1 is on and zone does not ignore sensor1, turn it off
@@ -1309,7 +1309,7 @@ void manual_start_program(byte pid, byte uwt) {
 				q->st = 0;
 				q->dur = dur;
 				q->sid = sid;
-				q->pid = 254;
+				q->pid = PROG_ID_RUN_ONCE;
 				match_found = true;
 			}
 		}

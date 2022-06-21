@@ -66,6 +66,10 @@ typedef unsigned long ulong;
 #define STN_TYPE_HTTP        0x04	// HTTP station
 #define STN_TYPE_OTHER       0xFF
 
+/** Special Program IDs */
+#define PROG_ID_MANUAL    0x63
+#define PROG_ID_RUN_ONCE  0xFE
+
 /** Notification macro defines */
 #define NOTIFY_PROGRAM_SCHED   0x0001
 #define NOTIFY_SENSOR1         0x0002

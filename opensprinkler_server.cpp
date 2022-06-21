@@ -724,7 +724,7 @@ void server_change_runonce() {
 			if (q) {
 				q->st = 0;
 				q->dur = water_time_resolve(dur);
-				q->pid = 254;
+				q->pid = PROG_ID_RUN_ONCE;
 				q->sid = sid;
 				match_found = true;
 			}
@@ -1578,7 +1578,7 @@ void server_change_manual() {
 				q->st = 0;
 				q->dur = timer;
 				q->sid = sid;
-				q->pid = 99;	// testing stations are assigned program index 99
+				q->pid = PROG_ID_MANUAL;	// testing stations are assigned program index 99
 				schedule_all_stations(curr_time);
 			} else {
 				handle_return(HTML_NOT_PERMITTED);
