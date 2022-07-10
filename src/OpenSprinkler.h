@@ -127,9 +127,6 @@ class OpenSprinkler
 {
 public:
 	// data members
-	static byte pin_sr_data; // RPi shift register data pin
-							 // to handle RPi rev. 1
-
 	static OSMqtt mqtt;
 
 	static NVConData nvdata;

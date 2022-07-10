@@ -791,7 +791,6 @@ void process_dynamic_events(ulong curr_time)
 	if ((os.iopts[IOPT_SENSOR2_TYPE] == SENSOR_TYPE_RAIN || os.iopts[IOPT_SENSOR2_TYPE] == SENSOR_TYPE_SOIL) && os.status.sensor2_active)
 		sn2 = true;
 
-	// TODO: handle sensor 2
 	byte sid, s, bid, qid, igs, igs2, igrd;
 	for (bid = 0; bid < os.nboards; bid++)
 	{

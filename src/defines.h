@@ -243,15 +243,11 @@ enum
 #define OS_HW_VERSION OSPI_HW_VERSION_BASE
 #define PIN_SR_LATCH 22	   // shift register latch pin
 #define PIN_SR_DATA 27	   // shift register data pin
-#define PIN_SR_DATA_ALT 21 // shift register data pin (alternative, for RPi 1 rev. 1 boards)
 #define PIN_SR_CLOCK 4	   // shift register clock pin
 #define PIN_SR_OE 17	   // shift register output enable pin
 #define PIN_SENSOR1 14
 #define PIN_SENSOR2 23
 #define PIN_RFTX 15 // RF transmitter pin
-//#define PIN_BUTTON_1      23    // button 1
-//#define PIN_BUTTON_2      24    // button 2
-//#define PIN_BUTTON_3      25    // button 3
 
 #define PIN_FREE_LIST                                                     \
 	{                                                                     \

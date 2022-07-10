@@ -61,8 +61,5 @@ void delayMicrosecondsHard(ulong us);
 ulong millis();
 ulong micros();
 void initialiseEpoch();
-#if defined(OSPI)
-unsigned int detect_rpi_rev();
-#endif
 
 #endif // _UTILS_H

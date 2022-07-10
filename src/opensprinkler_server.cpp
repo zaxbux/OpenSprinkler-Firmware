@@ -378,7 +378,7 @@ void server_change_stations()
 			tmp_buffer[0] -= '0';
 			tmp_buffer[STATION_SPECIAL_DATA_SIZE] = 0;
 
-			// only process GPIO and HTTP stations for OS 2.3, above, and OSPi
+			// process GPIO and HTTP stations
 			if (tmp_buffer[0] == STN_TYPE_GPIO)
 			{
 				// check that pin does not clash with OSPi pins

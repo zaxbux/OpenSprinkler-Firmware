@@ -135,37 +135,6 @@ ulong micros(void)
 	return (ulong)(now - epochMicro);
 }
 
-#if defined(OSPI)
-unsigned int detect_rpi_rev()
-{
-	FILE *filp;
-	unsigned int rev;
-	char buf[512];
-	char term;
-
-	rev = 0;
-	filp = fopen("/proc/cpuinfo", "r");
-
-	if (filp != NULL)
-	{
-		while (fgets(buf, sizeof(buf), filp) != NULL)
-		{
-			if (!strncasecmp("revision\t", buf, 9))
-			{
-				if (sscanf(buf + strlen(buf) - 5, "%x%c", &rev, &term) == 2)
-				{
-					if (term == '\n')
-						break;
-					rev = 0;
-				}
-			}
-		}
-		fclose(filp);
-	}
-	return rev;
-}
-#endif
-
 void write_to_file(const char *fn, const char *data, ulong size, ulong pos, bool trunc)
 {
 	FILE *file;

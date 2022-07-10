@@ -69,10 +69,6 @@ byte OpenSprinkler::attrib_spe[MAX_NUM_BOARDS];
 extern char tmp_buffer[];
 extern char ether_buffer[];
 
-#if defined(OSPI)
-byte OpenSprinkler::pin_sr_data = PIN_SR_DATA;
-#endif
-
 // TODO future: LCD define for Linux-based systems
 
 /** Option json names (stored in PROGMEM to reduce RAM usage) */
@@ -508,18 +504,7 @@ void OpenSprinkler::begin()
 	digitalWrite(PIN_SR_LATCH, HIGH);
 
 	pinMode(PIN_SR_CLOCK, OUTPUT);
-
-#if defined(OSPI)
-	pin_sr_data = PIN_SR_DATA;
-	// detect RPi revision
-	unsigned int rev = detect_rpi_rev();
-	if (rev == 0x0002 || rev == 0x0003)
-		pin_sr_data = PIN_SR_DATA_ALT;
-	// if this is revision 1, use PIN_SR_DATA_ALT
-	pinMode(pin_sr_data, OUTPUT);
-#else
 	pinMode(PIN_SR_DATA, OUTPUT);
-#endif
 
 	// Reset all stations
 	clear_all_station_bits();
@@ -575,11 +560,7 @@ void OpenSprinkler::apply_all_station_bits()
 		for (s = 0; s < 8; s++)
 		{
 			digitalWrite(PIN_SR_CLOCK, LOW);
-#if defined(OSPI) // if OSPI, use dynamically assigned pin_sr_data
-			digitalWrite(pin_sr_data, (sbits & ((byte)1 << (7 - s))) ? HIGH : LOW);
-#else
 			digitalWrite(PIN_SR_DATA, (sbits & ((byte)1 << (7 - s))) ? HIGH : LOW);
-#endif
 			digitalWrite(PIN_SR_CLOCK, HIGH);
 		}
 	}
