@@ -1,4 +1,4 @@
-/* OpenSprinkler Unified (AVR/RPI/LINUX/ESP8266) Firmware
+/* OpenSprinkler Unified (RPI/LINUX) Firmware
  * Copyright (C) 2015 by Ray Wang (ray@opensprinkler.com)
  *
  * OpenSprinkler library
@@ -21,23 +21,11 @@
  * <http://www.gnu.org/licenses/>.
  */
 
-#if defined(ARDUINO)
-	#include <Arduino.h>
-	#if defined(ESP8266)
-		#include <ESP8266WiFi.h>
-	#endif
-	#include <Ethernet.h>
-	#include <PubSubClient.h>
+#include <time.h>
+#include <stdio.h>
+#include <mosquitto.h>
 
-	struct PubSubClient *mqtt_client = NULL;
-
-#else
-	#include <time.h>
-	#include <stdio.h>
-	#include <mosquitto.h>
-
-	struct mosquitto *mqtt_client = NULL;
-#endif
+struct mosquitto *mqtt_client = NULL;
 
 #include "OpenSprinkler.h"
 #include "mqtt.h"
@@ -45,15 +33,9 @@
 // Debug routines to help identify any blocking of the event loop for an extended period
 
 #if defined(ENABLE_DEBUG)
-	#if defined(ARDUINO)
-		#include "TimeLib.h"
-		#define DEBUG_PRINTF(msg, ...)		{Serial.printf(msg, ##__VA_ARGS__);}
-		#define DEBUG_TIMESTAMP(msg, ...)	{time_t t = os.now_tz(); Serial.printf("%02d-%02d-%02d %02d:%02d:%02d - ", year(t), month(t), day(t), hour(t), minute(t), second(t));}
-	#else
-		#include <sys/time.h>
-		#define DEBUG_PRINTF(msg, ...)		{printf(msg, ##__VA_ARGS__);}
-		#define DEBUG_TIMESTAMP()			{char tstr[21]; time_t t = time(NULL); struct tm *tm = localtime(&t); strftime(tstr, 21, "%y-%m-%d %H:%M:%S - ", tm);printf("%s", tstr);}
-	#endif
+	#include <sys/time.h>
+	#define DEBUG_PRINTF(msg, ...)		{printf(msg, ##__VA_ARGS__);}
+	#define DEBUG_TIMESTAMP()			{char tstr[21]; time_t t = time(NULL); struct tm *tm = localtime(&t); strftime(tstr, 21, "%y-%m-%d %H:%M:%S - ", tm);printf("%s", tstr);}
 	#define DEBUG_LOGF(msg, ...)			{DEBUG_TIMESTAMP(); DEBUG_PRINTF(msg, ##__VA_ARGS__);}
 
 	static unsigned long _lastMillis = 0;	// Holds the timestamp associated with the last call to DEBUG_DURATION() 
@@ -97,13 +79,6 @@ bool OSMqtt::_enabled = false;						// Flag indicating whether MQTT is enabled
 void OSMqtt::init(void) {
 	DEBUG_LOGF("MQTT Init\r\n");
 	char id[MQTT_MAX_ID_LEN + 1] = {0};
-
-#if defined(ARDUINO)
-	uint8_t mac[6] = {0};
-	os.load_hardware_mac(mac, m_server!=NULL);
-	snprintf(id, MQTT_MAX_ID_LEN, "OS-%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-#endif
-
 	init(id);
 };
 
@@ -208,99 +183,6 @@ void OSMqtt::loop(void) {
 #endif
 }
 
-/**************************** ARDUINO ********************************************/
-#if defined(ARDUINO)
-
-	#if defined(ESP8266)
-		WiFiClient wifiClient;
-	#endif
-	EthernetClient ethClient;
-
-int OSMqtt::_init(void) {
-	Client * client = NULL;
-
-    if (mqtt_client) { delete mqtt_client; mqtt_client = 0; }
-
-	#if defined(ESP8266)
-		if (m_server) client = &ethClient;
-		else client = &wifiClient;
-	#else
-		client = &ethClient;
-	#endif
-
-	mqtt_client = new PubSubClient(*client);
-	mqtt_client->setKeepAlive(MQTT_KEEPALIVE);
-
-	if (mqtt_client == NULL) {
-		DEBUG_LOGF("MQTT Init: Failed to initialise client\r\n");
-		return MQTT_ERROR;
-	}
-
-	return MQTT_SUCCESS;
-}
-
-int OSMqtt::_connect(void) {
-	mqtt_client->setServer(_host, _port);
-	boolean state;
-	#define MQTT_CONNECT_NTRIES 3
-	byte tries = 0;
-	do {
-		DEBUG_PRINT(F("mqtt: "));
-		DEBUG_PRINTLN(_host);
-		if (_username[0])
-			state = mqtt_client->connect(_id, _username, _password, MQTT_AVAILABILITY_TOPIC, 0, true, MQTT_OFFLINE_PAYLOAD);
-		else
-			state = mqtt_client->connect(_id, NULL, NULL, MQTT_AVAILABILITY_TOPIC, 0, true, MQTT_OFFLINE_PAYLOAD);
-		if(state) break;
-		tries++;
-	} while(tries<MQTT_CONNECT_NTRIES);
-
-	if(tries==MQTT_CONNECT_NTRIES) {
-		DEBUG_LOGF("MQTT Connect: Failed (%d)\r\n", mqtt_client->state());
-		return MQTT_ERROR;
-	} else {
-		mqtt_client->publish(MQTT_AVAILABILITY_TOPIC, MQTT_ONLINE_PAYLOAD, true);
-	}
-	return MQTT_SUCCESS;
-}
-
-int OSMqtt::_disconnect(void) {
-	mqtt_client->disconnect();
-	return MQTT_SUCCESS;
-}
-
-bool OSMqtt::_connected(void) { return mqtt_client->connected(); }
-
-int OSMqtt::_publish(const char *topic, const char *payload) {
-	if (!mqtt_client->publish(topic, payload)) {
-		DEBUG_LOGF("MQTT Publish: Failed (%d)\r\n", mqtt_client->state());
-		return MQTT_ERROR;
-	}
-	return MQTT_SUCCESS;
-}
-
-int OSMqtt::_loop(void) {
-	mqtt_client->loop();
-	return mqtt_client->state();
-}
-
-const char * OSMqtt::_state_string(int rc) {
-	switch (rc) {
-		case MQTT_CONNECTION_TIMEOUT:		return "The server didn't respond within the keepalive time";
-		case MQTT_CONNECTION_LOST:			return "The network connection was lost";
-		case MQTT_CONNECT_FAILED:			return "The network connection failed";
-		case MQTT_DISCONNECTED:				return "The client has cleanly disconnected";
-		case MQTT_CONNECTED:				return "The client is connected";
-		case MQTT_CONNECT_BAD_PROTOCOL:		return "The server doesn't support the requested version of MQTT";
-		case MQTT_CONNECT_BAD_CLIENT_ID:	return "The server rejected the client identifier";
-		case MQTT_CONNECT_UNAVAILABLE:		return "The server was unavailable to accept the connection";
-		case MQTT_CONNECT_BAD_CREDENTIALS:	return "The username/password were rejected";
-		case MQTT_CONNECT_UNAUTHORIZED:		return "The client was not authorized to connect";
-		default:							return "Unrecognised state";
-	}
-}
-#else
-
 /************************** RASPBERRY PI / DEMO ****************************************/
 
 static bool _connected = false;
@@ -397,4 +279,3 @@ int OSMqtt::_loop(void) {
 const char * OSMqtt::_state_string(int error) {
 	return mosquitto_strerror(error);
 }
-#endif

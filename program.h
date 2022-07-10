@@ -1,4 +1,4 @@
-/* OpenSprinkler Unified (AVR/RPI/LINUX) Firmware
+/* OpenSprinkler Unified (RPI/LINUX) Firmware
  * Copyright (C) 2015 by Ray Wang (ray@opensprinkler.com)
  *
  * Program data structures and functions header file

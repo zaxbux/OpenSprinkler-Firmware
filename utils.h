@@ -1,4 +1,4 @@
-/* OpenSprinkler Unified (AVR/RPI/LINUX) Firmware
+/* OpenSprinkler Unified (RPI/LINUX) Firmware
  * Copyright (C) 2015 by Ray Wang (ray@opensprinkler.com)
  *
  * Utility functions header file
@@ -24,14 +24,11 @@
 #ifndef _UTILS_H
 #define _UTILS_H
 
-#if defined(ARDUINO)
-	#include <Arduino.h>
-#else // headers for RPI
-	#include <stdio.h>
-	#include <limits.h>
-	#include <sys/time.h>
+// headers for RPI
+#include <stdio.h>
+#include <limits.h>
+#include <sys/time.h>
 
-#endif
 #include "defines.h"
 
 // File reading/writing functions
@@ -55,21 +52,17 @@ int16_t water_time_decode_signed(byte i);
 void urlDecode(char *);
 void peel_http_header(char*);
 
-#if defined(ARDUINO)
-
-#else // Arduino compatible functions for RPI
-	char* get_runtime_path();
-	char* get_filename_fullpath(const char *filename);
-	void delay(ulong ms);
-	void delayMicroseconds(ulong us);
-	void delayMicrosecondsHard(ulong us);
-	ulong millis();
-	ulong micros();
-	void initialiseEpoch();
-	#if defined(OSPI)
-	unsigned int detect_rpi_rev();
-	#endif
-
+// Arduino compatible functions for RPI
+char* get_runtime_path();
+char* get_filename_fullpath(const char *filename);
+void delay(ulong ms);
+void delayMicroseconds(ulong us);
+void delayMicrosecondsHard(ulong us);
+ulong millis();
+ulong micros();
+void initialiseEpoch();
+#if defined(OSPI)
+unsigned int detect_rpi_rev();
 #endif
 
 #endif // _UTILS_H

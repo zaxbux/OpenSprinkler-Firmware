@@ -1,4 +1,4 @@
-/* OpenSprinkler Unified (AVR/RPI/LINUX) Firmware
+/* OpenSprinkler Unified (RPI/LINUX) Firmware
  * Copyright (C) 2015 by Ray Wang (ray@opensprinkler.com)
  *
  * Linux Ethernet functions
@@ -21,10 +21,6 @@
  * along with this program.  If not, see
  * <http://www.gnu.org/licenses/>.
  */
-
-#if defined(ARDUINO)
-
-#else
 
 #include "etherport.h"
 #include <stdarg.h>
@@ -203,4 +199,4 @@ size_t EthernetClient::write(const uint8_t *buf, size_t size)
 	return ::send(m_sock, buf, size, MSG_NOSIGNAL);
 }
 
-#endif
+

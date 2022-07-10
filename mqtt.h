@@ -1,4 +1,4 @@
-/* OpenSprinkler Unified (AVR/RPI/LINUX/ESP8266) Firmware
+/* OpenSprinkler Unified (RPI/LINUX) Firmware
  * Copyright (C) 2015 by Ray Wang (ray@opensprinkler.com)
  *
  * OpenSprinkler library header file

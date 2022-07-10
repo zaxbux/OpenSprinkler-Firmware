@@ -1,4 +1,4 @@
-/* OpenSprinkler Unified (AVR/RPI/LINUX) Firmware
+/* OpenSprinkler Unified (RPI/LINUX) Firmware
  * Copyright (C) 2015 by Ray Wang (ray@opensprinkler.com)
  *
  * Program data structures and functions
@@ -174,17 +174,13 @@ int16_t ProgramStruct::starttime_decode(int16_t t) {
 /** Check if a given time matches the program's start day */
 byte ProgramStruct::check_day_match(time_t t) {
 
-#if defined(ARDUINO) // get current time from Arduino
-	byte weekday_t = weekday(t);				// weekday ranges from [0,6] within Sunday being 1
-	byte day_t = day(t);
-	byte month_t = month(t);
-#else // get current time from RPI
+// get current time from RPI
 	time_t ct = t;
 	struct tm *ti = gmtime(&ct);
 	byte weekday_t = (ti->tm_wday+1)%7;  // tm_wday ranges from [0,6] with Sunday being 0
 	byte day_t = ti->tm_mday;
 	byte month_t = ti->tm_mon+1;	 // tm_mon ranges from [0,11]
-#endif // get current time
+// get current time
 
 	byte wd = (weekday_t+5)%7;
 	byte dt = day_t;

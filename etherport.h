@@ -1,4 +1,4 @@
-/* OpenSprinkler Unified (AVR/RPI/LINUX) Firmware
+/* OpenSprinkler Unified (RPI/LINUX) Firmware
  * Copyright (C) 2015 by Ray Wang (ray@opensprinkler.com)
  *
  * Linux Ethernet functions header file
@@ -24,10 +24,6 @@
 
 #ifndef _ETHERPORT_H_
 #define _ETHERPORT_H_
-
-#if defined(ARDUINO)
-
-#else // headers for RPI
 
 #include <stdio.h>
 #include <inttypes.h>
@@ -71,6 +67,5 @@ private:
 	uint16_t m_port;
 	int m_sock;
 };
-#endif
 
 #endif /* _ETHERPORT_H_ */

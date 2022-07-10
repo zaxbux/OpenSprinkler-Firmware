@@ -1,4 +1,4 @@
-/* OpenSprinkler Unified (AVR/RPI/LINUX/ESP8266) Firmware
+/* OpenSprinkler Unified (RPI/LINUX) Firmware
  * Copyright (C) 2015 by Ray Wang (ray@opensprinkler.com)
  *
  * OpenSprinkler library header file
@@ -28,34 +28,13 @@
 #include "defines.h"
 #include "utils.h"
 #include "gpio.h"
-#include "images.h"
 #include "mqtt.h"
-
-#if defined(ARDUINO) // headers for ESP8266
-	#include <Arduino.h>
-	#include <Wire.h>
-	#include <SPI.h>
-	#include <Ethernet.h>
-	#include "I2CRTC.h"
-
-	#if defined(ESP8266)
-		#include <FS.h>
-		#include <RCSwitch.h>
-		#include "SSD1306Display.h"
-		#include "espconnect.h"
-	#else
-		#include <SdFat.h>
-		#include "LiquidCrystal.h"
-	#endif
-	
-#else // headers for RPI/LINUX
-	#include <time.h>
-	#include <string.h>
-	#include <unistd.h>
-	#include <netdb.h>	
-	#include <sys/stat.h>  
-	#include "etherport.h"
-#endif // end of headers
+#include <time.h>
+#include <string.h>
+#include <unistd.h>
+#include <netdb.h>	
+#include <sys/stat.h>  
+#include "etherport.h"
 
 /** Non-volatile data structure */
 struct NVConData {
@@ -141,18 +120,8 @@ class OpenSprinkler {
 public:
 
 	// data members
-#if defined(ESP8266)
-	static SSD1306Display lcd;	// 128x64 OLED display
-#elif defined(ARDUINO)
-	static LiquidCrystal lcd; // 16x2 character LCD
-#else
-	// todo: LCD define for RPI
-#endif
-
-#if defined(OSPI)
 	static byte pin_sr_data;		// RPi shift register data pin
 															// to handle RPi rev. 1
-#endif
 
 	static OSMqtt mqtt;
 
@@ -257,93 +226,10 @@ public:
 	static int8_t send_http_request(uint32_t ip4, uint16_t port, char* p, void(*callback)(char*)=NULL, uint16_t timeout=3000);
 	static int8_t send_http_request(const char* server, uint16_t port, char* p, void(*callback)(char*)=NULL, uint16_t timeout=3000);
 	static int8_t send_http_request(char* server_with_port, char* p, void(*callback)(char*)=NULL, uint16_t timeout=3000);  
-	// -- LCD functions
-#if defined(ARDUINO) // LCD functions for Arduino
-	#if defined(ESP8266)
-	static void lcd_print_pgm(PGM_P str); // ESP8266 does not allow PGM_P followed by PROGMEM
-	static void lcd_print_line_clear_pgm(PGM_P str, byte line);
-	#else
-	static void lcd_print_pgm(PGM_P PROGMEM str);						// print a program memory string
-	static void lcd_print_line_clear_pgm(PGM_P PROGMEM str, byte line);
-	#endif
-	static void lcd_print_time(time_t t);									 // print current time
-	static void lcd_print_ip(const byte *ip, byte endian);		// print ip
-	static void lcd_print_mac(const byte *mac);							// print mac
-	static void lcd_print_station(byte line, char c);				// print station bits of the board selected by display_board
-	static void lcd_print_version(byte v);									 // print version number
-
-	static String time2str(uint32_t t) {
-		uint16_t h = hour(t);
-		uint16_t m = minute(t);
-		uint16_t s = second(t);
-		String str = "";
-		str+=h/10;
-		str+=h%10;
-		str+=":";
-		str+=m/10;
-		str+=m%10;
-		str+=":";
-		str+=s/10;
-		str+=s%10;
-		return str;
-	}
-	// -- UI and buttons
-	static byte button_read(byte waitmode); // Read button value. options for 'waitmodes' are:
-																					// BUTTON_WAIT_NONE, BUTTON_WAIT_RELEASE, BUTTON_WAIT_HOLD
-																					// return values are 'OR'ed with flags
-																					// check defines.h for details
-
-	// -- UI functions --
-	static void ui_set_options(int oid);		// ui for setting options (oid-> starting option index)
-	static void lcd_set_brightness(byte value=1);
-	static void lcd_set_contrast();
-
-	#if defined(ESP8266)
-	static IOEXP *mainio, *drio;
-	static IOEXP *expanders[];
-	static RCSwitch rfswitch;
-	static void detect_expanders();
-	static void flash_screen();
-	static void toggle_screen_led();
-	static void set_screen_led(byte status);	
-	static byte get_wifi_mode() {return wifi_testmode ? WIFI_MODE_STA : iopts[IOPT_WIFI_MODE];}
-	static byte wifi_testmode;
-	static String wifi_ssid, wifi_pass;
-	static void config_ip();
-	static void save_wifi_ip();
-	static void reset_to_ap();
-	static byte state;
-	#endif
-	
-private:
-	static void lcd_print_option(int i);	// print an option to the lcd
-	static void lcd_print_2digit(int v);	// print a integer in 2 digits
-	static void lcd_start();
-	static byte button_read_busy(byte pin_butt, byte waitmode, byte butt, byte is_holding);
-
-	#if defined(ESP8266)
-	static void latch_boost();
-	static void latch_open(byte sid);
-	static void latch_close(byte sid);
-	static void latch_setzonepin(byte sid, byte value);
-	static void latch_setallzonepins(byte value);
-	static void latch_disable_alloutputs_v2();
-	static void latch_setzoneoutput_v2(byte sid, byte A, byte K);
-	static void latch_apply_all_station_bits();
-	static byte prev_station_bits[];
-	#endif
-#endif // LCD functions
 	static byte engage_booster;
 };
 
 // todo
-#if defined(ARDUINO)
-	extern EthernetServer *m_server;
-	#if defined(ESP8266)
-	extern ESP8266WebServer *wifi_server;
-	#endif
-#else
-	extern EthernetServer *m_server;
-#endif
+extern EthernetServer *m_server;
 
 #endif	// _OPENSPRINKLER_H

@@ -1,4 +1,4 @@
-/* OpenSprinkler Unified (AVR/RPI/LINUX/ESP8266) Firmware
+/* OpenSprinkler Unified (RPI/LINUX) Firmware
  * Copyright (C) 2015 by Ray Wang (ray@opensprinkler.com)
  *
  * OpenSprinkler macro defines and hardware pin assignments
@@ -122,11 +122,7 @@ typedef unsigned long ulong;
 #define LED_SLOW_BLINK 500
 
 /** Storage / zone expander defines */
-#if defined(ARDUINO)
-	#define MAX_EXT_BOARDS    8  // maximum number of 8-zone expanders (each 16-zone expander counts as 2)
-#else
-	#define MAX_EXT_BOARDS		24 // allow more zones for linux-based firmwares
-#endif
+#define MAX_EXT_BOARDS		24 // allow more zones for linux-based firmwares
 
 #define MAX_NUM_BOARDS    (1+MAX_EXT_BOARDS)  // maximum number of 8-zone boards including expanders
 #define MAX_NUM_STATIONS  (MAX_NUM_BOARDS*8)  // maximum number of stations
@@ -241,135 +237,7 @@ enum {
 #undef OS_HW_VERSION
 
 /** Hardware defines */
-#if defined(__AVR_ATmega1284P__) || defined(__AVR_ATmega1284__) // for OS 2.3
-
-	#define OS_HW_VERSION   (OS_HW_VERSION_BASE+23)
-	#define PIN_FREE_LIST		{2,10,12,13,14,15,18,19}  // Free GPIO pins
-
-	// hardware pins
-	#define PIN_BUTTON_1      31    // button 1
-	#define PIN_BUTTON_2      30    // button 2
-	#define PIN_BUTTON_3      29    // button 3
-	#define PIN_RFTX          28    // RF data pin
-	#define PORT_RF        PORTA
-	#define PINX_RF        PINA3
-	#define PIN_SR_LATCH       3    // shift register latch pin
-	#define PIN_SR_DATA       21    // shift register data pin
-	#define PIN_SR_CLOCK      22    // shift register clock pin
-	#define PIN_SR_OE          1    // shift register output enable pin
-
-	// regular 16x2 LCD pin defines
-	#define PIN_LCD_RS        19    // LCD rs pin
-	#define PIN_LCD_EN        18    // LCD enable pin
-	#define PIN_LCD_D4        20    // LCD d4 pin
-	#define PIN_LCD_D5        21    // LCD d5 pin
-	#define PIN_LCD_D6        22    // LCD d6 pin
-	#define PIN_LCD_D7        23    // LCD d7 pin
-	#define PIN_LCD_BACKLIGHT 12    // LCD backlight pin
-	#define PIN_LCD_CONTRAST  13    // LCD contrast pin
-
-	// DC controller pin defines
-	#define PIN_BOOST         20    // booster pin
-	#define PIN_BOOST_EN      23    // boost voltage enable pin
-
-	#define PIN_ETHER_CS       4    // Ethernet controller chip select pin
-	#define PIN_SENSOR1				11		// 
-	#define PIN_SD_CS          0    // SD card chip select pin
-	#define PIN_FLOWSENSOR_INT 1    // flow sensor interrupt pin (INT1)
-	#define PIN_EXP_SENSE      4    // expansion board sensing pin (A4)
-	#define PIN_CURR_SENSE     7    // current sensing pin (A7)
-	#define PIN_CURR_DIGITAL  24    // digital pin index for A7
-
-	#define ETHER_BUFFER_SIZE   2048
-
-	#define 	wdt_reset()   __asm__ __volatile__ ("wdr")  // watchdog timer reset
-
-	#define pinModeExt        pinMode
-	#define digitalReadExt    digitalRead
-	#define digitalWriteExt   digitalWrite  
-
-#elif defined(ESP8266) // for ESP8266
-
-	#define OS_HW_VERSION    (OS_HW_VERSION_BASE+30)
-	#define IOEXP_PIN        0x80 // base for pins on main IO expander
-	#define MAIN_I2CADDR     0x20 // main IO expander I2C address
-	#define ACDR_I2CADDR     0x21 // ac driver I2C address
-	#define DCDR_I2CADDR     0x22 // dc driver I2C address
-	#define LADR_I2CADDR     0x23 // latch driver I2C address
-	#define EXP_I2CADDR_BASE 0x24 // base of expander I2C address
-	#define LCD_I2CADDR      0x3C // 128x64 OLED display I2C address
-
-	#define PIN_CURR_SENSE    A0
-	#define PIN_FREE_LIST     {} // no free GPIO pin at the moment
-	#define ETHER_BUFFER_SIZE   2048
-
-	#define PIN_ETHER_CS       16 // ENC28J60 CS (chip select pin) is 16 on OS 3.2.
-
-	/* To accommodate different OS30 versions, we use software defines pins */ 
-	extern byte PIN_BUTTON_1;
-	extern byte PIN_BUTTON_2;
-	extern byte PIN_BUTTON_3;
-	extern byte PIN_RFRX;
-	extern byte PIN_RFTX;
-	extern byte PIN_BOOST;
-	extern byte PIN_BOOST_EN;
-	extern byte PIN_LATCH_COM;
-	extern byte PIN_LATCH_COMA;
-	extern byte PIN_LATCH_COMK;
-	extern byte PIN_SENSOR1;
-	extern byte PIN_SENSOR2;
-	extern byte PIN_IOEXP_INT;
-
-	/* Original OS30 pin defines */
-	//#define V0_MAIN_INPUTMASK 0b00001010 // main input pin mask
-	// pins on main PCF8574 IO expander have pin numbers IOEXP_PIN+i
-	#define V0_PIN_BUTTON_1      IOEXP_PIN+1 // button 1
-	#define V0_PIN_BUTTON_2      0           // button 2
-	#define V0_PIN_BUTTON_3      IOEXP_PIN+3 // button 3
-	#define V0_PIN_RFRX          14
-	#define V0_PIN_PWR_RX        IOEXP_PIN+0
-	#define V0_PIN_RFTX          16
-	#define V0_PIN_PWR_TX        IOEXP_PIN+2
-	#define V0_PIN_BOOST         IOEXP_PIN+6
-	#define V0_PIN_BOOST_EN      IOEXP_PIN+7
-	#define V0_PIN_SENSOR1       12 // sensor 1
-	#define V0_PIN_SENSOR2       13 // sensor 2
-
-	/* OS30 revision 1 pin defines */
-	// pins on PCA9555A IO expander have pin numbers IOEXP_PIN+i
-	#define V1_IO_CONFIG         0x1F00 // config bits
-	#define V1_IO_OUTPUT         0x1F00 // output bits
-	#define V1_PIN_BUTTON_1      IOEXP_PIN+10 // button 1
-	#define V1_PIN_BUTTON_2      IOEXP_PIN+11 // button 2
-	#define V1_PIN_BUTTON_3      IOEXP_PIN+12 // button 3
-	#define V1_PIN_RFRX          14
-	#define V1_PIN_RFTX          16
-	#define V1_PIN_IOEXP_INT     12
-	#define V1_PIN_BOOST         IOEXP_PIN+13
-	#define V1_PIN_BOOST_EN      IOEXP_PIN+14
-	#define V1_PIN_LATCH_COM     IOEXP_PIN+15
-	#define V1_PIN_SENSOR1       IOEXP_PIN+8 // sensor 1
-	#define V1_PIN_SENSOR2       IOEXP_PIN+9 // sensor 2
-
-	/* OS30 revision 2 pin defines */
-	// pins on PCA9555A IO expander have pin numbers IOEXP_PIN+i
-	#define V2_IO_CONFIG         0x1000 // config bits
-	#define V2_IO_OUTPUT         0x1E00 // output bits
-	#define V2_PIN_BUTTON_1      2 // button 1
-	#define V2_PIN_BUTTON_2      0 // button 2
-	#define V2_PIN_BUTTON_3      IOEXP_PIN+12 // button 3
-	#define V2_PIN_RFTX          15
-	#define V2_PIN_BOOST         IOEXP_PIN+13
-	#define V2_PIN_BOOST_EN      IOEXP_PIN+14
-	#define V2_PIN_LATCH_COMA    IOEXP_PIN+8  // latch COM+ (anode)
-	#define V2_PIN_SRLAT         IOEXP_PIN+9  // shift register latch
-	#define V2_PIN_SRCLK         IOEXP_PIN+10 // shift register clock
-	#define V2_PIN_SRDAT         IOEXP_PIN+11 // shift register data
-	#define V2_PIN_LATCH_COMK    IOEXP_PIN+15 // latch COM- (cathode)
-	#define V2_PIN_SENSOR1       3  // sensor 1
-	#define V2_PIN_SENSOR2       10 // sensor 2
-
-#elif defined(OSPI) // for OSPi
+#if defined(OSPI) // for OSPi
 
 	#define OS_HW_VERSION    OSPI_HW_VERSION_BASE
 	#define PIN_SR_LATCH      22    // shift register latch pin
@@ -406,19 +274,11 @@ enum {
 #endif
 
 #if defined(ENABLE_DEBUG) /** Serial debug functions */
-
-	#if defined(ARDUINO)
-		#define DEBUG_BEGIN(x)   {Serial.begin(x);}
-		#define DEBUG_PRINT(x)   {Serial.print(x);}
-		#define DEBUG_PRINTLN(x) {Serial.println(x);}
-	#else
 		#include <stdio.h>
 		#define DEBUG_BEGIN(x)          {}  /** Serial debug functions */
 		inline  void DEBUG_PRINT(int x) {printf("%d", x);}
 		inline  void DEBUG_PRINT(const char*s) {printf("%s", s);}
 		#define DEBUG_PRINTLN(x)        {DEBUG_PRINT(x);printf("\n");}
-	#endif
-  
 #else
 
 	#define DEBUG_BEGIN(x)   {}
@@ -428,7 +288,7 @@ enum {
 #endif
   
 /** Re-define avr-specific (e.g. PGM) types to use standard types */
-#if !defined(ARDUINO)
+
 	#include <stdio.h>
 	#include <stdlib.h>
 	#include <string.h>
@@ -454,7 +314,7 @@ enum {
 	#define pinModeExt      pinMode
 	#define digitalReadExt  digitalRead
 	#define digitalWriteExt digitalWrite
-#endif
+
 
 /** Other defines */
 // button values

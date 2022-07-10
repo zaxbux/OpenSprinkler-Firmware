@@ -1,4 +1,4 @@
-/* OpenSprinkler Unified (AVR/RPI/LINUX) Firmware
+/* OpenSprinkler Unified (RPI/LINUX) Firmware
  * Copyright (C) 2015 by Ray Wang (ray@opensprinkler.com)
  *
  * Server functions
@@ -24,9 +24,7 @@
 #ifndef _OPENSPRINKLER_SERVER_H
 #define _OPENSPRINKLER_SERVER_H
 
-#if !defined(ARDUINO)
 #include <stdarg.h>
-#endif
 
 char dec2hexchar(byte dec);
 
