@@ -24,7 +24,8 @@
 #ifndef _MQTT_H
 #define _MQTT_H
 
-class OSMqtt {
+class OSMqtt
+{
 private:
     static char _id[];
     static char _host[];
@@ -40,15 +41,16 @@ private:
     static bool _connected(void);
     static int _publish(const char *topic, const char *payload);
     static int _loop(void);
-    static const char * _state_string(int state);
+    static const char *_state_string(int state);
+
 public:
     static void init(void);
-    static void init(const char * id);
+    static void init(const char *id);
     static void begin(void);
-    static void begin(const char * host, int port, const char * username, const char * password, bool enable);
+    static void begin(const char *host, int port, const char *username, const char *password, bool enable);
     static bool enabled(void) { return _enabled; };
     static void publish(const char *topic, const char *payload);
     static void loop(void);
 };
 
-#endif	// _MQTT_H
+#endif // _MQTT_H

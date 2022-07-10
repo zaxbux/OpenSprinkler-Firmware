@@ -35,7 +35,8 @@
 
 class EthernetServer;
 
-class EthernetClient {
+class EthernetClient
+{
 public:
 	EthernetClient();
 	EthernetClient(int sock);
@@ -50,19 +51,22 @@ public:
 	{
 		return m_sock;
 	}
+
 private:
 	int m_sock;
 	bool m_connected;
 	friend class EthernetServer;
 };
 
-class EthernetServer {
+class EthernetServer
+{
 public:
 	EthernetServer(uint16_t port);
 	~EthernetServer();
 
 	bool begin();
 	EthernetClient available();
+
 private:
 	uint16_t m_port;
 	int m_sock;

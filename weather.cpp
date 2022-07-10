@@ -18,7 +18,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see
- * <http://www.gnu.org/licenses/>. 
+ * <http://www.gnu.org/licenses/>.
  */
 
 #include <stdlib.h>
@@ -33,71 +33,87 @@ extern char ether_buffer[];
 char wt_rawData[TMP_BUFFER_SIZE];
 int wt_errCode = HTTP_RQT_NOT_RECEIVED;
 
-byte findKeyVal (const char *str,char *strbuf, uint16_t maxlen,const char *key,bool key_in_pgm=false,uint8_t *keyfound=NULL);
+byte findKeyVal(const char *str, char *strbuf, uint16_t maxlen, const char *key, bool key_in_pgm = false, uint8_t *keyfound = NULL);
 void write_log(byte type, ulong curr_time);
 
 // The weather function calls getweather.py on remote server to retrieve weather data
 // the default script is WEATHER_SCRIPT_HOST/weather?.py
-//static char website[] PROGMEM = DEFAULT_WEATHER_URL ;
+// static char website[] PROGMEM = DEFAULT_WEATHER_URL ;
 
-static void getweather_callback(char* buffer) {
+static void getweather_callback(char *buffer)
+{
 	char *p = buffer;
 	/* scan the buffer until the first & symbol */
-	while(*p && *p!='&') {
+	while (*p && *p != '&')
+	{
 		p++;
 	}
-	if (*p != '&')	return;
+	if (*p != '&')
+		return;
 	int v;
 	bool save_nvdata = false;
-	
+
 	// first check errCode, only update lswc timestamp if errCode is 0
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("errCode"), true)) {
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("errCode"), true))
+	{
 		wt_errCode = atoi(tmp_buffer);
-		if(wt_errCode==0) os.checkwt_success_lasttime = os.now_tz();
+		if (wt_errCode == 0)
+			os.checkwt_success_lasttime = os.now_tz();
 	}
-	
+
 	// then only parse scale if errCode is 0
-	if (wt_errCode==0 && findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("scale"), true)) {
+	if (wt_errCode == 0 && findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("scale"), true))
+	{
 		v = atoi(tmp_buffer);
-		if (v>=0 && v<=250 && v != os.iopts[IOPT_WATER_PERCENTAGE]) {
+		if (v >= 0 && v <= 250 && v != os.iopts[IOPT_WATER_PERCENTAGE])
+		{
 			// only save if the value has changed
 			os.iopts[IOPT_WATER_PERCENTAGE] = v;
 			os.iopts_save();
-			os.weather_update_flag |= WEATHER_UPDATE_WL;			
+			os.weather_update_flag |= WEATHER_UPDATE_WL;
 		}
-	}	
-		
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("sunrise"), true)) {
+	}
+
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("sunrise"), true))
+	{
 		v = atoi(tmp_buffer);
-		if (v>=0 && v<=1440 && v != os.nvdata.sunrise_time) {
+		if (v >= 0 && v <= 1440 && v != os.nvdata.sunrise_time)
+		{
 			os.nvdata.sunrise_time = v;
 			save_nvdata = true;
 			os.weather_update_flag |= WEATHER_UPDATE_SUNRISE;
 		}
 	}
 
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("sunset"), true)) {
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("sunset"), true))
+	{
 		v = atoi(tmp_buffer);
-		if (v>=0 && v<=1440 && v != os.nvdata.sunset_time) {
+		if (v >= 0 && v <= 1440 && v != os.nvdata.sunset_time)
+		{
 			os.nvdata.sunset_time = v;
-			save_nvdata = true;			
-			os.weather_update_flag |= WEATHER_UPDATE_SUNSET;			
+			save_nvdata = true;
+			os.weather_update_flag |= WEATHER_UPDATE_SUNSET;
 		}
 	}
 
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("eip"), true)) {
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("eip"), true))
+	{
 		uint32_t l = strtoul(tmp_buffer, NULL, 0);
-		if(l != os.nvdata.external_ip) {
+		if (l != os.nvdata.external_ip)
+		{
 			os.nvdata.external_ip = l;
-			save_nvdata = true;			
+			save_nvdata = true;
 			os.weather_update_flag |= WEATHER_UPDATE_EIP;
 		}
 	}
-	
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("tz"), true)) {
+
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("tz"), true))
+	{
 		v = atoi(tmp_buffer);
-		if (v>=0 && v<= 108) {
-			if (v != os.iopts[IOPT_TIMEZONE]) {
+		if (v >= 0 && v <= 108)
+		{
+			if (v != os.iopts[IOPT_TIMEZONE])
+			{
 				// if timezone changed, save change and force ntp sync
 				os.iopts[IOPT_TIMEZONE] = v;
 				os.iopts_save();
@@ -105,53 +121,65 @@ static void getweather_callback(char* buffer) {
 			}
 		}
 	}
-	
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("rd"), true)) {
+
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("rd"), true))
+	{
 		v = atoi(tmp_buffer);
-		if (v>0) {
-			os.nvdata.rd_stop_time = os.now_tz() + (unsigned long) v * 3600;
+		if (v > 0)
+		{
+			os.nvdata.rd_stop_time = os.now_tz() + (unsigned long)v * 3600;
 			os.raindelay_start();
-		} else if (v==0) {
+		}
+		else if (v == 0)
+		{
 			os.raindelay_stop();
 		}
 	}
 
-	if (findKeyVal(p, wt_rawData, TMP_BUFFER_SIZE, PSTR("rawData"), true)) {
-		wt_rawData[TMP_BUFFER_SIZE-1]=0;	// make sure the buffer ends properly
+	if (findKeyVal(p, wt_rawData, TMP_BUFFER_SIZE, PSTR("rawData"), true))
+	{
+		wt_rawData[TMP_BUFFER_SIZE - 1] = 0; // make sure the buffer ends properly
 	}
-	
-	if(save_nvdata) os.nvdata_save();
+
+	if (save_nvdata)
+		os.nvdata_save();
 	write_log(LOGDATA_WATERLEVEL, os.checkwt_success_lasttime);
 }
 
-static void getweather_callback_with_peel_header(char* buffer) {
+static void getweather_callback_with_peel_header(char *buffer)
+{
 	peel_http_header(buffer);
 	getweather_callback(buffer);
 }
 
-void GetWeather() {
+void GetWeather()
+{
 	// use temp buffer to construct get command
 	BufferFiller bf = tmp_buffer;
 	bf.emit_p(PSTR("$D?loc=$O&wto=$O&fwv=$D"),
-								(int) os.iopts[IOPT_USE_WEATHER],
-								SOPT_LOCATION,
-								SOPT_WEATHER_OPTS,
-								(int)os.iopts[IOPT_FW_VERSION]);
+			  (int)os.iopts[IOPT_USE_WEATHER],
+			  SOPT_LOCATION,
+			  SOPT_WEATHER_OPTS,
+			  (int)os.iopts[IOPT_FW_VERSION]);
 
-	char *src=tmp_buffer+strlen(tmp_buffer);
-	char *dst=tmp_buffer+TMP_BUFFER_SIZE-12;
-	
+	char *src = tmp_buffer + strlen(tmp_buffer);
+	char *dst = tmp_buffer + TMP_BUFFER_SIZE - 12;
+
 	char c;
 	// url encode. convert SPACE to %20
 	// copy reversely from the end because we are potentially expanding
-	// the string size 
-	while(src!=tmp_buffer) {
+	// the string size
+	while (src != tmp_buffer)
+	{
 		c = *src--;
-		if(c==' ') {
+		if (c == ' ')
+		{
 			*dst-- = '0';
 			*dst-- = '2';
 			*dst-- = '%';
-		} else {
+		}
+		else
+		{
 			*dst-- = c;
 		}
 	};
@@ -160,7 +188,7 @@ void GetWeather() {
 	strcpy(ether_buffer, "GET /");
 	strcat(ether_buffer, dst);
 	// because dst is part of tmp_buffer,
-	// must load weather url AFTER dst is copied to ether_buffer	
+	// must load weather url AFTER dst is copied to ether_buffer
 
 	// load weather url to tmp_buffer
 	char *host = tmp_buffer;
@@ -172,8 +200,10 @@ void GetWeather() {
 
 	wt_errCode = HTTP_RQT_NOT_RECEIVED;
 	int ret = os.send_http_request(host, ether_buffer, getweather_callback_with_peel_header);
-	if(ret!=HTTP_RQT_SUCCESS) {
-		if(wt_errCode < 0) wt_errCode = ret;
+	if (ret != HTTP_RQT_SUCCESS)
+	{
+		if (wt_errCode < 0)
+			wt_errCode = ret;
 		// if wt_errCode > 0, the call is successful but weather script may return error
 	}
 }

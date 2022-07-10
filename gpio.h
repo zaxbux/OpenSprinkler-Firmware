@@ -18,7 +18,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see
- * <http://www.gnu.org/licenses/>. 
+ * <http://www.gnu.org/licenses/>.
  */
 
 #ifndef GPIO_H
@@ -30,7 +30,7 @@
 
 #include "defines.h"
 #define OUTPUT 0
-#define INPUT  1
+#define INPUT 1
 
 #if defined(OSPI)
 #define INPUT_PULLUP 2
@@ -38,8 +38,8 @@
 #define INPUT_PULLUP INPUT
 #endif
 
-#define HIGH	 1
-#define LOW		 0
+#define HIGH 1
+#define LOW 0
 
 void pinMode(int pin, byte mode);
 void digitalWrite(int pin, byte value);
@@ -48,6 +48,6 @@ void gpio_fd_close(int fd);
 void gpio_write(int fd, byte value);
 byte digitalRead(int pin);
 // mode can be any of 'rising', 'falling', 'both'
-void attachInterrupt(int pin, const char* mode, void (*isr)(void));
+void attachInterrupt(int pin, const char *mode, void (*isr)(void));
 
 #endif // GPIO_H

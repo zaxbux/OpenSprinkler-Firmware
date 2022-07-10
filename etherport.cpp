@@ -35,7 +35,7 @@
 #include "defines.h"
 
 EthernetServer::EthernetServer(uint16_t port)
-		: m_port(port), m_sock(0)
+	: m_port(port), m_sock(0)
 {
 }
 
@@ -68,12 +68,12 @@ bool EthernetServer::begin()
 		DEBUG_PRINTLN("can't setsockopt IPV6_V6ONLY");
 		return false;
 	}
-	if (bind(m_sock, (struct sockaddr *) &sin, sizeof(sin)) < 0)
+	if (bind(m_sock, (struct sockaddr *)&sin, sizeof(sin)) < 0)
 	{
 		DEBUG_PRINTLN("shell bind error");
 		return false;
 	}
-	if (ioctl(m_sock, FIONBIO, (char*) &on) < 0)
+	if (ioctl(m_sock, FIONBIO, (char *)&on) < 0)
 	{
 		DEBUG_PRINTLN("setting nonblock failed");
 		return false;
@@ -104,7 +104,7 @@ EthernetClient EthernetServer::available()
 		int client_sock = 0;
 		struct sockaddr_in6 cli_addr;
 		unsigned int clilen = sizeof(cli_addr);
-		if ((client_sock = accept(m_sock, (struct sockaddr *) &cli_addr, &clilen)) <= 0)
+		if ((client_sock = accept(m_sock, (struct sockaddr *)&cli_addr, &clilen)) <= 0)
 			return EthernetClient(0);
 		return EthernetClient(client_sock);
 	}
@@ -112,12 +112,12 @@ EthernetClient EthernetServer::available()
 }
 
 EthernetClient::EthernetClient()
-		: m_sock(0), m_connected(false)
+	: m_sock(0), m_connected(false)
 {
 }
 
 EthernetClient::EthernetClient(int sock)
-		: m_sock(sock), m_connected(true)
+	: m_sock(sock), m_connected(true)
 {
 }
 
@@ -133,9 +133,9 @@ int EthernetClient::connect(uint8_t ip[4], uint16_t port)
 	struct sockaddr_in sin = {0};
 	sin.sin_family = AF_INET;
 	sin.sin_port = htons(port);
-	sin.sin_addr.s_addr = *(uint32_t*) (ip);
+	sin.sin_addr.s_addr = *(uint32_t *)(ip);
 	m_sock = socket(AF_INET, SOCK_STREAM, 0);
-	if (::connect(m_sock, (struct sockaddr *) &sin, sizeof(sin)) < 0)
+	if (::connect(m_sock, (struct sockaddr *)&sin, sizeof(sin)) < 0)
 	{
 		DEBUG_PRINTLN("error connecting to server");
 		return 0;
@@ -198,5 +198,3 @@ size_t EthernetClient::write(const uint8_t *buf, size_t size)
 {
 	return ::send(m_sock, buf, size, MSG_NOSIGNAL);
 }
-
-

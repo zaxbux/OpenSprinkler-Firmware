@@ -18,9 +18,9 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see
- * <http://www.gnu.org/licenses/>. 
+ * <http://www.gnu.org/licenses/>.
  */
- 
+
 #ifndef _OPENSPRINKLER_SERVER_H
 #define _OPENSPRINKLER_SERVER_H
 
@@ -28,68 +28,75 @@
 
 char dec2hexchar(byte dec);
 
-class BufferFiller {
+class BufferFiller
+{
 	char *start; //!< Pointer to start of buffer
-	char *ptr; //!< Pointer to cursor position
+	char *ptr;	 //!< Pointer to cursor position
 public:
-	BufferFiller () {}
-	BufferFiller (char *buf) : start (buf), ptr (buf) {}
+	BufferFiller() {}
+	BufferFiller(char *buf) : start(buf), ptr(buf) {}
 
-	void emit_p(PGM_P fmt, ...) {
+	void emit_p(PGM_P fmt, ...)
+	{
 		va_list ap;
 		va_start(ap, fmt);
-		for (;;) {
+		for (;;)
+		{
 			char c = pgm_read_byte(fmt++);
 			if (c == 0)
 				break;
-			if (c != '$') {
+			if (c != '$')
+			{
 				*ptr++ = c;
 				continue;
 			}
 			c = pgm_read_byte(fmt++);
-			switch (c) {
+			switch (c)
+			{
 			case 'D':
-				//wtoa(va_arg(ap, uint16_t), (char*) ptr);
-				itoa(va_arg(ap, int), (char*) ptr, 10);  // ray
+				// wtoa(va_arg(ap, uint16_t), (char*) ptr);
+				itoa(va_arg(ap, int), (char *)ptr, 10); // ray
 				break;
 			case 'L':
-				//ltoa(va_arg(ap, long), (char*) ptr, 10);
-				ultoa(va_arg(ap, long), (char*) ptr, 10); // ray
+				// ltoa(va_arg(ap, long), (char*) ptr, 10);
+				ultoa(va_arg(ap, long), (char *)ptr, 10); // ray
 				break;
 			case 'S':
-				strcpy((char*) ptr, va_arg(ap, const char*));
+				strcpy((char *)ptr, va_arg(ap, const char *));
 				break;
-			case 'X': {
+			case 'X':
+			{
 				char d = va_arg(ap, int);
 				*ptr++ = dec2hexchar((d >> 4) & 0x0F);
 				*ptr++ = dec2hexchar(d & 0x0F);
 			}
 				continue;
-			case 'F': {
+			case 'F':
+			{
 				PGM_P s = va_arg(ap, PGM_P);
 				char d;
 				while ((d = pgm_read_byte(s++)) != 0)
-						*ptr++ = d;
+					*ptr++ = d;
 				continue;
 			}
-			case 'O': {
+			case 'O':
+			{
 				uint16_t oid = va_arg(ap, int);
-				file_read_block(SOPTS_FILENAME, (char*) ptr, oid*MAX_SOPTS_SIZE, MAX_SOPTS_SIZE);
+				file_read_block(SOPTS_FILENAME, (char *)ptr, oid * MAX_SOPTS_SIZE, MAX_SOPTS_SIZE);
 			}
-				break;
+			break;
 			default:
 				*ptr++ = c;
 				continue;
 			}
-			ptr += strlen((char*) ptr);
+			ptr += strlen((char *)ptr);
 		}
-		*(ptr)=0;				 
+		*(ptr) = 0;
 		va_end(ap);
 	}
 
-	char* buffer () const { return start; }
-	unsigned int position () const { return ptr - start; }
+	char *buffer() const { return start; }
+	unsigned int position() const { return ptr - start; }
 };
-
 
 #endif // _OPENSPRINKLER_SERVER_H
