@@ -232,7 +232,7 @@ byte ProgramStruct::check_day_match(time_t t)
 		break;
 
 	case PROGRAM_TYPE_BIWEEKLY:
-		// todo future
+		// TODO future
 		break;
 
 	case PROGRAM_TYPE_MONTHLY:
@@ -343,7 +343,7 @@ void ProgramData::drem_to_relative(byte days[2])
 {
 	byte rem_abs = days[0];
 	byte inv = days[1];
-	// todo future: use now_tz()?
+	// TODO future: use now_tz()?
 	days[0] = (byte)((rem_abs + inv - (os.now_tz() / SECS_PER_DAY) % inv) % inv);
 }
 
@@ -352,6 +352,6 @@ void ProgramData::drem_to_absolute(byte days[2])
 {
 	byte rem_rel = days[0];
 	byte inv = days[1];
-	// todo future: use now_tz()?
+	// TODO future: use now_tz()?
 	days[0] = (byte)(((os.now_tz() / SECS_PER_DAY) + rem_rel) % inv);
 }

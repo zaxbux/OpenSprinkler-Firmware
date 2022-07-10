@@ -266,7 +266,7 @@ void file_write_block(const char *fn, const void *src, ulong pos, ulong len)
 void file_copy_block(const char *fn, ulong from, ulong to, ulong len, void *tmp)
 {
 	// assume tmp buffer is provided and is larger than len
-	// todo future: if tmp buffer is not provided, do byte-to-byte copy
+	// TODO future: if tmp buffer is not provided, do byte-to-byte copy
 	if (tmp == NULL)
 	{
 		return;

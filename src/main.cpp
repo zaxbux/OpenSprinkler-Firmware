@@ -310,7 +310,7 @@ void do_loop()
 			// check through all programs
 			for (pid = 0; pid < pd.nprograms; pid++)
 			{
-				pd.read(pid, &prog); // todo future: reduce load time
+				pd.read(pid, &prog); // TODO future: reduce load time
 				if (prog.check_match(curr_time))
 				{
 					// program match found
@@ -691,7 +691,7 @@ void check_weather()
 		// if last successful weather call timestamp is more than allowed threshold
 		// and if the selected adjustment method is not manual
 		// reset watering percentage to 100
-		// todo: the firmware currently needs to be explicitly aware of which adjustment methods
+		// TODO: the firmware currently needs to be explicitly aware of which adjustment methods
 		// use manual watering percentage (namely methods 0 and 2), this is not ideal
 		os.checkwt_success_lasttime = 0;
 		if (!(os.iopts[IOPT_USE_WEATHER] == 0 || os.iopts[IOPT_USE_WEATHER] == 2))
@@ -791,7 +791,7 @@ void process_dynamic_events(ulong curr_time)
 	if ((os.iopts[IOPT_SENSOR2_TYPE] == SENSOR_TYPE_RAIN || os.iopts[IOPT_SENSOR2_TYPE] == SENSOR_TYPE_SOIL) && os.status.sensor2_active)
 		sn2 = true;
 
-	// todo: handle sensor 2
+	// TODO: handle sensor 2
 	byte sid, s, bid, qid, igs, igs2, igrd;
 	for (bid = 0; bid < os.nboards; bid++)
 	{
@@ -1012,7 +1012,7 @@ void push_message(int type, uint32_t lval, float fval, const char *sval)
 	{
 	case NOTIFY_STATION_ON:
 
-		// todo: add IFTTT support for this event as well
+		// TODO: add IFTTT support for this event as well
 		if (os.mqtt.enabled())
 		{
 			sprintf_P(topic, PSTR("opensprinkler/station/%d"), lval);

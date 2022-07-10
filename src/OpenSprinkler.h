@@ -143,7 +143,7 @@ public:
 	static const char *sopts[]; // string options
 	static byte station_bits[]; // station activation bits. each byte corresponds to a board (8 stations)
 								// first byte-> master controller, second byte-> ext. board 1, and so on
-	// todo future: the following attribute bytes are for backward compatibility
+	// TODO future: the following attribute bytes are for backward compatibility
 	static byte attrib_mas[];
 	static byte attrib_igs[];
 	static byte attrib_mas2[];
@@ -236,7 +236,7 @@ public:
 	static byte engage_booster;
 };
 
-// todo
+// TODO
 extern EthernetServer *m_server;
 
 #endif // _OPENSPRINKLER_H

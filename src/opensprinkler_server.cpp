@@ -110,7 +110,7 @@ static const char htmlReturnHome[] PROGMEM =
 void print_html_standard_header()
 {
 	bfill.emit_p(PSTR("$F$F$F$F\r\n"), html200OK, htmlContentHTML, htmlNoCache, htmlAccessControl);
-	// todo: streamline this part as well
+	// TODO: streamline this part as well
 	/*m_client->write((const uint8_t *)html200OK, strlen(html200OK));
 	m_client->write((const uint8_t *)htmlContentHTML, strlen(htmlContentHTML));
 	m_client->write((const uint8_t *)htmlNoCache, strlen(htmlNoCache));
@@ -123,7 +123,7 @@ void print_json_header(bool bracket = true)
 	bfill.emit_p(PSTR("$F$F$F$F\r\n"), html200OK, htmlContentJSON, htmlAccessControl, htmlNoCache);
 	if (bracket)
 		bfill.emit_p(PSTR("{"));
-	// todo: streamline
+	// TODO: streamline
 	/*m_client->write((const uint8_t *)html200OK, strlen(html200OK));
 	m_client->write((const uint8_t *)htmlContentJSON, strlen(htmlContentJSON));
 	m_client->write((const uint8_t *)htmlNoCache, strlen(htmlNoCache));

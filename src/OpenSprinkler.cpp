@@ -56,7 +56,7 @@ ulong OpenSprinkler::powerup_lasttime;
 uint8_t OpenSprinkler::last_reboot_cause = REBOOT_CAUSE_NONE;
 byte OpenSprinkler::weather_update_flag;
 
-// todo future: the following attribute bytes are for backward compatibility
+// TODO future: the following attribute bytes are for backward compatibility
 byte OpenSprinkler::attrib_mas[MAX_NUM_BOARDS];
 byte OpenSprinkler::attrib_igs[MAX_NUM_BOARDS];
 byte OpenSprinkler::attrib_mas2[MAX_NUM_BOARDS];
@@ -73,7 +73,7 @@ extern char ether_buffer[];
 byte OpenSprinkler::pin_sr_data = PIN_SR_DATA;
 #endif
 
-// todo future: LCD define for Linux-based systems
+// TODO future: LCD define for Linux-based systems
 
 /** Option json names (stored in PROGMEM to reduce RAM usage) */
 // IMPORTANT: each json name is strictly 5 characters
@@ -819,7 +819,7 @@ void OpenSprinkler::get_station_name(byte sid, char tmp[])
 /** Set station name */
 void OpenSprinkler::set_station_name(byte sid, char tmp[])
 {
-	// todo: store the right size
+	// TODO: store the right size
 	tmp[STATION_NAME_SIZE] = 0;
 	file_write_block(STATIONS_FILENAME, tmp, (uint32_t)sid * sizeof(StationData) + offsetof(StationData, name), STATION_NAME_SIZE);
 }
@@ -917,7 +917,7 @@ byte OpenSprinkler::weekday_today()
 	// return ((byte)weekday()+5)%7; // Time::weekday() assumes Sunday is 1
 
 	return 0;
-	// todo future: is this function needed for RPI?
+	// TODO future: is this function needed for RPI?
 }
 
 /** Switch special station */
@@ -1213,7 +1213,7 @@ void OpenSprinkler::switch_httpstation(HTTPStationData *data, bool turnon)
 void OpenSprinkler::pre_factory_reset()
 {
 	// remove 'done' file as an indicator for reset
-	// todo os2.3 and ospi: delete log files and/or wipe SD card
+	// TODO os2.3 and ospi: delete log files and/or wipe SD card
 	remove_file(DONE_FILENAME);
 }
 
