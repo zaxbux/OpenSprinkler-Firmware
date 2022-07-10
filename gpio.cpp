@@ -1,4 +1,4 @@
-/* OpenSprinkler Unified (AVR/RPI/BBB/LINUX) Firmware
+/* OpenSprinkler Unified (AVR/RPI/LINUX) Firmware
  * Copyright (C) 2014 by Ray Wang (ray@opensprinkler.com)
  *
  * GPIO functions
@@ -182,7 +182,7 @@ byte digitalReadExt(byte pin) {
 }
 #endif
 
-#elif defined(OSPI) || defined(OSBO)
+#elif defined(OSPI)
 
 #include <sys/types.h>
 #include <sys/ioctl.h>

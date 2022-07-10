@@ -1,4 +1,4 @@
-/* OpenSprinkler Unified (AVR/RPI/BBB/LINUX/ESP8266) Firmware
+/* OpenSprinkler Unified (AVR/RPI/LINUX/ESP8266) Firmware
  * Copyright (C) 2015 by Ray Wang (ray@opensprinkler.com)
  *
  * OpenSprinkler library header file
@@ -48,7 +48,7 @@
 		#include "LiquidCrystal.h"
 	#endif
 	
-#else // headers for RPI/BBB/LINUX
+#else // headers for RPI/LINUX
 	#include <time.h>
 	#include <string.h>
 	#include <unistd.h>
@@ -146,7 +146,7 @@ public:
 #elif defined(ARDUINO)
 	static LiquidCrystal lcd; // 16x2 character LCD
 #else
-	// todo: LCD define for RPI/BBB
+	// todo: LCD define for RPI
 #endif
 
 #if defined(OSPI)

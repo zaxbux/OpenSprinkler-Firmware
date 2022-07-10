@@ -1,4 +1,4 @@
-/* OpenSprinkler Unified (AVR/RPI/BBB/LINUX) Firmware
+/* OpenSprinkler Unified (AVR/RPI/LINUX) Firmware
  * Copyright (C) 2015 by Ray Wang (ray@opensprinkler.com)
  *
  * Linux Ethernet functions header file
@@ -27,7 +27,7 @@
 
 #if defined(ARDUINO)
 
-#else // headers for RPI/BBB
+#else // headers for RPI
 
 #include <stdio.h>
 #include <inttypes.h>

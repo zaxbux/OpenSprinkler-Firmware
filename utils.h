@@ -1,4 +1,4 @@
-/* OpenSprinkler Unified (AVR/RPI/BBB/LINUX) Firmware
+/* OpenSprinkler Unified (AVR/RPI/LINUX) Firmware
  * Copyright (C) 2015 by Ray Wang (ray@opensprinkler.com)
  *
  * Utility functions header file
@@ -26,7 +26,7 @@
 
 #if defined(ARDUINO)
 	#include <Arduino.h>
-#else // headers for RPI/BBB
+#else // headers for RPI
 	#include <stdio.h>
 	#include <limits.h>
 	#include <sys/time.h>
@@ -57,7 +57,7 @@ void peel_http_header(char*);
 
 #if defined(ARDUINO)
 
-#else // Arduino compatible functions for RPI/BBB
+#else // Arduino compatible functions for RPI
 	char* get_runtime_path();
 	char* get_filename_fullpath(const char *filename);
 	void delay(ulong ms);

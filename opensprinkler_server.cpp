@@ -1,4 +1,4 @@
-/* OpenSprinkler Unified (AVR/RPI/BBB/LINUX) Firmware
+/* OpenSprinkler Unified (AVR/RPI/LINUX) Firmware
  * Copyright (C) 2015 by Ray Wang (ray@opensprinkler.com)
  *
  * Server functions
@@ -1182,7 +1182,7 @@ void server_home()
  * rd:	rain delay hours (0 turns off rain delay)
  * re:	remote extension mode
  * ap:	reset to ap (ESP8266 only)
- * update: launch update script (for OSPi/OSBo/Linux only)
+ * update: launch update script (for OSPi/Linux only)
  */
 void server_change_values()
 {
@@ -1685,7 +1685,7 @@ void server_json_log() {
 		if (!sd.exists(tmp_buffer)) continue;
 		SdFile file;
 		file.open(tmp_buffer, O_READ);
-#else // prepare to open log file for RPI/BBB
+#else // prepare to open log file for RPI
 		FILE *file = fopen(get_filename_fullpath(tmp_buffer), "rb");
 		if(!file) continue;
 #endif // prepare to open log file

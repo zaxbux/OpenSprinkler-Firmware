@@ -1,4 +1,4 @@
-/* OpenSprinkler Unified (AVR/RPI/BBB/LINUX) Firmware
+/* OpenSprinkler Unified (AVR/RPI/LINUX) Firmware
  * Copyright (C) 2015 by Ray Wang (ray@opensprinkler.com)
  *
  * Main loop
@@ -39,7 +39,7 @@
 		SdFat sd;																	// SD card object
 	#endif
 	unsigned long getNtpTime();
-#else // header and defs for RPI/BBB
+#else // header and defs for RPI
 	EthernetServer *m_server = 0;
 	EthernetClient *m_client = 0;
 #endif
@@ -602,7 +602,7 @@ void do_loop()
 	
 	ui_state_machine();
 
-#else // Process Ethernet packets for RPI/BBB
+#else // Process Ethernet packets for RPI
 	EthernetClient client = m_server->available();
 	if (client) {
 		while(true) {
@@ -1032,7 +1032,7 @@ void do_loop()
 	}
 
 	#if !defined(ARDUINO)
-		delay(1); // For OSPI/OSBO/LINUX, sleep 1 ms to minimize CPU usage
+		delay(1); // For OSPI/LINUX, sleep 1 ms to minimize CPU usage
 	#endif
 }
 
@@ -1585,7 +1585,7 @@ void write_log(byte type, ulong curr_time) {
 	}
 	#endif
 	
-#else // prepare log folder for RPI/BBB
+#else // prepare log folder for RPI
 	struct stat st;
 	if(stat(get_filename_fullpath(LOG_PREFIX), &st)) {
 		if(mkdir(get_filename_fullpath(LOG_PREFIX), S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IWGRP | S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH)) {
@@ -1704,7 +1704,7 @@ void delete_log(char *name) {
 	}
 	#endif
 	
-#else // delete_log implementation for RPI/BBB
+#else // delete_log implementation for RPI
 	if (strncmp(name, "all", 3) == 0) {
 		// delete the log folder
 		rmdir(get_filename_fullpath(LOG_PREFIX));
@@ -1804,7 +1804,7 @@ void perform_ntp_sync() {
 #endif
 }
 
-#if !defined(ARDUINO) // main function for RPI/BBB
+#if !defined(ARDUINO) // main function for RPI
 int main(int argc, char *argv[]) {
 	do_setup();
 
