@@ -1,0 +1,13 @@
+[Unit]
+Description=OpenSprinkler Controller
+
+[Service]
+User=opensprinkler
+# Prepend "/usr/bin/stdbuf -oL" to ExecStart to write diagnostic output to journal
+ExecStart=/opt/opensprinkler/OpenSprinkler
+WorkingDirectory=/opt/opensprinkler
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
