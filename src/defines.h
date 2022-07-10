@@ -50,12 +50,12 @@ typedef unsigned long ulong;
 #define HW_TYPE_UNKNOWN 0xFF
 
 /** Data file names */
-#define IOPTS_FILENAME "iopts.dat"	 // integer options data file
-#define SOPTS_FILENAME "sopts.dat"	 // string options data file
-#define STATIONS_FILENAME "stns.dat" // stations data file
-#define NVCON_FILENAME "nvcon.dat"	 // non-volatile controller data file, see OpenSprinkler.h --> struct NVConData
-#define PROG_FILENAME "prog.dat"	 // program data file
-#define DONE_FILENAME "done.dat"	 // used to indicate the completion of all files
+#define IOPTS_FILENAME "data/iopts.dat"	  // integer options data file
+#define SOPTS_FILENAME "data/sopts.dat"	  // string options data file
+#define STATIONS_FILENAME "data/stns.dat" // stations data file
+#define NVCON_FILENAME "data/nvcon.dat"	  // non-volatile controller data file, see OpenSprinkler.h --> struct NVConData
+#define PROG_FILENAME "data/prog.dat"	  // program data file
+#define DONE_FILENAME "data/done.dat"	  // used to indicate the completion of all files
 
 /** Station macro defines */
 #define STN_TYPE_STANDARD 0x00
