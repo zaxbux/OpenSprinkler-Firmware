@@ -157,6 +157,73 @@ const char sopt_json_names[] PROGMEM =
 	"apass";
 */
 
+/** Option maximum values (stored in PROGMEM to reduce RAM usage) */
+const byte iopt_max[] PROGMEM = {
+	0,
+	108,
+	1,
+	1,
+	255,
+	255,
+	255,
+	255,
+	255,
+	255,
+	255,
+	255,
+	255,
+	255,
+	0,
+	MAX_EXT_BOARDS,
+	1,
+	255,
+	MAX_NUM_STATIONS,
+	255,
+	255,
+	255,
+	1,
+	250,
+	1,
+	1,
+	255,
+	255,
+	255,
+	255,
+	250,
+	255,
+	255,
+	255,
+	255,
+	255,
+	1,
+	MAX_NUM_STATIONS,
+	255,
+	255,
+	0,
+	255,
+	255,
+	1,
+	255,
+	255,
+	255,
+	255,
+	1,
+	255,
+	255,
+	1,
+	255,
+	1,
+	255,
+	255,
+	255,
+	255,
+	255,
+	255,
+	255,
+	255,
+	255,
+	1};
+
 /** Integer option values (stored in RAM) */
 byte OpenSprinkler::iopts[] = {
 	OS_FW_VERSION, // firmware version
@@ -352,11 +419,7 @@ void OpenSprinkler::update_dev()
 // end network init functions
 
 /** Initialize pins, controller variables, LCD */
-void OpenSprinkler::begin()
-{
-	hw_type = HW_TYPE_UNKNOWN;
-	hw_rev = 0;
-
+void OpenSprinkler::begin() {
 	// shift register setup
 	pinMode(PIN_SR_OE, OUTPUT);
 	// pull shift register OE high to disable output
@@ -452,8 +515,6 @@ void OpenSprinkler::detect_binarysensor_status(ulong curr_time)
 	// sensor_type: 0 if normally closed, 1 if normally open
 	if (iopts[IOPT_SENSOR1_TYPE] == SENSOR_TYPE_RAIN || iopts[IOPT_SENSOR1_TYPE] == SENSOR_TYPE_SOIL)
 	{
-		if (hw_rev == 2)
-			pinModeExt(PIN_SENSOR1, INPUT_PULLUP); // this seems necessary for OS 3.2
 		byte val = digitalReadExt(PIN_SENSOR1);
 		status.sensor1 = (val == iopts[IOPT_SENSOR1_OPTION]) ? 0 : 1;
 		if (status.sensor1)
@@ -494,8 +555,6 @@ void OpenSprinkler::detect_binarysensor_status(ulong curr_time)
 #if defined(PIN_SENSOR2)
 	if (iopts[IOPT_SENSOR2_TYPE] == SENSOR_TYPE_RAIN || iopts[IOPT_SENSOR2_TYPE] == SENSOR_TYPE_SOIL)
 	{
-		if (hw_rev == 2)
-			pinModeExt(PIN_SENSOR2, INPUT_PULLUP); // this seems necessary for OS 3.2
 		byte val = digitalReadExt(PIN_SENSOR2);
 		status.sensor2 = (val == iopts[IOPT_SENSOR2_OPTION]) ? 0 : 1;
 		if (status.sensor2)
@@ -543,8 +602,6 @@ byte OpenSprinkler::detect_programswitch_status(ulong curr_time)
 	if (iopts[IOPT_SENSOR1_TYPE] == SENSOR_TYPE_PSWITCH)
 	{
 		static byte sensor1_hist = 0;
-		if (hw_rev == 2)
-			pinModeExt(PIN_SENSOR1, INPUT_PULLUP);									  // this seems necessary for OS 3.2
 		status.sensor1 = (digitalReadExt(PIN_SENSOR1) != iopts[IOPT_SENSOR1_OPTION]); // is switch activated?
 		sensor1_hist = (sensor1_hist << 1) | status.sensor1;
 		// basic noise filtering: only trigger if sensor matches pattern:
@@ -558,9 +615,9 @@ byte OpenSprinkler::detect_programswitch_status(ulong curr_time)
 	if (iopts[IOPT_SENSOR2_TYPE] == SENSOR_TYPE_PSWITCH)
 	{
 		static byte sensor2_hist = 0;
-		if (hw_rev == 2)
-			pinModeExt(PIN_SENSOR2, INPUT_PULLUP);									  // this seems necessary for OS 3.2
-		status.sensor2 = (digitalReadExt(PIN_SENSOR2) != iopts[IOPT_SENSOR2_OPTION]); // is sensor activated?
+
+		status.sensor2 = (digitalReadExt(PIN_SENSOR2) !=
+						  iopts[IOPT_SENSOR2_OPTION]);	// is sensor activated?
 		sensor2_hist = (sensor2_hist << 1) | status.sensor2;
 		if ((sensor2_hist & 0b1111) == 0b0011)
 		{
@@ -822,11 +879,7 @@ byte OpenSprinkler::set_station_bit(byte sid, byte value)
 		else
 		{
 			(*data) = (*data) & (~mask);
-			if (hw_type == HW_TYPE_LATCH)
-			{
-				engage_booster = true; // if LATCH controller, engage booster when bit changes
-			}
-			switch_special_station(sid, 0); // handle special stations
+			switch_special_station(sid, 0);	 // handle special stations
 			return 255;
 		}
 	}

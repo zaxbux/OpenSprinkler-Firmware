@@ -121,6 +121,7 @@ struct ConStatus
 };
 
 extern const char iopt_json_names[];
+extern const uint8_t iopt_max[];
 
 class OpenSprinkler
 {
@@ -132,8 +133,6 @@ public:
 	static ConStatus status;
 	static ConStatus old_status;
 	static byte nboards, nstations;
-	static byte hw_type; // hardware type
-	static byte hw_rev;	 // hardware minor
 
 	static byte iopts[];		// integer options
 	static const char *sopts[]; // string options

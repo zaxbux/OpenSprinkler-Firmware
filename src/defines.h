@@ -43,12 +43,6 @@ typedef unsigned long ulong;
 #define OSPI_HW_VERSION_BASE 0x40
 #define SIM_HW_VERSION_BASE 0xC0
 
-/** Hardware type macro defines */
-#define HW_TYPE_AC 0xAC	   // standard 24VAC for 24VAC solenoids only, with triacs
-#define HW_TYPE_DC 0xDC	   // DC powered, for both DC and 24VAC solenoids, with boost converter and MOSFETs
-#define HW_TYPE_LATCH 0x1A // DC powered, for DC latching solenoids only, with boost converter and H-bridges
-#define HW_TYPE_UNKNOWN 0xFF
-
 /** Data file names */
 #define IOPTS_FILENAME "data/iopts.dat"	  // integer options data file
 #define SOPTS_FILENAME "data/sopts.dat"	  // string options data file
