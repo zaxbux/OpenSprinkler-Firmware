@@ -209,8 +209,6 @@ void do_loop()
 	{
 
 		last_time = curr_time;
-		if (os.button_timeout)
-			os.button_timeout--;
 
 		// ====== Check raindelay status ======
 		if (os.status.rain_delayed)

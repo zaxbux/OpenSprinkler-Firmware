@@ -49,7 +49,6 @@ ulong OpenSprinkler::raindelay_on_lasttime;
 
 ulong OpenSprinkler::flowcount_log_start;
 ulong OpenSprinkler::flowcount_rt;
-byte OpenSprinkler::button_timeout;
 ulong OpenSprinkler::checkwt_lasttime;
 ulong OpenSprinkler::checkwt_success_lasttime;
 ulong OpenSprinkler::powerup_lasttime;
@@ -158,146 +157,6 @@ const char sopt_json_names[] PROGMEM =
 	"apass";
 */
 
-/** Option promopts (stored in PROGMEM to reduce RAM usage) */
-// Each string is strictly 16 characters
-// with SPACE fillings if less
-const char iopt_prompts[] PROGMEM =
-	"Firmware version"
-	"Time zone (GMT):"
-	"Enable NTP sync?"
-	"Enable DHCP?    "
-	"Static.ip1:     "
-	"Static.ip2:     "
-	"Static.ip3:     "
-	"Static.ip4:     "
-	"Gateway.ip1:    "
-	"Gateway.ip2:    "
-	"Gateway.ip3:    "
-	"Gateway.ip4:    "
-	"HTTP Port:      "
-	"----------------"
-	"Hardware version"
-	"# of exp. board:"
-	"----------------"
-	"Stn. delay (sec)"
-	"Master 1 (Mas1):"
-	"Mas1  on adjust:"
-	"Mas1 off adjust:"
-	"----------------"
-	"----------------"
-	"Watering level: "
-	"Device enabled? "
-	"Ignore password?"
-	"Device ID:      "
-	"LCD contrast:   "
-	"LCD brightness: "
-	"LCD dimming:    "
-	"DC boost time:  "
-	"Weather algo.:  "
-	"NTP server.ip1: "
-	"NTP server.ip2: "
-	"NTP server.ip3: "
-	"NTP server.ip4: "
-	"Enable logging? "
-	"Master 2 (Mas2):"
-	"Mas2  on adjust:"
-	"Mas2 off adjust:"
-	"Firmware minor: "
-	"Pulse rate:     "
-	"----------------"
-	"As remote ext.? "
-	"DNS server.ip1: "
-	"DNS server.ip2: "
-	"DNS server.ip3: "
-	"DNS server.ip4: "
-	"Special Refresh?"
-	"IFTTT Enable:   "
-	"Sensor 1 type:  "
-	"Normally open?  "
-	"Sensor 2 type:  "
-	"Normally open?  "
-	"Sn1 on adjust:  "
-	"Sn1 off adjust: "
-	"Sn2 on adjust:  "
-	"Sn2 off adjust: "
-	"Subnet mask1:   "
-	"Subnet mask2:   "
-	"Subnet mask3:   "
-	"Subnet mask4:   "
-	"WiFi mode?      "
-	"Factory reset?  ";
-
-// string options do not have prompts
-
-/** Option maximum values (stored in PROGMEM to reduce RAM usage) */
-const byte iopt_max[] PROGMEM = {
-	0,
-	108,
-	1,
-	1,
-	255,
-	255,
-	255,
-	255,
-	255,
-	255,
-	255,
-	255,
-	255,
-	255,
-	0,
-	MAX_EXT_BOARDS,
-	1,
-	255,
-	MAX_NUM_STATIONS,
-	255,
-	255,
-	255,
-	1,
-	250,
-	1,
-	1,
-	255,
-	255,
-	255,
-	255,
-	250,
-	255,
-	255,
-	255,
-	255,
-	255,
-	1,
-	MAX_NUM_STATIONS,
-	255,
-	255,
-	0,
-	255,
-	255,
-	1,
-	255,
-	255,
-	255,
-	255,
-	1,
-	255,
-	255,
-	1,
-	255,
-	1,
-	255,
-	255,
-	255,
-	255,
-	255,
-	255,
-	255,
-	255,
-	255,
-	1};
-
-// string options do not have maximum values
-
 /** Integer option values (stored in RAM) */
 byte OpenSprinkler::iopts[] = {
 	OS_FW_VERSION, // firmware version
@@ -382,16 +241,6 @@ const char *OpenSprinkler::sopts[] = {
 	DEFAULT_EMPTY_STRING,
 	DEFAULT_EMPTY_STRING};
 
-/** Weekday strings (stored in PROGMEM to reduce RAM usage) */
-static const char days_str[] PROGMEM =
-	"Mon\0"
-	"Tue\0"
-	"Wed\0"
-	"Thu\0"
-	"Fri\0"
-	"Sat\0"
-	"Sun\0";
-
 /** Calculate local time (UTC time plus time zone offset) */
 time_t OpenSprinkler::now_tz()
 {
@@ -425,15 +274,29 @@ byte OpenSprinkler::start_network()
 	return m_server->begin();
 }
 
+/**
+ * @brief
+ * @todo Define primary interface e.g. `eth0` and check status (IFF_UP).
+ * @return true
+ * @return false
+ */
 bool OpenSprinkler::network_connected(void)
 {
 	return true;
 }
 
-// Return mac of first recognised interface and fallback to software mac
-// Note: on OSPi, operating system handles interface allocation so 'wired' ignored
-bool OpenSprinkler::load_hardware_mac(byte *mac, bool wired)
-{
+/**
+ * @brief Return mac of first recognised interface and fallback to software mac
+ * Note: on OSPi, operating system handles interface allocation so 'wired'
+ * ignored
+ *
+ * @todo Use primary interface and get mac from it.
+ *
+ * @param mac
+ * @return true
+ * @return false
+ */
+bool OpenSprinkler::load_hardware_mac(byte *mac) {
 	const char *if_names[] = {"eth0", "eth1", "wlan0", "wlan1"};
 	struct ifreq ifr;
 	int fd;
@@ -487,8 +350,6 @@ void OpenSprinkler::update_dev()
 	system(cmd);
 }
 // end network init functions
-
-// extern void flow_isr();
 
 /** Initialize pins, controller variables, LCD */
 void OpenSprinkler::begin()

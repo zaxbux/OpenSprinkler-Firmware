@@ -121,7 +121,6 @@ struct ConStatus
 };
 
 extern const char iopt_json_names[];
-extern const uint8_t iopt_max[];
 
 class OpenSprinkler
 {
@@ -161,7 +160,6 @@ public:
 	static ulong flowcount_rt;			  // flow count (for computing real-time flow rate)
 	static ulong flowcount_log_start;	  // starting flow count (for logging)
 
-	static byte button_timeout;			   // button timeout
 	static ulong checkwt_lasttime;		   // time when weather was checked
 	static ulong checkwt_success_lasttime; // time when weather check was successful
 	static ulong powerup_lasttime;		   // time when controller is powered up most recently
@@ -175,7 +173,7 @@ public:
 	static byte start_network();									 // initialize network with the given mac and port
 	static byte start_ether();										 // initialize ethernet with the given mac and port
 	static bool network_connected();								 // check if the network is up
-	static bool load_hardware_mac(byte *buffer, bool wired = false); // read hardware mac address
+	static bool load_hardware_mac(byte *buffer);					 // read hardware mac address
 	static time_t now_tz();
 	// -- station names and attributes
 	static void get_station_data(byte sid, StationData *data); // get station data
