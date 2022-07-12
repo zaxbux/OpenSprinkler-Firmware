@@ -44,19 +44,19 @@ typedef unsigned long ulong;
 #define SIM_HW_VERSION_BASE 0xC0
 
 /** Data file names */
-#define IOPTS_FILENAME "data/iopts.dat"	  // integer options data file
-#define SOPTS_FILENAME "data/sopts.dat"	  // string options data file
-#define STATIONS_FILENAME "data/stns.dat" // stations data file
-#define NVCON_FILENAME "data/nvcon.dat"	  // non-volatile controller data file, see OpenSprinkler.h --> struct NVConData
-#define PROG_FILENAME "data/prog.dat"	  // program data file
-#define DONE_FILENAME "data/done.dat"	  // used to indicate the completion of all files
+#define IOPTS_FILENAME "iopts.dat"	  // integer options data file
+#define SOPTS_FILENAME "sopts.dat"	  // string options data file
+#define STATIONS_FILENAME "stns.dat"  // stations data file
+#define NVCON_FILENAME "nvcon.dat"	  // non-volatile controller data file, see OpenSprinkler.h --> struct NVConData
+#define PROG_FILENAME "prog.dat"	  // program data file
+#define DONE_FILENAME "done.dat"	  // used to indicate the completion of all files
 
 /** Station macro defines */
 #define STN_TYPE_STANDARD 0x00
-#define STN_TYPE_RF 0x01	 // Radio Frequency (RF) station
-#define STN_TYPE_REMOTE 0x02 // Remote OpenSprinkler station
-#define STN_TYPE_GPIO 0x03	 // direct GPIO station
-#define STN_TYPE_HTTP 0x04	 // HTTP station
+#define STN_TYPE_RF 0x01	  // Radio Frequency (RF) station
+#define STN_TYPE_REMOTE 0x02  // Remote OpenSprinkler station
+#define STN_TYPE_GPIO 0x03	  // direct GPIO station
+#define STN_TYPE_HTTP 0x04	  // HTTP station
 #define STN_TYPE_OTHER 0xFF
 
 /** Notification macro defines */
@@ -79,54 +79,42 @@ typedef unsigned long ulong;
 
 /** Sensor macro defines */
 #define SENSOR_TYPE_NONE 0x00
-#define SENSOR_TYPE_RAIN 0x01	 // rain sensor
-#define SENSOR_TYPE_FLOW 0x02	 // flow sensor
-#define SENSOR_TYPE_SOIL 0x03	 // soil moisture sensor
-#define SENSOR_TYPE_PSWITCH 0xF0 // program switch sensor
+#define SENSOR_TYPE_RAIN 0x01	  // rain sensor
+#define SENSOR_TYPE_FLOW 0x02	  // flow sensor
+#define SENSOR_TYPE_SOIL 0x03	  // soil moisture sensor
+#define SENSOR_TYPE_PSWITCH 0xF0  // program switch sensor
 #define SENSOR_TYPE_OTHER 0xFF
 
-#define FLOWCOUNT_RT_WINDOW 30 // flow count window (for computing real-time flow rate), 30 seconds
+#define FLOWCOUNT_RT_WINDOW 30	// flow count window (for computing real-time flow rate), 30 seconds
 
 /** Reboot cause */
 #define REBOOT_CAUSE_NONE 0
 #define REBOOT_CAUSE_RESET 1
-#define REBOOT_CAUSE_BUTTON 2
-#define REBOOT_CAUSE_RSTAP 3
+#define REBOOT_CAUSE_BUTTON 2  // @TODO: Use RF GPIO for shutdown button?
+//#define REBOOT_CAUSE_RSTAP 3
 #define REBOOT_CAUSE_TIMER 4
 #define REBOOT_CAUSE_WEB 5
-#define REBOOT_CAUSE_WIFIDONE 6
+//#define REBOOT_CAUSE_WIFIDONE 6
 #define REBOOT_CAUSE_FWUPDATE 7
 #define REBOOT_CAUSE_WEATHER_FAIL 8
 #define REBOOT_CAUSE_NETWORK_FAIL 9
-#define REBOOT_CAUSE_NTP 10
+//#define REBOOT_CAUSE_NTP 10
 #define REBOOT_CAUSE_PROGRAM 11
 #define REBOOT_CAUSE_POWERON 99
 
-/** WiFi defines */
-#define WIFI_MODE_AP 0xA9
-#define WIFI_MODE_STA 0x2A
-
-#define OS_STATE_INITIAL 0
-#define OS_STATE_CONNECTING 1
-#define OS_STATE_CONNECTED 2
-#define OS_STATE_TRY_CONNECT 3
-
-#define LED_FAST_BLINK 100
-#define LED_SLOW_BLINK 500
-
 /** Storage / zone expander defines */
-#define MAX_EXT_BOARDS 24 // allow more zones for linux-based firmwares
+#define MAX_EXT_BOARDS 24  // allow more zones for linux-based firmwares
 
-#define MAX_NUM_BOARDS (1 + MAX_EXT_BOARDS)	  // maximum number of 8-zone boards including expanders
-#define MAX_NUM_STATIONS (MAX_NUM_BOARDS * 8) // maximum number of stations
-#define STATION_NAME_SIZE 32				  // maximum number of characters in each station name
-#define MAX_SOPTS_SIZE 160					  // maximum string option size
+#define MAX_NUM_BOARDS (1 + MAX_EXT_BOARDS)	   // maximum number of 8-zone boards including expanders
+#define MAX_NUM_STATIONS (MAX_NUM_BOARDS * 8)  // maximum number of stations
+#define STATION_NAME_SIZE 32				   // maximum number of characters in each station name
+#define MAX_SOPTS_SIZE 160					   // maximum string option size
 
 #define STATION_SPECIAL_DATA_SIZE (TMP_BUFFER_SIZE - STATION_NAME_SIZE - 12)
 
 /** Default string option values */
-#define DEFAULT_PASSWORD "a6d82bced638de3def1e9bbb4983225c" // md5 of 'opendoor'
-#define DEFAULT_LOCATION "0,0"								// Boston,MA
+#define DEFAULT_PASSWORD "a6d82bced638de3def1e9bbb4983225c"	 // md5 of 'opendoor'
+#define DEFAULT_LOCATION "0,0"								 // Boston,MA
 #define DEFAULT_JAVASCRIPT_URL "https://ui.opensprinkler.com/js"
 #define DEFAULT_WEATHER_URL "weather.opensprinkler.com"
 #define DEFAULT_IFTTT_URL "maker.ifttt.com"
@@ -135,56 +123,32 @@ typedef unsigned long ulong;
 /** Macro define of each option
  * Refer to OpenSprinkler.cpp for details on each option
  */
-enum
-{
-	IOPT_FW_VERSION = 0, // read-only (ro)
+enum {
+	IOPT_FW_VERSION = 0,  // read-only (ro)
 	IOPT_TIMEZONE,
-	IOPT_USE_NTP,
-	IOPT_USE_DHCP,
-	IOPT_STATIC_IP1,
-	IOPT_STATIC_IP2,
-	IOPT_STATIC_IP3,
-	IOPT_STATIC_IP4,
-	IOPT_GATEWAY_IP1,
-	IOPT_GATEWAY_IP2,
-	IOPT_GATEWAY_IP3,
-	IOPT_GATEWAY_IP4,
 	IOPT_HTTPPORT_0,
 	IOPT_HTTPPORT_1,
-	IOPT_HW_VERSION, // ro
+	IOPT_HW_VERSION,  // ro
 	IOPT_EXT_BOARDS,
-	IOPT_SEQUENTIAL_RETIRED, // ro
 	IOPT_STATION_DELAY_TIME,
 	IOPT_MASTER_STATION,
 	IOPT_MASTER_ON_ADJ,
 	IOPT_MASTER_OFF_ADJ,
-	IOPT_URS_RETIRED, // ro
-	IOPT_RSO_RETIRED, // ro
 	IOPT_WATER_PERCENTAGE,
-	IOPT_DEVICE_ENABLE, // editable through jc
+	IOPT_DEVICE_ENABLE,	 // editable through jc
 	IOPT_IGNORE_PASSWORD,
-	IOPT_DEVICE_ID,
 	IOPT_LCD_CONTRAST,
 	IOPT_LCD_BACKLIGHT,
 	IOPT_LCD_DIMMING,
-	IOPT_BOOST_TIME,
 	IOPT_USE_WEATHER,
-	IOPT_NTP_IP1,
-	IOPT_NTP_IP2,
-	IOPT_NTP_IP3,
-	IOPT_NTP_IP4,
 	IOPT_ENABLE_LOGGING,
 	IOPT_MASTER_STATION_2,
 	IOPT_MASTER_ON_ADJ_2,
 	IOPT_MASTER_OFF_ADJ_2,
-	IOPT_FW_MINOR, // ro
+	IOPT_FW_MINOR,	// ro
 	IOPT_PULSE_RATE_0,
 	IOPT_PULSE_RATE_1,
-	IOPT_REMOTE_EXT_MODE, // editable through jc
-	IOPT_DNS_IP1,
-	IOPT_DNS_IP2,
-	IOPT_DNS_IP3,
-	IOPT_DNS_IP4,
+	IOPT_REMOTE_EXT_MODE,  // editable through jc
 	IOPT_SPE_AUTO_REFRESH,
 	IOPT_IFTTT_ENABLE,
 	IOPT_SENSOR1_TYPE,
@@ -195,29 +159,19 @@ enum
 	IOPT_SENSOR1_OFF_DELAY,
 	IOPT_SENSOR2_ON_DELAY,
 	IOPT_SENSOR2_OFF_DELAY,
-	IOPT_SUBNET_MASK1,
-	IOPT_SUBNET_MASK2,
-	IOPT_SUBNET_MASK3,
-	IOPT_SUBNET_MASK4,
-	IOPT_WIFI_MODE, // ro
-	IOPT_RESET,		// ro
-	NUM_IOPTS		// total number of integer options
+	IOPT_RESET,	 // ro
+	NUM_IOPTS	 // total number of integer options
 };
 
-enum
-{
+enum {
 	SOPT_PASSWORD = 0,
 	SOPT_LOCATION,
 	SOPT_JAVASCRIPTURL,
 	SOPT_WEATHERURL,
 	SOPT_WEATHER_OPTS,
-	SOPT_IFTTT_KEY, // TODO: make this IFTTT config just like MQTT
-	SOPT_STA_SSID,
-	SOPT_STA_PASS,
+	SOPT_IFTTT_KEY,	 // TODO: make this IFTTT config just like MQTT
 	SOPT_MQTT_OPTS,
-	// SOPT_WEATHER_KEY,
-	// SOPT_AP_PASS,
-	NUM_SOPTS // total number of string options
+	NUM_SOPTS  // total number of string options
 };
 
 /** Log Data Type */
@@ -232,21 +186,22 @@ enum
 #undef OS_HW_VERSION
 
 /** Hardware defines */
-#if defined(OSPI) // for OSPi
+#if defined(OSPI)  // for OSPi
 
 #define OS_HW_VERSION OSPI_HW_VERSION_BASE
-#define PIN_SR_LATCH 22	   // shift register latch pin
-#define PIN_SR_DATA 27	   // shift register data pin
-#define PIN_SR_CLOCK 4	   // shift register clock pin
-#define PIN_SR_OE 17	   // shift register output enable pin
+#define PIN_SR_LATCH 22	 // shift register latch pin
+#define PIN_SR_DATA 27	 // shift register data pin
+#define PIN_SR_CLOCK 4	 // shift register clock pin
+#define PIN_SR_OE 17	 // shift register output enable pin
 #define PIN_SENSOR1 14
 #define PIN_SENSOR2 23
-#define PIN_RFTX 15 // RF transmitter pin
+#define PIN_RFTX 15	 // RF transmitter pin
 
+// @TODO: Get available GPIOs from system
 #define PIN_FREE_LIST                                                     \
 	{                                                                     \
 		5, 6, 7, 8, 9, 10, 11, 12, 13, 16, 18, 19, 20, 21, 23, 24, 25, 26 \
-	} // free GPIO pins
+	}  // free GPIO pins
 #define ETHER_BUFFER_SIZE 16384
 
 #else // for demo / simulation
@@ -300,57 +255,18 @@ inline void DEBUG_PRINT(const char *s) { printf("%s", s); }
 
 /** Re-define avr-specific (e.g. PGM) types to use standard types */
 
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stddef.h>
-inline void itoa(int v, char *s, int b)
-{
-	sprintf(s, "%d", v);
-}
-inline void ultoa(unsigned long v, char *s, int b) { sprintf(s, "%lu", v); }
-#define now() time(0)
-#define pgm_read_byte(x) *(x)
-#define PSTR(x) x
-#define F(x) x
-#define strcat_P strcat
-#define strcpy_P strcpy
-#define sprintf_P sprintf
+
 #include <string>
-#define String string
 using namespace std;
-#define PROGMEM
-typedef const char *PGM_P;
-typedef unsigned char uint8_t;
-typedef short int16_t;
-typedef unsigned short uint16_t;
-typedef bool boolean;
-#define pinModeExt pinMode
-#define digitalReadExt digitalRead
-#define digitalWriteExt digitalWrite
-
-/** Other defines */
-// button values
-#define BUTTON_1 0x01
-#define BUTTON_2 0x02
-#define BUTTON_3 0x04
-
-// button status values
-#define BUTTON_NONE 0x00	  // no button pressed
-#define BUTTON_MASK 0x0F	  // button status mask
-#define BUTTON_FLAG_HOLD 0x80 // long hold flag
-#define BUTTON_FLAG_DOWN 0x40 // down flag
-#define BUTTON_FLAG_UP 0x20	  // up flag
-
-// button timing values
-#define BUTTON_DELAY_MS 1	// short delay (milliseconds)
-#define BUTTON_HOLD_MS 1000 // long hold expiration time (milliseconds)
-
-// button mode values
-#define BUTTON_WAIT_NONE 0	  // do not wait, return value immediately
-#define BUTTON_WAIT_RELEASE 1 // wait until button is release
-#define BUTTON_WAIT_HOLD 2	  // wait until button hold time expires
-
-#define DISPLAY_MSG_MS 2000 // message display time (milliseconds)
+//#define
+// typedef const char *PGM_P;
+// typedef unsigned char uint8_t;
+// typedef short int16_t;
+// typedef unsigned short uint16_t;
+// typedef bool bool;
 
 #endif // _DEFINES_H

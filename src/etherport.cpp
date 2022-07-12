@@ -44,8 +44,7 @@ EthernetServer::~EthernetServer()
 	close(m_sock);
 }
 
-bool EthernetServer::begin()
-{
+bool EthernetServer::begin() {
 	struct sockaddr_in6 sin = {0};
 	sin.sin6_family = AF_INET6;
 	sin.sin6_port = htons(m_port);
@@ -144,8 +143,7 @@ int EthernetClient::connect(uint8_t ip[4], uint16_t port)
 	return 1;
 }
 
-bool EthernetClient::connected()
-{
+bool EthernetClient::connected() {
 	if (!m_sock)
 		return false;
 	int error = 0;
@@ -164,8 +162,7 @@ void EthernetClient::stop()
 	}
 }
 
-EthernetClient::operator bool()
-{
+EthernetClient::operator bool() {
 	return m_sock != 0;
 }
 

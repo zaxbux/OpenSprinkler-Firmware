@@ -41,15 +41,12 @@ void remote_http_callback(char *);
 
 // Small variations have been added to the timing values below
 // to minimize conflicting events
-#define NTP_SYNC_INTERVAL 86413L			 // NTP sync interval (in seconds)
-#define CHECK_NETWORK_INTERVAL 601			 // Network checking timeout (in seconds)
 #define CHECK_WEATHER_TIMEOUT 21613L		 // Weather check interval (in seconds)
 #define CHECK_WEATHER_SUCCESS_TIMEOUT 86400L // Weather check success interval (in seconds)
 #define LCD_BACKLIGHT_TIMEOUT 15			 // LCD backlight timeout (in seconds))
 #define PING_TIMEOUT 200					 // Ping test timeout (in ms)
 #define UI_STATE_MACHINE_INTERVAL 50		 // how often does ui_state_machine run (in ms)
 #define CLIENT_READ_TIMEOUT 5				 // client read timeout (in seconds)
-#define DHCP_CHECKLEASE_INTERVAL 3600L		 // DHCP check lease interval (in seconds)
 // Define buffers: need them to be sufficiently large to cover string option reading
 char ether_buffer[ETHER_BUFFER_SIZE * 2]; // ethernet buffer, make it twice as large to allow overflow
 char tmp_buffer[TMP_BUFFER_SIZE * 2];	  // scratch buffer, make it twice as large to allow overflow
@@ -73,7 +70,7 @@ uint32_t reboot_timer = 0;
 
 void flow_poll()
 {
-	byte curr_flow_state = digitalReadExt(PIN_SENSOR1);
+	byte curr_flow_state = digitalRead(PIN_SENSOR1);
 	if (!(prev_flow_state == HIGH && curr_flow_state == LOW))
 	{ // only record on falling edge
 		prev_flow_state = curr_flow_state;
@@ -123,7 +120,6 @@ void do_setup()
 		DEBUG_PRINTLN("network failed.");
 		os.status.network_fails = 1;
 	}
-	os.status.req_network = 0;
 
 	os.mqtt.init();
 	os.status.req_mqtt_restart = true;
@@ -134,10 +130,8 @@ void schedule_all_stations(ulong curr_time);
 void turn_on_station(byte sid);
 void turn_off_station(byte sid, ulong curr_time);
 void process_dynamic_events(ulong curr_time);
-void check_network();
 void check_weather();
 bool process_special_program_command(const char *, uint32_t curr_time);
-void perform_ntp_sync();
 void delete_log(char *name);
 void handle_web_request(char *p);
 
@@ -198,7 +192,7 @@ void do_loop()
 	// Start up MQTT when we have a network connection
 	if (os.status.req_mqtt_restart && os.network_connected())
 	{
-		DEBUG_PRINTLN(F("req_mqtt_restart"));
+		DEBUG_PRINTLN("req_mqtt_restart");
 		os.mqtt.begin();
 		os.status.req_mqtt_restart = false;
 	}
@@ -298,7 +292,7 @@ void do_loop()
 
 		// ====== Schedule program data ======
 		ulong curr_minute = curr_time / 60;
-		boolean match_found = false;
+		bool match_found = false;
 		RuntimeQueueStruct *q;
 		// since the granularity of start time is minute
 		// we only need to check once every minute
@@ -611,24 +605,11 @@ void do_loop()
 			}
 		}
 
-		// perform ntp sync
-		// instead of using curr_time, which may change due to NTP sync itself
-		if (curr_time % NTP_SYNC_INTERVAL == 0)
-			os.status.req_ntpsync = 1;
-		// if((millis()/1000) % NTP_SYNC_INTERVAL==15) os.status.req_ntpsync = 1;
-		perform_ntp_sync();
-
-		// check network connection
-		if (curr_time && (curr_time % CHECK_NETWORK_INTERVAL == 0))
-			os.status.req_network = 1;
-		check_network();
-
 		// check weather
 		check_weather();
 
 		byte wuf = os.weather_update_flag;
-		if (wuf)
-		{
+		if (wuf) {
 			if ((wuf & WEATHER_UPDATE_EIP) | (wuf & WEATHER_UPDATE_WL))
 			{
 				// at the moment, we only send notification if water level or external IP changed
@@ -650,8 +631,7 @@ void do_loop()
 }
 
 /** Check and process special program command */
-bool process_special_program_command(const char *pname, uint32_t curr_time)
-{
+bool process_special_program_command(const char *pname, uint32_t curr_time) {
 	if (pname[0] == ':')
 	{ // special command start with :
 		if (strncmp(pname, ":>reboot_now", 12) == 0)
@@ -928,7 +908,7 @@ void reset_all_stations()
  */
 void manual_start_program(byte pid, byte uwt)
 {
-	boolean match_found = false;
+	bool match_found = false;
 	reset_all_stations_immediate();
 	ProgramStruct prog;
 	ulong dur;
@@ -978,7 +958,7 @@ void manual_start_program(byte pid, byte uwt)
 // ==========================================
 void ip2string(char *str, byte ip[4])
 {
-	sprintf_P(str + strlen(str), PSTR("%d.%d.%d.%d"), ip[0], ip[1], ip[2], ip[3]);
+	sprintf(str + strlen(str), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
 }
 
 void push_message(int type, uint32_t lval, float fval, const char *sval)
@@ -996,7 +976,7 @@ void push_message(int type, uint32_t lval, float fval, const char *sval)
 
 	if (ifttt_enabled)
 	{
-		strcpy_P(postval, PSTR("{\"value1\":\""));
+		strcpy(postval, "{\"value1\":\"");
 	}
 
 	if (os.mqtt.enabled())
@@ -1012,8 +992,8 @@ void push_message(int type, uint32_t lval, float fval, const char *sval)
 		// TODO: add IFTTT support for this event as well
 		if (os.mqtt.enabled())
 		{
-			sprintf_P(topic, PSTR("opensprinkler/station/%d"), lval);
-			strcpy_P(payload, PSTR("{\"state\":1}"));
+			sprintf(topic, "opensprinkler/station/%d", lval);
+			strcpy(payload, "{\"state\":1}");
 		}
 		break;
 
@@ -1021,25 +1001,25 @@ void push_message(int type, uint32_t lval, float fval, const char *sval)
 
 		if (os.mqtt.enabled())
 		{
-			sprintf_P(topic, PSTR("opensprinkler/station/%d"), lval);
+			sprintf(topic, "opensprinkler/station/%d", lval);
 			if (os.iopts[IOPT_SENSOR1_TYPE] == SENSOR_TYPE_FLOW)
 			{
-				sprintf_P(payload, PSTR("{\"state\":0,\"duration\":%d,\"flow\":%d.%02d}"), (int)fval, (int)flow_last_gpm, (int)(flow_last_gpm * 100) % 100);
+				sprintf(payload, "{\"state\":0,\"duration\":%d,\"flow\":%d.%02d}", (int)fval, (int)flow_last_gpm, (int)(flow_last_gpm * 100) % 100);
 			}
 			else
 			{
-				sprintf_P(payload, PSTR("{\"state\":0,\"duration\":%d}"), (int)fval);
+				sprintf(payload, "{\"state\":0,\"duration\":%d}", (int)fval);
 			}
 		}
 		if (ifttt_enabled)
 		{
 			char name[STATION_NAME_SIZE];
 			os.get_station_name(lval, name);
-			sprintf_P(postval + strlen(postval), PSTR("Station %s closed. It ran for %d minutes %d seconds."), name, (int)fval / 60, (int)fval % 60);
+			sprintf(postval + strlen(postval), "Station %s closed. It ran for %d minutes %d seconds.", name, (int)fval / 60, (int)fval % 60);
 
 			if (os.iopts[IOPT_SENSOR1_TYPE] == SENSOR_TYPE_FLOW)
 			{
-				sprintf_P(postval + strlen(postval), PSTR(" Flow rate: %d.%02d"), (int)flow_last_gpm, (int)(flow_last_gpm * 100) % 100);
+				sprintf(postval + strlen(postval), " Flow rate: %d.%02d", (int)flow_last_gpm, (int)(flow_last_gpm * 100) % 100);
 			}
 		}
 		break;
@@ -1049,17 +1029,17 @@ void push_message(int type, uint32_t lval, float fval, const char *sval)
 		if (ifttt_enabled)
 		{
 			if (sval)
-				strcat_P(postval, PSTR("Manually scheduled "));
+				strcat(postval, "Manually scheduled ");
 			else
-				strcat_P(postval, PSTR("Automatically scheduled "));
-			strcat_P(postval, PSTR("Program "));
+				strcat(postval, "Automatically scheduled ");
+			strcat(postval, "Program ");
 			{
 				ProgramStruct prog;
 				pd.read(lval, &prog);
 				if (lval < pd.nprograms)
 					strcat(postval, prog.name);
 			}
-			sprintf_P(postval + strlen(postval), PSTR(" with %d%% water level."), (int)fval);
+			sprintf(postval + strlen(postval), " with %d%% water level.", (int)fval);
 		}
 		break;
 
@@ -1067,13 +1047,13 @@ void push_message(int type, uint32_t lval, float fval, const char *sval)
 
 		if (os.mqtt.enabled())
 		{
-			strcpy_P(topic, PSTR("opensprinkler/sensor1"));
-			sprintf_P(payload, PSTR("{\"state\":%d}"), (int)fval);
+			strcpy(topic, "opensprinkler/sensor1");
+			sprintf(payload, "{\"state\":%d}", (int)fval);
 		}
 		if (ifttt_enabled)
 		{
-			strcat_P(postval, PSTR("Sensor 1 "));
-			strcat_P(postval, ((int)fval) ? PSTR("activated.") : PSTR("de-activated."));
+			strcat(postval, "Sensor 1 ");
+			strcat(postval, ((int)fval) ? "activated." : "de-activated.");
 		}
 		break;
 
@@ -1081,13 +1061,13 @@ void push_message(int type, uint32_t lval, float fval, const char *sval)
 
 		if (os.mqtt.enabled())
 		{
-			strcpy_P(topic, PSTR("opensprinkler/sensor2"));
-			sprintf_P(payload, PSTR("{\"state\":%d}"), (int)fval);
+			strcpy(topic, "opensprinkler/sensor2");
+			sprintf(payload, "{\"state\":%d}", (int)fval);
 		}
 		if (ifttt_enabled)
 		{
-			strcat_P(postval, PSTR("Sensor 2 "));
-			strcat_P(postval, ((int)fval) ? PSTR("activated.") : PSTR("de-activated."));
+			strcat(postval, "Sensor 2 ");
+			strcat(postval, ((int)fval) ? "activated." : "de-activated.");
 		}
 		break;
 
@@ -1095,13 +1075,13 @@ void push_message(int type, uint32_t lval, float fval, const char *sval)
 
 		if (os.mqtt.enabled())
 		{
-			strcpy_P(topic, PSTR("opensprinkler/raindelay"));
-			sprintf_P(payload, PSTR("{\"state\":%d}"), (int)fval);
+			strcpy(topic, "opensprinkler/raindelay");
+			sprintf(payload, "{\"state\":%d}", (int)fval);
 		}
 		if (ifttt_enabled)
 		{
-			strcat_P(postval, PSTR("Rain delay "));
-			strcat_P(postval, ((int)fval) ? PSTR("activated.") : PSTR("de-activated."));
+			strcat(postval, "Rain delay ");
+			strcat(postval, ((int)fval) ? "activated." : "de-activated.");
 		}
 		break;
 
@@ -1112,12 +1092,12 @@ void push_message(int type, uint32_t lval, float fval, const char *sval)
 		volume = lval * volume;
 		if (os.mqtt.enabled())
 		{
-			strcpy_P(topic, PSTR("opensprinkler/sensor/flow"));
-			sprintf_P(payload, PSTR("{\"count\":%lu,\"volume\":%d.%02d}"), lval, (int)volume / 100, (int)volume % 100);
+			strcpy(topic, "opensprinkler/sensor/flow");
+			sprintf(payload, "{\"count\":%lu,\"volume\":%d.%02d}", lval, (int)volume / 100, (int)volume % 100);
 		}
 		if (ifttt_enabled)
 		{
-			sprintf_P(postval + strlen(postval), PSTR("Flow count: %lu, volume: %d.%02d"), lval, (int)volume / 100, (int)volume % 100);
+			sprintf(postval + strlen(postval), "Flow count: %lu, volume: %d.%02d", lval, (int)volume / 100, (int)volume % 100);
 		}
 		break;
 
@@ -1127,7 +1107,7 @@ void push_message(int type, uint32_t lval, float fval, const char *sval)
 		{
 			if (lval > 0)
 			{
-				strcat_P(postval, PSTR("External IP updated: "));
+				strcat(postval, "External IP updated: ");
 				byte ip[4] = {(byte)((lval >> 24) & 0xFF),
 							  (byte)((lval >> 16) & 0xFF),
 							  (byte)((lval >> 8) & 0xFF),
@@ -1136,7 +1116,7 @@ void push_message(int type, uint32_t lval, float fval, const char *sval)
 			}
 			if (fval >= 0)
 			{
-				sprintf_P(postval + strlen(postval), PSTR("Water level updated: %d%%."), (int)fval);
+				sprintf(postval + strlen(postval), "Water level updated: %d%%.", (int)fval);
 			}
 		}
 		break;
@@ -1145,12 +1125,12 @@ void push_message(int type, uint32_t lval, float fval, const char *sval)
 
 		if (os.mqtt.enabled())
 		{
-			strcpy_P(topic, PSTR("opensprinkler/system"));
-			strcpy_P(payload, PSTR("{\"state\":\"started\"}"));
+			strcpy(topic, "opensprinkler/system");
+			strcpy(payload, "{\"state\":\"started\"}");
 		}
 		if (ifttt_enabled)
 		{
-			strcat_P(postval, PSTR("Process restarted."));
+			strcat(postval, "Process restarted.");
 		}
 		break;
 	}
@@ -1160,16 +1140,17 @@ void push_message(int type, uint32_t lval, float fval, const char *sval)
 
 	if (ifttt_enabled)
 	{
-		strcat_P(postval, PSTR("\"}"));
+		strcat(postval, "\"}");
 
 		// char postBuffer[1500];
 		BufferFiller bf = ether_buffer;
-		bf.emit_p(PSTR("POST /trigger/sprinkler/with/key/$O HTTP/1.0\r\n"
-					   "Host: $S\r\n"
-					   "Accept: */*\r\n"
-					   "Content-Length: $D\r\n"
-					   "Content-Type: application/json\r\n\r\n$S"),
-				  SOPT_IFTTT_KEY, DEFAULT_IFTTT_URL, strlen(postval), postval);
+		bf.emit_p(
+			"POST /trigger/sprinkler/with/key/$O HTTP/1.0\r\n"
+			"Host: $S\r\n"
+			"Accept: */*\r\n"
+			"Content-Length: $D\r\n"
+			"Content-Type: application/json\r\n\r\n$S",
+			SOPT_IFTTT_KEY, DEFAULT_IFTTT_URL, strlen(postval), postval);
 
 		os.send_http_request(DEFAULT_IFTTT_URL, 80, ether_buffer, remote_http_callback);
 	}
@@ -1188,7 +1169,7 @@ void make_logfile_name(char *name)
 	strcpy(tmp_buffer + TMP_BUFFER_SIZE - 10, name);
 	strcpy(tmp_buffer, LOG_PREFIX);
 	strcat(tmp_buffer, tmp_buffer + TMP_BUFFER_SIZE - 10);
-	strcat_P(tmp_buffer, PSTR(".txt"));
+	strcat(tmp_buffer, ".txt");
 }
 
 /* To save RAM space, we store log type names
@@ -1196,7 +1177,7 @@ void make_logfile_name(char *name)
  * must be strictly two characters with an ending 0
  * so each name is 3 characters total
  */
-static const char log_type_names[] PROGMEM =
+static const char log_type_names[] =
 	"  \0"
 	"s1\0"
 	"rd\0"
@@ -1213,7 +1194,8 @@ void write_log(byte type, ulong curr_time)
 		return;
 
 	// file name will be logs/xxxxx.tx where xxxxx is the day in epoch time
-	ultoa(curr_time / 86400, tmp_buffer, 10);
+	// ultoa(curr_time / 86400, tmp_buffer, 10);
+	sprintf(tmp_buffer, "%lu", curr_time / 86400);
 	make_logfile_name(tmp_buffer);
 
 	// Step 1: open file if exists, or create new otherwise,
@@ -1238,16 +1220,19 @@ void write_log(byte type, ulong curr_time)
 	fseek(file, 0, SEEK_END);
 
 	// Step 2: prepare data buffer
-	strcpy_P(tmp_buffer, PSTR("["));
+	strcpy(tmp_buffer, "[");
 
 	if (type == LOGDATA_STATION)
 	{
-		itoa(pd.lastrun.program, tmp_buffer + strlen(tmp_buffer), 10);
-		strcat_P(tmp_buffer, PSTR(","));
-		itoa(pd.lastrun.station, tmp_buffer + strlen(tmp_buffer), 10);
-		strcat_P(tmp_buffer, PSTR(","));
+		// itoa(pd.lastrun.program, tmp_buffer + strlen(tmp_buffer), 10);
+		sprintf(tmp_buffer + strlen(tmp_buffer), "%d", pd.lastrun.program);
+		strcat(tmp_buffer, ",");
+		// itoa(pd.lastrun.station, tmp_buffer + strlen(tmp_buffer), 10);
+		sprintf(tmp_buffer + strlen(tmp_buffer), "%d", pd.lastrun.station);
+		strcat(tmp_buffer, ",");
 		// duration is unsigned integer
-		ultoa((ulong)pd.lastrun.duration, tmp_buffer + strlen(tmp_buffer), 10);
+		// ultoa((ulong)pd.lastrun.duration, tmp_buffer + strlen(tmp_buffer), 10);
+		sprintf(tmp_buffer + strlen(tmp_buffer), "%lu", (ulong)pd.lastrun.duration);
 	}
 	else
 	{
@@ -1256,10 +1241,11 @@ void write_log(byte type, ulong curr_time)
 		{
 			lvalue = (flow_count > os.flowcount_log_start) ? (flow_count - os.flowcount_log_start) : 0;
 		}
-		ultoa(lvalue, tmp_buffer + strlen(tmp_buffer), 10);
-		strcat_P(tmp_buffer, PSTR(",\""));
-		strcat_P(tmp_buffer, log_type_names + type * 3);
-		strcat_P(tmp_buffer, PSTR("\","));
+		// ultoa(lvalue, tmp_buffer + strlen(tmp_buffer), 10);
+		sprintf(tmp_buffer + strlen(tmp_buffer), "%lu", lvalue);
+		strcat(tmp_buffer, ",\"");
+		strcat(tmp_buffer, log_type_names + type * 3);
+		strcat(tmp_buffer, "\",");
 
 		switch (type)
 		{
@@ -1279,17 +1265,19 @@ void write_log(byte type, ulong curr_time)
 			lvalue = os.iopts[IOPT_WATER_PERCENTAGE];
 			break;
 		}
-		ultoa(lvalue, tmp_buffer + strlen(tmp_buffer), 10);
+		// ultoa(lvalue, tmp_buffer + strlen(tmp_buffer), 10);
+		sprintf(tmp_buffer + strlen(tmp_buffer), "%lu", lvalue);
 	}
-	strcat_P(tmp_buffer, PSTR(","));
-	ultoa(curr_time, tmp_buffer + strlen(tmp_buffer), 10);
+	strcat(tmp_buffer, ",");
+	// ultoa(curr_time, tmp_buffer + strlen(tmp_buffer), 10);
+	sprintf(tmp_buffer + strlen(tmp_buffer), "%lu", curr_time);
 	if ((os.iopts[IOPT_SENSOR1_TYPE] == SENSOR_TYPE_FLOW) && (type == LOGDATA_STATION))
 	{
 		// RAH implementation of flow sensor
-		strcat_P(tmp_buffer, PSTR(","));
+		strcat(tmp_buffer, ",");
 		sprintf(tmp_buffer + strlen(tmp_buffer), "%5.2f", flow_last_gpm);
 	}
-	strcat_P(tmp_buffer, PSTR("]\r\n"));
+	strcat(tmp_buffer, "]\r\n");
 
 	fwrite(tmp_buffer, 1, strlen(tmp_buffer), file);
 	fclose(file);
@@ -1314,23 +1302,6 @@ void delete_log(char *name)
 		make_logfile_name(name);
 		remove(get_filename_fullpath(tmp_buffer));
 	}
-}
-
-/** Perform network check
- * This function pings the router
- * to check if it's still online.
- * If not, it re-initializes Ethernet controller.
- */
-void check_network()
-{
-	// nothing to do for other platforms
-}
-
-/** Perform NTP sync */
-void perform_ntp_sync()
-{
-	// nothing to do here
-	// Linux will do this for you
 }
 
 // main function for RPI

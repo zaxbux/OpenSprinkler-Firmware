@@ -143,8 +143,7 @@ void OSMqtt::begin(void)
 }
 
 // Start the MQTT service and connect to the MQTT broker.
-void OSMqtt::begin(const char *host, int port, const char *username, const char *password, bool enabled)
-{
+void OSMqtt::begin(const char *host, int port, const char *username, const char *password, bool enabled) {
 	DEBUG_LOGF("MQTT Begin: Config (%s:%d %s) %s\r\n", host, port, username, enabled ? "Enabled" : "Disabled");
 
 	strncpy(_host, host, MQTT_MAX_HOST_LEN);

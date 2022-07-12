@@ -38,7 +38,7 @@ void write_log(byte type, ulong curr_time);
 
 // The weather function calls getweather.py on remote server to retrieve weather data
 // the default script is WEATHER_SCRIPT_HOST/weather?.py
-// static char website[] PROGMEM = DEFAULT_WEATHER_URL ;
+// static char website[]  = DEFAULT_WEATHER_URL ;
 
 static void getweather_callback(char *buffer)
 {
@@ -54,16 +54,14 @@ static void getweather_callback(char *buffer)
 	bool save_nvdata = false;
 
 	// first check errCode, only update lswc timestamp if errCode is 0
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("errCode"), true))
-	{
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "errCode", true)) {
 		wt_errCode = atoi(tmp_buffer);
 		if (wt_errCode == 0)
 			os.checkwt_success_lasttime = os.now_tz();
 	}
 
 	// then only parse scale if errCode is 0
-	if (wt_errCode == 0 && findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("scale"), true))
-	{
+	if (wt_errCode == 0 && findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "scale", true)) {
 		v = atoi(tmp_buffer);
 		if (v >= 0 && v <= 250 && v != os.iopts[IOPT_WATER_PERCENTAGE])
 		{
@@ -74,8 +72,7 @@ static void getweather_callback(char *buffer)
 		}
 	}
 
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("sunrise"), true))
-	{
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "sunrise", true)) {
 		v = atoi(tmp_buffer);
 		if (v >= 0 && v <= 1440 && v != os.nvdata.sunrise_time)
 		{
@@ -85,8 +82,7 @@ static void getweather_callback(char *buffer)
 		}
 	}
 
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("sunset"), true))
-	{
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "sunset", true)) {
 		v = atoi(tmp_buffer);
 		if (v >= 0 && v <= 1440 && v != os.nvdata.sunset_time)
 		{
@@ -96,8 +92,7 @@ static void getweather_callback(char *buffer)
 		}
 	}
 
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("eip"), true))
-	{
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "eip", true)) {
 		uint32_t l = strtoul(tmp_buffer, NULL, 0);
 		if (l != os.nvdata.external_ip)
 		{
@@ -107,8 +102,7 @@ static void getweather_callback(char *buffer)
 		}
 	}
 
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("tz"), true))
-	{
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "tz", true)) {
 		v = atoi(tmp_buffer);
 		if (v >= 0 && v <= 108)
 		{
@@ -122,8 +116,7 @@ static void getweather_callback(char *buffer)
 		}
 	}
 
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("rd"), true))
-	{
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "rd", true)) {
 		v = atoi(tmp_buffer);
 		if (v > 0)
 		{
@@ -136,8 +129,7 @@ static void getweather_callback(char *buffer)
 		}
 	}
 
-	if (findKeyVal(p, wt_rawData, TMP_BUFFER_SIZE, PSTR("rawData"), true))
-	{
+	if (findKeyVal(p, wt_rawData, TMP_BUFFER_SIZE, "rawData", true)) {
 		wt_rawData[TMP_BUFFER_SIZE - 1] = 0; // make sure the buffer ends properly
 	}
 
@@ -156,7 +148,7 @@ void GetWeather()
 {
 	// use temp buffer to construct get command
 	BufferFiller bf = tmp_buffer;
-	bf.emit_p(PSTR("$D?loc=$O&wto=$O&fwv=$D"),
+	bf.emit_p("$D?loc=$O&wto=$O&fwv=$D",
 			  (int)os.iopts[IOPT_USE_WEATHER],
 			  SOPT_LOCATION,
 			  SOPT_WEATHER_OPTS,

@@ -82,34 +82,34 @@ int available_ether_buffer()
 #define HTML_UPLOAD_FAILED 0x40
 #define HTML_REDIRECT_HOME 0xFF
 
-static const char html200OK[] PROGMEM =
+static const char html200OK[] =
 	"HTTP/1.1 200 OK\r\n";
 
-static const char htmlCacheCtrl[] PROGMEM =
+static const char htmlCacheCtrl[] =
 	"Cache-Control: max-age=604800, public\r\n";
 
-static const char htmlNoCache[] PROGMEM =
+static const char htmlNoCache[] =
 	"Cache-Control: max-age=0, no-cache, no-store, must-revalidate\r\n";
 
-static const char htmlContentHTML[] PROGMEM =
+static const char htmlContentHTML[] =
 	"Content-Type: text/html\r\n";
 
-static const char htmlAccessControl[] PROGMEM =
+static const char htmlAccessControl[] =
 	"Access-Control-Allow-Origin: *\r\n";
 
-static const char htmlContentJSON[] PROGMEM =
+static const char htmlContentJSON[] =
 	"Content-Type: application/json\r\n"
 	"Connection: close\r\n";
 
-static const char htmlMobileHeader[] PROGMEM =
+static const char htmlMobileHeader[] =
 	"<meta name=\"viewport\" content=\"width=device-width,initial-scale=1.0,minimum-scale=1.0,user-scalable=no\">\r\n";
 
-static const char htmlReturnHome[] PROGMEM =
+static const char htmlReturnHome[] =
 	"<script>window.location=\"/\";</script>\n";
 
 void print_html_standard_header()
 {
-	bfill.emit_p(PSTR("$F$F$F$F\r\n"), html200OK, htmlContentHTML, htmlNoCache, htmlAccessControl);
+	bfill.emit_p("$F$F$F$F\r\n", html200OK, htmlContentHTML, htmlNoCache, htmlAccessControl);
 	// TODO: streamline this part as well
 	/*m_client->write((const uint8_t *)html200OK, strlen(html200OK));
 	m_client->write((const uint8_t *)htmlContentHTML, strlen(htmlContentHTML));
@@ -118,11 +118,10 @@ void print_html_standard_header()
 	m_client->write((const uint8_t *)"\r\n", 2);*/
 }
 
-void print_json_header(bool bracket = true)
-{
-	bfill.emit_p(PSTR("$F$F$F$F\r\n"), html200OK, htmlContentJSON, htmlAccessControl, htmlNoCache);
+void print_json_header(bool bracket = true) {
+	bfill.emit_p("$F$F$F$F\r\n", html200OK, htmlContentJSON, htmlAccessControl, htmlNoCache);
 	if (bracket)
-		bfill.emit_p(PSTR("{"));
+		bfill.emit_p("{");
 	// TODO: streamline
 	/*m_client->write((const uint8_t *)html200OK, strlen(html200OK));
 	m_client->write((const uint8_t *)htmlContentJSON, strlen(htmlContentJSON));
@@ -132,8 +131,7 @@ void print_json_header(bool bracket = true)
 	else m_client->write((const uint8_t *)"\r\n", 2);*/
 }
 
-byte findKeyVal(const char *str, char *strbuf, uint16_t maxlen, const char *key, bool key_in_pgm = false, uint8_t *keyfound = NULL)
-{
+byte findKeyVal(const char *str, char *strbuf, uint16_t maxlen, const char *key, bool key_in_pgm = false, uint8_t *keyfound = NULL) {
 	uint8_t found = 0;
 	// case 2: otherwise, assume the key-val is stored in str
 	uint16_t i = 0;
@@ -196,8 +194,7 @@ void rewind_ether_buffer()
 	ether_buffer[0] = 0;
 }
 
-void send_packet(bool final = false)
-{
+void send_packet(bool final = false) {
 	m_client->write((const uint8_t *)ether_buffer, strlen(ether_buffer));
 	if (final)
 	{
@@ -216,8 +213,7 @@ char dec2hexchar(byte dec)
 }
 
 /** Check and verify password */
-boolean check_password(char *p)
-{
+bool check_password(char *p) {
 #if defined(DEMO)
 	return true;
 #endif
@@ -227,8 +223,7 @@ boolean check_password(char *p)
 	{
 		p = get_buffer;
 	}
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("pw"), true))
-	{
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "pw", true)) {
 		urlDecode(tmp_buffer);
 		if (os.password_verify(tmp_buffer))
 			return true;
@@ -238,41 +233,41 @@ boolean check_password(char *p)
 
 void server_json_stations_attrib(const char *name, byte *attrib)
 {
-	bfill.emit_p(PSTR("\"$F\":["), name);
+	bfill.emit_p("\"$F\":[", name);
 	for (byte i = 0; i < os.nboards; i++)
 	{
-		bfill.emit_p(PSTR("$D"), attrib[i]);
+		bfill.emit_p("$D", attrib[i]);
 		if (i != os.nboards - 1)
-			bfill.emit_p(PSTR(","));
+			bfill.emit_p(",");
 	}
-	bfill.emit_p(PSTR("],"));
+	bfill.emit_p("],");
 }
 
 void server_json_stations_main()
 {
-	server_json_stations_attrib(PSTR("masop"), os.attrib_mas);
-	server_json_stations_attrib(PSTR("masop2"), os.attrib_mas2);
-	server_json_stations_attrib(PSTR("ignore_rain"), os.attrib_igrd);
-	server_json_stations_attrib(PSTR("ignore_sn1"), os.attrib_igs);
-	server_json_stations_attrib(PSTR("ignore_sn2"), os.attrib_igs2);
-	server_json_stations_attrib(PSTR("stn_dis"), os.attrib_dis);
-	server_json_stations_attrib(PSTR("stn_seq"), os.attrib_seq);
-	server_json_stations_attrib(PSTR("stn_spe"), os.attrib_spe);
+	server_json_stations_attrib("masop", os.attrib_mas);
+	server_json_stations_attrib("masop2", os.attrib_mas2);
+	server_json_stations_attrib("ignore_rain", os.attrib_igrd);
+	server_json_stations_attrib("ignore_sn1", os.attrib_igs);
+	server_json_stations_attrib("ignore_sn2", os.attrib_igs2);
+	server_json_stations_attrib("stn_dis", os.attrib_dis);
+	server_json_stations_attrib("stn_seq", os.attrib_seq);
+	server_json_stations_attrib("stn_spe", os.attrib_spe);
 
-	bfill.emit_p(PSTR("\"snames\":["));
+	bfill.emit_p("\"snames\":[");
 	byte sid;
 	for (sid = 0; sid < os.nstations; sid++)
 	{
 		os.get_station_name(sid, tmp_buffer);
-		bfill.emit_p(PSTR("\"$S\""), tmp_buffer);
+		bfill.emit_p("\"$S\"", tmp_buffer);
 		if (sid != os.nstations - 1)
-			bfill.emit_p(PSTR(","));
+			bfill.emit_p(",");
 		if (available_ether_buffer() <= 0)
 		{
 			send_packet();
 		}
 	}
-	bfill.emit_p(PSTR("],\"maxlen\":$D}"), STATION_NAME_SIZE);
+	bfill.emit_p("],\"maxlen\":$D}", STATION_NAME_SIZE);
 }
 
 /** Output stations data */
@@ -296,19 +291,19 @@ void server_json_station_special()
 		{ // check if this is a special station
 			os.get_station_data(sid, data);
 			if (comma)
-				bfill.emit_p(PSTR(","));
+				bfill.emit_p(",");
 			else
 			{
 				comma = 1;
 			}
-			bfill.emit_p(PSTR("\"$D\":{\"st\":$D,\"sd\":\"$S\"}"), sid, data->type, data->sped);
+			bfill.emit_p("\"$D\":{\"st\":$D,\"sd\":\"$S\"}", sid, data->type, data->sped);
 		}
 		if (available_ether_buffer() <= 0)
 		{
 			send_packet();
 		}
 	}
-	bfill.emit_p(PSTR("}"));
+	bfill.emit_p("}");
 	handle_return(HTML_OK);
 }
 
@@ -319,7 +314,8 @@ void server_change_stations_attrib(char *p, char header, byte *attrib)
 	tbuf2[0] = header;
 	for (bid = 0; bid < os.nboards; bid++)
 	{
-		itoa(bid, tbuf2 + 1, 10);
+		// itoa(bid, tbuf2 + 1, 10);
+		sprintf(tbuf2 + 1, "%d", bid);
 		if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, tbuf2))
 		{
 			attrib[bid] = atoi(tmp_buffer);
@@ -348,7 +344,8 @@ void server_change_stations()
 	// process station names
 	for (sid = 0; sid < os.nstations; sid++)
 	{
-		itoa(sid, tbuf2 + 1, 10);
+		// itoa(sid, tbuf2 + 1, 10);
+		sprintf(tbuf2 + 1, "%d", sid);
 		if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, tbuf2))
 		{
 			urlDecode(tmp_buffer);
@@ -366,15 +363,12 @@ void server_change_stations()
 	server_change_stations_attrib(p, 'p', os.attrib_spe);  // special
 
 	/* handle special data */
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("sid"), true))
-	{
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "sid", true)) {
 		sid = atoi(tmp_buffer);
 		if (sid < 0 || sid > os.nstations)
 			handle_return(HTML_DATA_OUTOFBOUND);
-		if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("st"), true) &&
-			findKeyVal(p, tmp_buffer + 1, TMP_BUFFER_SIZE - 1, PSTR("sd"), true))
-		{
-
+		if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "st", true) &&
+			findKeyVal(p, tmp_buffer + 1, TMP_BUFFER_SIZE - 1, "sd", true)) {
 			tmp_buffer[0] -= '0';
 			tmp_buffer[STATION_SPECIAL_DATA_SIZE] = 0;
 
@@ -406,10 +400,7 @@ void server_change_stations()
 			// write spe data
 			file_write_block(STATIONS_FILENAME, tmp_buffer,
 							 (uint32_t)sid * sizeof(StationData) + offsetof(StationData, type), STATION_SPECIAL_DATA_SIZE + 1);
-		}
-		else
-		{
-
+		} else {
 			handle_return(HTML_DATA_MISSING);
 		}
 	}
@@ -450,7 +441,7 @@ void server_manual_program()
 {
 	char *p = get_buffer;
 
-	if (!findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("pid"), true))
+	if (!findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "pid", true))
 		handle_return(HTML_DATA_MISSING);
 
 	int pid = atoi(tmp_buffer);
@@ -460,8 +451,7 @@ void server_manual_program()
 	}
 
 	byte uwt = 0;
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("uwt"), true))
-	{
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "uwt", true)) {
 		if (tmp_buffer[0] == '1')
 			uwt = 1;
 	}
@@ -490,7 +480,7 @@ void server_change_runonce()
 		urlDecode(p);
 	// search for the start of t=[
 	char *pv;
-	boolean found = false;
+	bool found = false;
 	for (pv = p; (*pv) != 0 && pv < p + 100; pv++)
 	{
 		if (strncmp(pv, "t=[", 3) == 0)
@@ -508,7 +498,7 @@ void server_change_runonce()
 
 	byte sid, bid, s;
 	uint16_t dur;
-	boolean match_found = false;
+	bool match_found = false;
 	for (sid = 0; sid < os.nstations; sid++)
 	{
 		dur = parse_listdata(&pv);
@@ -548,7 +538,7 @@ void server_change_runonce()
 void server_delete_program()
 {
 	char *p = get_buffer;
-	if (!findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("pid"), true))
+	if (!findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "pid", true))
 		handle_return(HTML_DATA_MISSING);
 
 	int pid = atoi(tmp_buffer);
@@ -579,7 +569,7 @@ void server_moveup_program()
 {
 	char *p = get_buffer;
 
-	if (!findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("pid"), true))
+	if (!findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "pid", true))
 		handle_return(HTML_DATA_MISSING);
 
 	int pid = atoi(tmp_buffer);
@@ -602,7 +592,7 @@ void server_moveup_program()
  * dur?:	station water time
  * name:	program name
  */
-const char _str_program[] PROGMEM = "Program ";
+const char _str_program[] = "Program ";
 void server_change_program()
 {
 	char *p = get_buffer;
@@ -612,7 +602,7 @@ void server_change_program()
 	ProgramStruct prog;
 
 	// parse program index
-	if (!findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("pid"), true))
+	if (!findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "pid", true))
 		handle_return(HTML_DATA_MISSING);
 
 	int pid = atoi(tmp_buffer);
@@ -620,8 +610,7 @@ void server_change_program()
 		handle_return(HTML_DATA_OUTOFBOUND);
 
 	// check if "en" parameter is present
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("en"), true))
-	{
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "en", true)) {
 		if (pid < 0)
 			handle_return(HTML_DATA_OUTOFBOUND);
 		pd.set_flagbit(pid, PROGRAMSTRUCT_EN_BIT, (tmp_buffer[0] == '0') ? 0 : 1);
@@ -629,8 +618,7 @@ void server_change_program()
 	}
 
 	// check if "uwt" parameter is present
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("uwt"), true))
-	{
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "uwt", true)) {
 		if (pid < 0)
 			handle_return(HTML_DATA_OUTOFBOUND);
 		pd.set_flagbit(pid, PROGRAMSTRUCT_UWT_BIT, (tmp_buffer[0] == '0') ? 0 : 1);
@@ -638,15 +626,13 @@ void server_change_program()
 	}
 
 	// parse program name
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("name"), true))
-	{
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "name", true)) {
 		urlDecode(tmp_buffer);
 		strncpy(prog.name, tmp_buffer, PROGRAM_NAME_SIZE);
-	}
-	else
-	{
-		strcpy_P(prog.name, _str_program);
-		itoa((pid == -1) ? (pd.nprograms + 1) : (pid + 1), prog.name + 8, 10);
+	} else {
+		strcpy(prog.name, _str_program);
+		// itoa((pid == -1) ? (pd.nprograms + 1) : (pid + 1), prog.name + 8, 10);
+		sprintf(prog.name + 8, "%d", (pid == -1) ? (pd.nprograms + 1) : (pid + 1));
 	}
 
 	// do a full string decoding
@@ -656,7 +642,7 @@ void server_change_program()
 	// parse ad-hoc v=[...
 	// search for the start of v=[
 	char *pv;
-	boolean found = false;
+	bool found = false;
 
 	for (pv = p; (*pv) != 0 && pv < p + 100; pv++)
 	{
@@ -717,38 +703,19 @@ void server_change_program()
 	handle_return(HTML_SUCCESS);
 }
 
-void server_json_options_main()
-{
+void server_json_options_main() {
 	byte oid;
-	for (oid = 0; oid < NUM_IOPTS; oid++)
-	{
-		// do not send the following parameters for non-Arduino platforms
-		if (oid == IOPT_USE_NTP || oid == IOPT_USE_DHCP ||
-			(oid >= IOPT_STATIC_IP1 && oid <= IOPT_STATIC_IP4) ||
-			(oid >= IOPT_GATEWAY_IP1 && oid <= IOPT_GATEWAY_IP4) ||
-			(oid >= IOPT_DNS_IP1 && oid <= IOPT_DNS_IP4) ||
-			(oid >= IOPT_SUBNET_MASK1 && oid <= IOPT_SUBNET_MASK4))
-			continue;
-
-#if defined(PIN_SENSOR2)
+	for (oid = 0; oid < NUM_IOPTS; oid++) {
+		//#if defined(PIN_SENSOR2)
 		// only OS 3.x or controllers that have PIN_SENSOR2 defined support sensor 2 options
-		if (oid == IOPT_SENSOR2_TYPE || oid == IOPT_SENSOR2_OPTION || oid == IOPT_SENSOR2_ON_DELAY || oid == IOPT_SENSOR2_OFF_DELAY)
-			continue;
-#endif
+		// if (oid == IOPT_SENSOR2_TYPE || oid == IOPT_SENSOR2_OPTION || oid == IOPT_SENSOR2_ON_DELAY || oid == IOPT_SENSOR2_OFF_DELAY)
+		//	continue;
+		//#endif
 
 		int32_t v = os.iopts[oid];
-		if (oid == IOPT_MASTER_OFF_ADJ || oid == IOPT_MASTER_OFF_ADJ_2 ||
-			oid == IOPT_MASTER_ON_ADJ || oid == IOPT_MASTER_ON_ADJ_2 ||
-			oid == IOPT_STATION_DELAY_TIME)
-		{
+		if (oid == IOPT_MASTER_OFF_ADJ || oid == IOPT_MASTER_OFF_ADJ_2 || oid == IOPT_MASTER_ON_ADJ || oid == IOPT_MASTER_ON_ADJ_2 || oid == IOPT_STATION_DELAY_TIME) {
 			v = water_time_decode_signed(v);
 		}
-
-		if (oid == IOPT_BOOST_TIME)
-			continue;
-
-		if (oid == IOPT_SEQUENTIAL_RETIRED || oid == IOPT_URS_RETIRED || oid == IOPT_RSO_RETIRED)
-			continue;
 
 		// for Linux-based platforms, there is no LCD currently
 		if (oid == IOPT_LCD_CONTRAST || oid == IOPT_LCD_BACKLIGHT || oid == IOPT_LCD_DIMMING)
@@ -756,12 +723,12 @@ void server_json_options_main()
 
 		// each json name takes 5 characters
 		strncpy_P0(tmp_buffer, iopt_json_names + oid * 5, 5);
-		bfill.emit_p(PSTR("\"$S\":$D"), tmp_buffer, v);
+		bfill.emit_p("\"$S\":$D", tmp_buffer, v);
 		if (oid != NUM_IOPTS - 1)
-			bfill.emit_p(PSTR(","));
+			bfill.emit_p(",");
 	}
 
-	bfill.emit_p(PSTR(",\"dexp\":$D,\"mexp\":$D}"), os.detect_exp(), MAX_EXT_BOARDS);
+	bfill.emit_p(",\"mexp\":$D}", MAX_EXT_BOARDS);
 }
 
 /** Output Options */
@@ -774,44 +741,40 @@ void server_json_options()
 
 void server_json_programs_main()
 {
-
-	bfill.emit_p(PSTR("\"nprogs\":$D,\"nboards\":$D,\"mnp\":$D,\"mnst\":$D,\"pnsize\":$D,\"pd\":["),
+	bfill.emit_p("\"nprogs\":$D,\"nboards\":$D,\"mnp\":$D,\"mnst\":$D,\"pnsize\":$D,\"pd\":[",
 				 pd.nprograms, os.nboards, MAX_NUM_PROGRAMS, MAX_NUM_STARTTIMES, PROGRAM_NAME_SIZE);
 	byte pid, i;
 	ProgramStruct prog;
-	for (pid = 0; pid < pd.nprograms; pid++)
-	{
+	for (pid = 0; pid < pd.nprograms; pid++) {
 		pd.read(pid, &prog);
-		if (prog.type == PROGRAM_TYPE_INTERVAL && prog.days[1] >= 1)
-		{
+		if (prog.type == PROGRAM_TYPE_INTERVAL && prog.days[1] >= 1) {
 			pd.drem_to_relative(prog.days);
 		}
 
 		byte bytedata = *(char *)(&prog);
-		bfill.emit_p(PSTR("[$D,$D,$D,["), bytedata, prog.days[0], prog.days[1]);
+		bfill.emit_p("[$D,$D,$D,[", bytedata, prog.days[0], prog.days[1]);
 		// start times data
-		for (i = 0; i < (MAX_NUM_STARTTIMES - 1); i++)
-		{
-			bfill.emit_p(PSTR("$D,"), prog.starttimes[i]);
+		for (i = 0; i < (MAX_NUM_STARTTIMES - 1); i++) {
+			bfill.emit_p("$D,", prog.starttimes[i]);
 		}
-		bfill.emit_p(PSTR("$D],["), prog.starttimes[i]); // this is the last element
+		bfill.emit_p("$D],[", prog.starttimes[i]);	// this is the last element
 		// station water time
 		for (i = 0; i < os.nstations - 1; i++)
 		{
-			bfill.emit_p(PSTR("$L,"), (unsigned long)prog.durations[i]);
+			bfill.emit_p("$L,", (unsigned long)prog.durations[i]);
 		}
-		bfill.emit_p(PSTR("$L],\""), (unsigned long)prog.durations[i]); // this is the last element
+		bfill.emit_p("$L],\"", (unsigned long)prog.durations[i]);  // this is the last element
 		// program name
 		strncpy(tmp_buffer, prog.name, PROGRAM_NAME_SIZE);
 		tmp_buffer[PROGRAM_NAME_SIZE] = 0; // make sure the string ends
-		bfill.emit_p(PSTR("$S"), tmp_buffer);
+		bfill.emit_p("$S", tmp_buffer);
 		if (pid != pd.nprograms - 1)
 		{
-			bfill.emit_p(PSTR("\"],"));
+			bfill.emit_p("\"],");
 		}
 		else
 		{
-			bfill.emit_p(PSTR("\"]"));
+			bfill.emit_p("\"]");
 		}
 		// push out a packet if available
 		// buffer size is getting small
@@ -820,7 +783,7 @@ void server_json_programs_main()
 			send_packet();
 		}
 	}
-	bfill.emit_p(PSTR("]}"));
+	bfill.emit_p("]}");
 }
 
 /** Output program data */
@@ -835,7 +798,7 @@ void server_json_programs()
 void server_view_scripturl()
 {
 	print_html_standard_header();
-	bfill.emit_p(PSTR("<form name=of action=cu method=get><table cellspacing=\"12\"><tr><td><b>JavaScript</b>:</td><td><input type=text size=40 maxlength=40 value=\"$O\" name=jsp></td></tr><tr><td>Default:</td><td>$S</td></tr><tr><td><b>Weather</b>:</td><td><input type=text size=40 maxlength=40 value=\"$O\" name=wsp></td></tr><tr><td>Default:</td><td>$S</td></tr><tr><td><b>Password</b>:</td><td><input type=password size=32 name=pw> <input type=submit></td></tr></table></form><script src=https://ui.opensprinkler.com/js/hasher.js></script>"), SOPT_JAVASCRIPTURL, DEFAULT_JAVASCRIPT_URL, SOPT_WEATHERURL, DEFAULT_WEATHER_URL);
+	bfill.emit_p("<form name=of action=cu method=get><table cellspacing=\"12\"><tr><td><b>JavaScript</b>:</td><td><input type=text size=40 maxlength=40 value=\"$O\" name=jsp></td></tr><tr><td>Default:</td><td>$S</td></tr><tr><td><b>Weather</b>:</td><td><input type=text size=40 maxlength=40 value=\"$O\" name=wsp></td></tr><tr><td>Default:</td><td>$S</td></tr><tr><td><b>Password</b>:</td><td><input type=password size=32 name=pw> <input type=submit></td></tr></table></form><script src=https://ui.opensprinkler.com/js/hasher.js></script>", SOPT_JAVASCRIPTURL, DEFAULT_JAVASCRIPT_URL, SOPT_WEATHERURL, DEFAULT_WEATHER_URL);
 	handle_return(HTML_OK);
 }
 
@@ -843,33 +806,34 @@ void server_json_controller_main()
 {
 	byte bid, sid;
 	ulong curr_time = os.now_tz();
-	bfill.emit_p(PSTR("\"devt\":$L,\"nbrd\":$D,\"en\":$D,\"sn1\":$D,\"sn2\":$D,\"rd\":$D,\"rdst\":$L,"
-					  "\"sunrise\":$D,\"sunset\":$D,\"eip\":$L,\"lwc\":$L,\"lswc\":$L,"
-					  "\"lupt\":$L,\"lrbtc\":$D,\"lrun\":[$D,$D,$D,$L],"),
-				 curr_time,
-				 os.nboards,
-				 os.status.enabled,
-				 os.status.sensor1_active,
-				 os.status.sensor2_active,
-				 os.status.rain_delayed,
-				 os.nvdata.rd_stop_time,
-				 os.nvdata.sunrise_time,
-				 os.nvdata.sunset_time,
-				 os.nvdata.external_ip,
-				 os.checkwt_lasttime,
-				 os.checkwt_success_lasttime,
-				 os.powerup_lasttime,
-				 os.last_reboot_cause,
-				 pd.lastrun.station,
-				 pd.lastrun.program,
-				 pd.lastrun.duration,
-				 pd.lastrun.endtime);
+	bfill.emit_p(
+		"\"devt\":$L,\"nbrd\":$D,\"en\":$D,\"sn1\":$D,\"sn2\":$D,\"rd\":$D,\"rdst\":$L,"
+		"\"sunrise\":$D,\"sunset\":$D,\"eip\":$L,\"lwc\":$L,\"lswc\":$L,"
+		"\"lupt\":$L,\"lrbtc\":$D,\"lrun\":[$D,$D,$D,$L],",
+		curr_time,
+		os.nboards,
+		os.status.enabled,
+		os.status.sensor1_active,
+		os.status.sensor2_active,
+		os.status.rain_delayed,
+		os.nvdata.rd_stop_time,
+		os.nvdata.sunrise_time,
+		os.nvdata.sunset_time,
+		os.nvdata.external_ip,
+		os.checkwt_lasttime,
+		os.checkwt_success_lasttime,
+		os.powerup_lasttime,
+		os.last_reboot_cause,
+		pd.lastrun.station,
+		pd.lastrun.program,
+		pd.lastrun.duration,
+		pd.lastrun.endtime);
 
 	byte mac[6] = {0};
 	os.load_hardware_mac(mac);
-	bfill.emit_p(PSTR("\"mac\":\"$X:$X:$X:$X:$X:$X\","), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+	bfill.emit_p("\"mac\":\"$X:$X:$X:$X:$X:$X\",", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
-	bfill.emit_p(PSTR("\"loc\":\"$O\",\"jsp\":\"$O\",\"wsp\":\"$O\",\"wto\":{$O},\"ifkey\":\"$O\",\"mqtt\":{$O},\"wtdata\":$S,\"wterr\":$D,"),
+	bfill.emit_p("\"loc\":\"$O\",\"jsp\":\"$O\",\"wsp\":\"$O\",\"wto\":{$O},\"ifkey\":\"$O\",\"mqtt\":{$O},\"wtdata\":$S,\"wterr\":$D,",
 				 SOPT_LOCATION,
 				 SOPT_JAVASCRIPTURL,
 				 SOPT_WEATHERURL,
@@ -881,14 +845,14 @@ void server_json_controller_main()
 
 	if (os.iopts[IOPT_SENSOR1_TYPE] == SENSOR_TYPE_FLOW)
 	{
-		bfill.emit_p(PSTR("\"flcrt\":$L,\"flwrt\":$D,"), os.flowcount_rt, FLOWCOUNT_RT_WINDOW);
+		bfill.emit_p("\"flcrt\":$L,\"flwrt\":$D,", os.flowcount_rt, FLOWCOUNT_RT_WINDOW);
 	}
 
-	bfill.emit_p(PSTR("\"sbits\":["));
+	bfill.emit_p("\"sbits\":[");
 	// print sbits
 	for (bid = 0; bid < os.nboards; bid++)
-		bfill.emit_p(PSTR("$D,"), os.station_bits[bid]);
-	bfill.emit_p(PSTR("0],\"ps\":["));
+		bfill.emit_p("$D,", os.station_bits[bid]);
+	bfill.emit_p("0],\"ps\":[");
 	// print ps
 	for (sid = 0; sid < os.nstations; sid++)
 	{
@@ -907,14 +871,14 @@ void server_json_controller_main()
 			if (rem > 65535)
 				rem = 0;
 		}
-		bfill.emit_p(PSTR("[$D,$L,$L]"), (qid < 255) ? q->pid : 0, rem, (qid < 255) ? q->st : 0);
-		bfill.emit_p((sid < os.nstations - 1) ? PSTR(",") : PSTR("]"));
+		bfill.emit_p("[$D,$L,$L]", (qid < 255) ? q->pid : 0, rem, (qid < 255) ? q->st : 0);
+		bfill.emit_p((sid < os.nstations - 1) ? "," : "]");
 	}
 
-	// bfill.emit_p(PSTR(",\"blynk\":\"$O\""), SOPT_BLYNK_TOKEN);
-	// bfill.emit_p(PSTR(",\"mqtt\":\"$O\""), SOPT_MQTT_IP);
+	// bfill.emit_p(",\"blynk\":\"$O\"", SOPT_BLYNK_TOKEN);
+	// bfill.emit_p(",\"mqtt\":\"$O\"", SOPT_MQTT_IP);
 
-	bfill.emit_p(PSTR("}"));
+	bfill.emit_p("}");
 }
 
 /** Output controller variables in json */
@@ -930,12 +894,11 @@ void server_home()
 {
 	print_html_standard_header();
 
-	bfill.emit_p(PSTR("<!DOCTYPE html>\n<html>\n<head>\n$F</head>\n<body>\n<script>"), htmlMobileHeader);
+	bfill.emit_p("<!DOCTYPE html>\n<html>\n<head>\n$F</head>\n<body>\n<script>", htmlMobileHeader);
 	// send server variables and javascript packets
-	bfill.emit_p(PSTR("var ver=$D,ipas=$D;</script>\n"),
-				 OS_FW_VERSION, os.iopts[IOPT_IGNORE_PASSWORD]);
+	bfill.emit_p("var ver=$D,ipas=$D;</script>\n", OS_FW_VERSION, os.iopts[IOPT_IGNORE_PASSWORD]);
 
-	bfill.emit_p(PSTR("<script src=\"$O/home.js\"></script>\n</body>\n</html>"), SOPT_JAVASCRIPTURL);
+	bfill.emit_p("<script src=\"$O/home.js\"></script>\n</body>\n</html>", SOPT_JAVASCRIPTURL);
 
 	handle_return(HTML_OK);
 }
@@ -950,40 +913,35 @@ void server_home()
  * en:	enable (0 or 1)
  * rd:	rain delay hours (0 turns off rain delay)
  * re:	remote extension mode
- * ap:	reset to ap (ESP8266 only)
  * update: launch update script (for OSPi/Linux only)
  */
 void server_change_values()
 {
 	char *p = get_buffer;
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("rsn"), true))
-	{
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "rsn", true)) {
 		reset_all_stations();
 	}
 
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("update"), true) && atoi(tmp_buffer) > 0)
-	{
+	// @TODO Remove
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "update", true) && atoi(tmp_buffer) > 0) {
 		os.update_dev();
 	}
 
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("rbt"), true) && atoi(tmp_buffer) > 0)
-	{
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "rbt", true) && atoi(tmp_buffer) > 0) {
 		print_html_standard_header();
-		// bfill.emit_p(PSTR("Rebooting..."));
+		// bfill.emit_p("Rebooting...");
 		send_packet(true);
 		os.reboot_dev(REBOOT_CAUSE_WEB);
 	}
 
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("en"), true))
-	{
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "en", true)) {
 		if (tmp_buffer[0] == '1' && !os.status.enabled)
 			os.enable();
 		else if (tmp_buffer[0] == '0' && os.status.enabled)
 			os.disable();
 	}
 
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("rd"), true))
-	{
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "rd", true)) {
 		int rd = atoi(tmp_buffer);
 		if (rd > 0)
 		{
@@ -998,8 +956,7 @@ void server_change_values()
 			handle_return(HTML_DATA_OUTOFBOUND);
 	}
 
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("re"), true))
-	{
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "re", true)) {
 		if (tmp_buffer[0] == '1' && !os.iopts[IOPT_REMOTE_EXT_MODE])
 		{
 			os.iopts[IOPT_REMOTE_EXT_MODE] = 1;
@@ -1044,16 +1001,14 @@ void server_change_scripturl()
 #if defined(DEMO)
 	handle_return(HTML_REDIRECT_HOME);
 #endif
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("jsp"), true))
-	{
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "jsp", true)) {
 		urlDecode(tmp_buffer);
 		tmp_buffer[TMP_BUFFER_SIZE] = 0; // make sure we don't exceed the maximum size
 		// trim unwanted space characters
 		string_remove_space(tmp_buffer);
 		os.sopt_save(SOPT_JAVASCRIPTURL, tmp_buffer);
 	}
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("wsp"), true))
-	{
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "wsp", true)) {
 		urlDecode(tmp_buffer);
 		tmp_buffer[TMP_BUFFER_SIZE] = 0;
 		string_remove_space(tmp_buffer);
@@ -1076,7 +1031,6 @@ void server_change_options()
 	char *p = get_buffer;
 
 	// temporarily save some old options values
-	bool time_change = false;
 	bool weather_change = false;
 	bool sensor_change = false;
 
@@ -1086,16 +1040,14 @@ void server_change_options()
 	byte err = 0;
 	byte prev_value;
 	byte max_value;
-	for (byte oid = 0; oid < NUM_IOPTS; oid++)
-	{
-
+	for (byte oid = 0; oid < NUM_IOPTS; oid++) {
 		// skip options that cannot be set through /co command
-		if (oid == IOPT_FW_VERSION || oid == IOPT_HW_VERSION || oid == IOPT_SEQUENTIAL_RETIRED ||
+		if (oid == IOPT_FW_VERSION || oid == IOPT_HW_VERSION ||
 			oid == IOPT_DEVICE_ENABLE || oid == IOPT_FW_MINOR || oid == IOPT_REMOTE_EXT_MODE ||
-			oid == IOPT_RESET || oid == IOPT_WIFI_MODE || oid == IOPT_URS_RETIRED || oid == IOPT_RSO_RETIRED)
+			oid == IOPT_RESET)
 			continue;
 		prev_value = os.iopts[oid];
-		max_value = pgm_read_byte(iopt_max + oid);
+		max_value = *(iopt_max + oid);
 
 		// will no longer support oxx option names
 		// json name only
@@ -1104,41 +1056,30 @@ void server_change_options()
 		if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, tbuf2))
 		{
 			int32_t v = atol(tmp_buffer);
-			if (oid == IOPT_MASTER_OFF_ADJ || oid == IOPT_MASTER_OFF_ADJ_2 ||
-				oid == IOPT_MASTER_ON_ADJ || oid == IOPT_MASTER_ON_ADJ_2 ||
-				oid == IOPT_STATION_DELAY_TIME)
-			{
+			if (oid == IOPT_MASTER_OFF_ADJ || oid == IOPT_MASTER_OFF_ADJ_2 || oid == IOPT_MASTER_ON_ADJ || oid == IOPT_MASTER_ON_ADJ_2 || oid == IOPT_STATION_DELAY_TIME) {
 				v = water_time_encode_signed(v);
-			} // encode station delay time
-			if (oid == IOPT_BOOST_TIME)
-			{
-				v >>= 2;
 			}
-			if (v >= 0 && v <= max_value)
-			{
+			if (v >= 0 && v <= max_value) {
 				os.iopts[oid] = v;
-			}
-			else
-			{
+			} else {
 				err = 1;
 			}
 		}
 
-		if (os.iopts[oid] != prev_value)
-		{ // if value has changed
-			if (oid == IOPT_TIMEZONE || oid == IOPT_USE_NTP)
-				time_change = true;
-			if (oid >= IOPT_NTP_IP1 && oid <= IOPT_NTP_IP4)
-				time_change = true;
-			if (oid == IOPT_USE_WEATHER)
-				weather_change = true;
-			if (oid >= IOPT_SENSOR1_TYPE && oid <= IOPT_SENSOR2_OFF_DELAY)
+		if (os.iopts[oid] != prev_value) {	// if value has changed
+			if (oid == IOPT_TIMEZONE) {
+				// @TODO Update time
+				if (oid == IOPT_USE_WEATHER) {
+					weather_change = true;
+				}
+			}
+			if (oid >= IOPT_SENSOR1_TYPE && oid <= IOPT_SENSOR2_OFF_DELAY) {
 				sensor_change = true;
+			}
 		}
 	}
 
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("loc"), true))
-	{
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "loc", true)) {
 		urlDecode(tmp_buffer);
 		if (os.sopt_save(SOPT_LOCATION, tmp_buffer))
 		{ // if location string has changed
@@ -1146,8 +1087,7 @@ void server_change_options()
 		}
 	}
 	uint8_t keyfound = 0;
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("wto"), true))
-	{
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "wto", true)) {
 		urlDecode(tmp_buffer);
 		if (os.sopt_save(SOPT_WEATHER_OPTS, tmp_buffer))
 		{
@@ -1157,70 +1097,29 @@ void server_change_options()
 	}
 
 	keyfound = 0;
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("ifkey"), true, &keyfound))
-	{
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "ifkey", true, &keyfound)) {
 		urlDecode(tmp_buffer);
 		os.sopt_save(SOPT_IFTTT_KEY, tmp_buffer);
-	}
-	else if (keyfound)
-	{
+	} else if (keyfound) {
 		tmp_buffer[0] = 0;
 		os.sopt_save(SOPT_IFTTT_KEY, tmp_buffer);
 	}
 
 	keyfound = 0;
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("mqtt"), true, &keyfound))
-	{
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "mqtt", true, &keyfound)) {
 		urlDecode(tmp_buffer);
 		os.sopt_save(SOPT_MQTT_OPTS, tmp_buffer);
 		os.status.req_mqtt_restart = true;
-	}
-	else if (keyfound)
-	{
+	} else if (keyfound) {
 		tmp_buffer[0] = 0;
 		os.sopt_save(SOPT_MQTT_OPTS, tmp_buffer);
 		os.status.req_mqtt_restart = true;
 	}
 
-	/*
-	// wtkey is retired
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("wtkey"), true, &keyfound)) {
-		urlDecode(tmp_buffer);
-		if (os.sopt_save(SOPT_WEATHER_KEY, tmp_buffer)) {  // if weather key has changed
-			weather_change = true;
-		}
-	} else if (keyfound) {
-		tmp_buffer[0]=0;
-		os.sopt_save(SOPT_WEATHER_KEY, tmp_buffer);
-	}
-
-	keyfound = 0;
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("blynk"), true, &keyfound)) {
-		urlDecode(tmp_buffer);
-		os.sopt_save(SOPT_BLYNK_TOKEN, tmp_buffer);
-	} else if (keyfound) {
-		tmp_buffer[0]=0;
-		os.sopt_save(SOPT_BLYNK_TOKEN, tmp_buffer);
-	}
-	*/
-
-	// if not using NTP and manually setting time
-	if (!os.iopts[IOPT_USE_NTP] && findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("ttt"), true))
-	{
-		unsigned long t;
-		t = strtoul(tmp_buffer, NULL, 0);
-		// before chaging time, reset all stations to avoid messing up with timing
-		reset_all_stations_immediate();
-	}
 	if (err)
 		handle_return(HTML_DATA_OUTOFBOUND);
 
 	os.iopts_save();
-
-	if (time_change)
-	{
-		os.status.req_ntpsync = 1;
-	}
 
 	if (weather_change)
 	{
@@ -1254,17 +1153,13 @@ void server_change_password()
 #endif
 
 	char *p = get_buffer;
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("npw"), true))
-	{
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "npw", true)) {
 		char tbuf2[TMP_BUFFER_SIZE];
-		if (findKeyVal(p, tbuf2, TMP_BUFFER_SIZE, PSTR("cpw"), true) && strncmp(tmp_buffer, tbuf2, TMP_BUFFER_SIZE) == 0)
-		{
+		if (findKeyVal(p, tbuf2, TMP_BUFFER_SIZE, "cpw", true) && strncmp(tmp_buffer, tbuf2, TMP_BUFFER_SIZE) == 0) {
 			urlDecode(tmp_buffer);
 			os.sopt_save(SOPT_PASSWORD, tmp_buffer);
 			handle_return(HTML_SUCCESS);
-		}
-		else
-		{
+		} else {
 			handle_return(HTML_MISMATCH);
 		}
 	}
@@ -1273,16 +1168,16 @@ void server_change_password()
 
 void server_json_status_main()
 {
-	bfill.emit_p(PSTR("\"sn\":["));
+	bfill.emit_p("\"sn\":[");
 	byte sid;
 
 	for (sid = 0; sid < os.nstations; sid++)
 	{
-		bfill.emit_p(PSTR("$D"), (os.station_bits[(sid >> 3)] >> (sid & 0x07)) & 1);
+		bfill.emit_p("$D", (os.station_bits[(sid >> 3)] >> (sid & 0x07)) & 1);
 		if (sid != os.nstations - 1)
-			bfill.emit_p(PSTR(","));
+			bfill.emit_p(",");
 	}
-	bfill.emit_p(PSTR("],\"nstations\":$D}"), os.nstations);
+	bfill.emit_p("],\"nstations\":$D}", os.nstations);
 }
 
 /** Output station status */
@@ -1307,24 +1202,18 @@ void server_change_manual()
 	char *p = get_buffer;
 
 	int sid = -1;
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("sid"), true))
-	{
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "sid", true)) {
 		sid = atoi(tmp_buffer);
 		if (sid < 0 || sid >= os.nstations)
 			handle_return(HTML_DATA_OUTOFBOUND);
-	}
-	else
-	{
+	} else {
 		handle_return(HTML_DATA_MISSING);
 	}
 
 	byte en = 0;
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("en"), true))
-	{
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "en", true)) {
 		en = atoi(tmp_buffer);
-	}
-	else
-	{
+	} else {
 		handle_return(HTML_DATA_MISSING);
 	}
 
@@ -1332,8 +1221,7 @@ void server_change_manual()
 	unsigned long curr_time = os.now_tz();
 	if (en)
 	{ // if turning on a station, must provide timer
-		if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("t"), true))
-		{
+		if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "t", true)) {
 			timer = (uint16_t)atol(tmp_buffer);
 			if (timer == 0 || timer > 64800)
 			{
@@ -1369,9 +1257,7 @@ void server_change_manual()
 			{
 				handle_return(HTML_NOT_PERMITTED);
 			}
-		}
-		else
-		{
+		} else {
 			handle_return(HTML_DATA_MISSING);
 		}
 	}
@@ -1402,22 +1288,19 @@ void server_json_log()
 	unsigned int start, end;
 
 	// past n day history
-	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("hist"), true))
-	{
+	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "hist", true)) {
 		int hist = atoi(tmp_buffer);
 		if (hist < 0 || hist > 365)
 			handle_return(HTML_DATA_OUTOFBOUND);
 		end = os.now_tz() / 86400L;
 		start = end - hist;
-	}
-	else
-	{
-		if (!findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("start"), true))
+	} else {
+		if (!findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "start", true))
 			handle_return(HTML_DATA_MISSING);
 
 		start = strtoul(tmp_buffer, NULL, 0) / 86400L;
 
-		if (!findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("end"), true))
+		if (!findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "end", true))
 			handle_return(HTML_DATA_MISSING);
 
 		end = strtoul(tmp_buffer, NULL, 0) / 86400L;
@@ -1430,17 +1313,18 @@ void server_json_log()
 	// extract the type parameter
 	char type[4] = {0};
 	bool type_specified = false;
-	if (findKeyVal(p, type, 4, PSTR("type"), true))
+	if (findKeyVal(p, type, 4, "type", true))
 		type_specified = true;
 
 	print_json_header(false);
 
-	bfill.emit_p(PSTR("["));
+	bfill.emit_p("[");
 
 	bool comma = 0;
 	for (unsigned int i = start; i <= end; i++)
 	{
-		itoa(i, tmp_buffer, 10);
+		// itoa(i, tmp_buffer, 10);
+		sprintf(tmp_buffer, "%d", i);
 		make_logfile_name(tmp_buffer);
 
 		// prepare to open log file for RPI
@@ -1485,12 +1369,12 @@ void server_json_log()
 				continue;
 			// if this is the first record, do not print comma
 			if (comma)
-				bfill.emit_p(PSTR(","));
+				bfill.emit_p(",");
 			else
 			{
 				comma = 1;
 			}
-			bfill.emit_p(PSTR("$S"), tmp_buffer);
+			bfill.emit_p("$S", tmp_buffer);
 			// if the available ether buffer size is getting small
 			// push out a packet
 			if (available_ether_buffer() <= 0)
@@ -1500,7 +1384,7 @@ void server_json_log()
 		}
 	}
 
-	bfill.emit_p(PSTR("]"));
+	bfill.emit_p("]");
 	handle_return(HTML_OK);
 }
 /**
@@ -1516,7 +1400,7 @@ void server_delete_log()
 {
 	char *p = get_buffer;
 
-	if (!findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, PSTR("day"), true))
+	if (!findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "day", true))
 		handle_return(HTML_DATA_MISSING);
 
 	delete_log(tmp_buffer);
@@ -1528,21 +1412,21 @@ void server_delete_log()
 void server_json_all()
 {
 	print_json_header();
-	bfill.emit_p(PSTR("\"settings\":{"));
+	bfill.emit_p("\"settings\":{");
 	server_json_controller_main();
 	send_packet();
-	bfill.emit_p(PSTR(",\"programs\":{"));
+	bfill.emit_p(",\"programs\":{");
 	server_json_programs_main();
 	send_packet();
-	bfill.emit_p(PSTR(",\"options\":{"));
+	bfill.emit_p(",\"options\":{");
 	server_json_options_main();
 	send_packet();
-	bfill.emit_p(PSTR(",\"status\":{"));
+	bfill.emit_p(",\"status\":{");
 	server_json_status_main();
 	send_packet();
-	bfill.emit_p(PSTR(",\"stations\":{"));
+	bfill.emit_p(",\"stations\":{");
 	server_json_stations_main();
-	bfill.emit_p(PSTR("}"));
+	bfill.emit_p("}");
 	handle_return(HTML_OK);
 }
 
@@ -1554,7 +1438,7 @@ typedef void (*URLHandler)(void);
  * The order must exactly match the order of the
  * handler functions below
  */
-const char _url_keys[] PROGMEM =
+const char _url_keys[] =
 	"cv"
 	"jc"
 	"dp"
@@ -1622,9 +1506,7 @@ void handle_web_request(char *p)
 		byte i;
 		for (i = 0; i < sizeof(urls) / sizeof(URLHandler); i++)
 		{
-			if (pgm_read_byte(_url_keys + 2 * i) == com[0] && pgm_read_byte(_url_keys + 2 * i + 1) == com[1])
-			{
-
+			if (*(_url_keys + 2 * i) == com[0] && *(_url_keys + 2 * i + 1) == com[1]) {
 				// check password
 				int ret = HTML_UNAUTHORIZED;
 
@@ -1641,7 +1523,7 @@ void handle_web_request(char *p)
 					if (check_password(dat) == false)
 					{
 						print_json_header();
-						bfill.emit_p(PSTR("\"$F\":$D}"),
+						bfill.emit_p("\"$F\":$D}",
 									 iopt_json_names + 0, os.iopts[0]);
 						ret = HTML_OK;
 					}
@@ -1684,11 +1566,11 @@ void handle_web_request(char *p)
 					break;
 				case HTML_REDIRECT_HOME:
 					print_html_standard_header();
-					bfill.emit_p(PSTR("$F"), htmlReturnHome);
+					bfill.emit_p("$F", htmlReturnHome);
 					break;
 				default:
 					print_json_header();
-					bfill.emit_p(PSTR("\"result\":$D}"), ret);
+					bfill.emit_p("\"result\":$D}", ret);
 				}
 				break;
 			}
@@ -1698,7 +1580,7 @@ void handle_web_request(char *p)
 		{
 			// no server funtion found
 			print_json_header();
-			bfill.emit_p(PSTR("\"result\":$D}"), HTML_PAGE_NOT_FOUND);
+			bfill.emit_p("\"result\":$D}", HTML_PAGE_NOT_FOUND);
 		}
 		send_packet(true);
 	}

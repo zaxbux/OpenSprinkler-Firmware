@@ -135,8 +135,7 @@ ulong micros(void)
 	return (ulong)(now - epochMicro);
 }
 
-void write_to_file(const char *fn, const char *data, ulong size, ulong pos, bool trunc)
-{
+void write_to_file(const char *fn, const char *data, ulong size, ulong pos, bool trunc) {
 	FILE *file;
 	if (trunc)
 	{
@@ -190,8 +189,7 @@ void remove_file(const char *fn)
 	remove(get_filename_fullpath(fn));
 }
 
-bool file_exists(const char *fn)
-{
+bool file_exists(const char *fn) {
 	FILE *file;
 	file = fopen(get_filename_fullpath(fn), "rb");
 	if (file)
@@ -288,7 +286,7 @@ void strncpy_P0(char *dest, const char *src, int n)
 	byte i;
 	for (i = 0; i < n; i++)
 	{
-		*dest = pgm_read_byte(src++);
+		*dest = *(src++);
 		dest++;
 	}
 	*dest = 0;

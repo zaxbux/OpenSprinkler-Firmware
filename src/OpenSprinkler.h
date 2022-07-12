@@ -106,11 +106,7 @@ struct ConStatus
 	byte rain_delayed : 1;	   // rain delay bit (when set, rain delay is applied)
 	byte sensor1 : 1;		   // sensor1 status bit (when set, sensor1 on is detected)
 	byte program_busy : 1;	   // HIGH means a program is being executed currently
-	byte has_curr_sense : 1;   // HIGH means the controller has a current sensing pin
 	byte safe_reboot : 1;	   // HIGH means a safe reboot has been marked
-	byte req_ntpsync : 1;	   // request ntpsync
-	byte req_network : 1;	   // request check network
-	byte display_board : 5;	   // the board that is being displayed onto the lcd
 	byte network_fails : 3;	   // number of network fails
 	byte mas : 8;			   // master station index
 	byte mas2 : 8;			   // master2 station index
@@ -170,7 +166,6 @@ public:
 	static void reboot_dev(uint8_t);								 // reboot the microcontroller
 	static void begin();											 // initialization, must call this function before calling other functions
 	static byte start_network();									 // initialize network with the given mac and port
-	static byte start_ether();										 // initialize ethernet with the given mac and port
 	static bool network_connected();								 // check if the network is up
 	static bool load_hardware_mac(byte *buffer);					 // read hardware mac address
 	static time_t now_tz();
@@ -200,7 +195,7 @@ public:
 	static void iopts_save();
 	static bool sopt_save(byte oid, const char *buf);
 	static void sopt_load(byte oid, char *buf);
-	static String sopt_load(byte oid);
+	static string sopt_load(byte oid);
 
 	static byte password_verify(char *pw); // verify password
 
@@ -213,12 +208,6 @@ public:
 	static byte detect_programswitch_status(ulong); // get program switch status
 	static void sensor_resetall();
 
-	static uint16_t read_current();	  // read current sensing value
-	static uint16_t baseline_current; // resting state current
-
-	static int detect_exp();	 // detect the number of expansion boards
-	static byte weekday_today(); // returns index of today's weekday (Monday is 0)
-
 	static byte set_station_bit(byte sid, byte value);		  // set station bit of one station (sid->station index, value->0/1)
 	static void switch_special_station(byte sid, byte value); // swtich special station
 	static void clear_all_station_bits();					  // clear all station bits
@@ -227,7 +216,6 @@ public:
 	static int8_t send_http_request(uint32_t ip4, uint16_t port, char *p, void (*callback)(char *) = NULL, uint16_t timeout = 3000);
 	static int8_t send_http_request(const char *server, uint16_t port, char *p, void (*callback)(char *) = NULL, uint16_t timeout = 3000);
 	static int8_t send_http_request(char *server_with_port, char *p, void (*callback)(char *) = NULL, uint16_t timeout = 3000);
-	static byte engage_booster;
 };
 
 // TODO
