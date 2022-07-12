@@ -217,16 +217,14 @@ bool check_password(char *p) {
 #if defined(DEMO)
 	return true;
 #endif
-	if (os.iopts[IOPT_IGNORE_PASSWORD])
-		return true;
-	if (m_client && !p)
-	{
+	if (m_client && !p) {
 		p = get_buffer;
 	}
 	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "pw", true)) {
 		urlDecode(tmp_buffer);
-		if (os.password_verify(tmp_buffer))
+		if (os.password_verify(tmp_buffer)) {
 			return true;
+		}
 	}
 	return false;
 }
@@ -896,7 +894,7 @@ void server_home()
 
 	bfill.emit_p("<!DOCTYPE html>\n<html>\n<head>\n$F</head>\n<body>\n<script>", htmlMobileHeader);
 	// send server variables and javascript packets
-	bfill.emit_p("var ver=$D,ipas=$D;</script>\n", OS_FW_VERSION, os.iopts[IOPT_IGNORE_PASSWORD]);
+	bfill.emit_p("var ver=$D;</script>\n", OS_FW_VERSION);
 
 	bfill.emit_p("<script src=\"$O/home.js\"></script>\n</body>\n</html>", SOPT_JAVASCRIPTURL);
 
