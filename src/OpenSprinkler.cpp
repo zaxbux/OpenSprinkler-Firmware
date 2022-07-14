@@ -85,7 +85,6 @@ const char iopt_json_names[] =
 	"mtof\0"
 	"wl\0\0\0"
 	"den\0\0"
-	"ipas\0"
 	"con\0\0"
 	"lit\0\0"
 	"dim\0\0"
@@ -140,7 +139,6 @@ const byte iopt_max[] = {
 	255,
 	250,
 	1,
-	1,
 	255,
 	255,
 	255,
@@ -179,7 +177,6 @@ byte OpenSprinkler::iopts[] = {
 	120,		  // master off adjusted time (-10 minutes to 10 minutes)
 	100,		  // water level (default 100%),
 	1,			  // device enable
-	0,			  // 1: ignore password; 0: use password
 	150,		  // lcd contrast
 	100,		  // lcd backlight
 	50,			  // lcd dimming
