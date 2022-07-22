@@ -36,7 +36,7 @@ EthernetClient *m_client = 0;
 void reset_all_stations();
 void reset_all_stations_immediate();
 void push_message(int type, uint32_t lval = 0, float fval = 0.f, const char *sval = NULL);
-void manual_start_program(byte, byte);
+void manual_start_program(unsigned char, unsigned char);
 void remote_http_callback(char *);
 
 // Small variations have been added to the timing values below
@@ -61,23 +61,23 @@ ProgramData pd;	  // ProgramdData object
  * flow_stop - time when valve turns off (last rising edge pulse detected before off)
  * flow_gallons - total # of gallons+1 from flow_start to flow_stop
  * flow_last_gpm - last flow rate measured (averaged over flow_gallons) from last valve stopped (used to write to log file). */
-ulong flow_begin, flow_start, flow_stop, flow_gallons;
-ulong flow_count = 0;
-byte prev_flow_state = HIGH;
+unsigned long flow_begin, flow_start, flow_stop, flow_gallons;
+unsigned long flow_count = 0;
+unsigned char prev_flow_state = HIGH;
 float flow_last_gpm = 0;
 
 uint32_t reboot_timer = 0;
 
 void flow_poll()
 {
-	byte curr_flow_state = digitalRead(PIN_SENSOR1);
+	unsigned char curr_flow_state = digitalRead(PIN_SENSOR1);
 	if (!(prev_flow_state == HIGH && curr_flow_state == LOW))
 	{ // only record on falling edge
 		prev_flow_state = curr_flow_state;
 		return;
 	}
 	prev_flow_state = curr_flow_state;
-	ulong curr = millis();
+	unsigned long curr = millis();
 	flow_count++;
 
 	/* RAH implementation of flow sensor */
@@ -125,11 +125,11 @@ void do_setup()
 	os.status.req_mqtt_restart = true;
 }
 
-void write_log(byte type, ulong curr_time);
-void schedule_all_stations(ulong curr_time);
-void turn_on_station(byte sid);
-void turn_off_station(byte sid, ulong curr_time);
-void process_dynamic_events(ulong curr_time);
+void write_log(unsigned char type, unsigned long curr_time);
+void schedule_all_stations(unsigned long curr_time);
+void turn_on_station(unsigned char sid);
+void turn_off_station(unsigned char sid, unsigned long curr_time);
+void process_dynamic_events(unsigned long curr_time);
 void check_weather();
 bool process_special_program_command(const char *, uint32_t curr_time);
 void delete_log(char *name);
@@ -139,10 +139,10 @@ void handle_web_request(char *p);
 void do_loop()
 {
 	// handle flow sensor using polling every 1ms (maximum freq 1/(2*1ms)=500Hz)
-	static ulong flowpoll_timeout = 0;
+	static unsigned long flowpoll_timeout = 0;
 	if (os.iopts[IOPT_SENSOR1_TYPE] == SENSOR_TYPE_FLOW)
 	{
-		ulong curr = millis();
+		unsigned long curr = millis();
 		if (curr != flowpoll_timeout)
 		{
 			flowpoll_timeout = curr;
@@ -150,10 +150,10 @@ void do_loop()
 		}
 	}
 
-	static ulong last_time = 0;
-	static ulong last_minute = 0;
+	static unsigned long last_time = 0;
+	static unsigned long last_minute = 0;
 
-	byte bid, sid, s, pid, qid, bitvalue;
+	unsigned char bid, sid, s, pid, qid, bitvalue;
 	ProgramStruct prog;
 
 	os.status.mas = os.iopts[IOPT_MASTER_STATION];
@@ -274,7 +274,7 @@ void do_loop()
 		os.old_status.sensor2_active = os.status.sensor2_active;
 
 		// ===== Check program switch status =====
-		byte pswitch = os.detect_programswitch_status(curr_time);
+		unsigned char pswitch = os.detect_programswitch_status(curr_time);
 		if (pswitch > 0)
 		{
 			reset_all_stations_immediate(); // immediately stop all stations
@@ -291,7 +291,7 @@ void do_loop()
 		}
 
 		// ====== Schedule program data ======
-		ulong curr_minute = curr_time / 60;
+		unsigned long curr_minute = curr_time / 60;
 		bool match_found = false;
 		RuntimeQueueStruct *q;
 		// since the granularity of start time is minute
@@ -323,11 +323,11 @@ void do_loop()
 						if (prog.durations[sid] && !(os.attrib_dis[bid] & (1 << s)))
 						{
 							// water time is scaled by watering percentage
-							ulong water_time = water_time_resolve(prog.durations[sid]);
+							unsigned long water_time = water_time_resolve(prog.durations[sid]);
 							// if the program is set to use weather scaling
 							if (prog.use_weather)
 							{
-								byte wl = os.iopts[IOPT_WATER_PERCENTAGE];
+								unsigned char wl = os.iopts[IOPT_WATER_PERCENTAGE];
 								water_time = water_time * wl / 100;
 								if (wl < 20 && water_time < 10) // if water_percentage is less than 20% and water_time is less than 10 seconds
 																// do not water
@@ -392,7 +392,7 @@ void do_loop()
 			for (; q < pd.queue + pd.nqueue; q++, qid++)
 			{
 				sid = q->sid;
-				byte sqi = pd.station_qid[sid];
+				unsigned char sqi = pd.station_qid[sid];
 				// skip if station is already assigned a queue element
 				// and that queue element has an earlier start time
 				if (sqi < 255 && pd.queue[sqi].st < q->st)
@@ -406,7 +406,7 @@ void do_loop()
 				bitvalue = os.station_bits[bid];
 				for (s = 0; s < 8; s++)
 				{
-					byte sid = bid * 8 + s;
+					unsigned char sid = bid * 8 + s;
 
 					// skip master station
 					if (os.status.mas == sid + 1)
@@ -456,8 +456,8 @@ void do_loop()
 
 			// check through runtime queue, calculate the last stop time of sequential stations
 			pd.last_seq_stop_time = 0;
-			ulong sst;
-			byte re = os.iopts[IOPT_REMOTE_EXT_MODE];
+			unsigned long sst;
+			unsigned char re = os.iopts[IOPT_REMOTE_EXT_MODE];
 			q = pd.queue;
 			for (; q < pd.queue + pd.nqueue; q++)
 			{
@@ -506,7 +506,7 @@ void do_loop()
 		{
 			int16_t mas_on_adj = water_time_decode_signed(os.iopts[IOPT_MASTER_ON_ADJ]);
 			int16_t mas_off_adj = water_time_decode_signed(os.iopts[IOPT_MASTER_OFF_ADJ]);
-			byte masbit = 0;
+			unsigned char masbit = 0;
 
 			for (sid = 0; sid < os.nstations; sid++)
 			{
@@ -535,7 +535,7 @@ void do_loop()
 		{
 			int16_t mas_on_adj_2 = water_time_decode_signed(os.iopts[IOPT_MASTER_ON_ADJ_2]);
 			int16_t mas_off_adj_2 = water_time_decode_signed(os.iopts[IOPT_MASTER_OFF_ADJ_2]);
-			byte masbit2 = 0;
+			unsigned char masbit2 = 0;
 			for (sid = 0; sid < os.nstations; sid++)
 			{
 				// skip if this is the master station
@@ -595,7 +595,7 @@ void do_loop()
 		}
 
 		// real-time flow count
-		static ulong flowcount_rt_start = 0;
+		static unsigned long flowcount_rt_start = 0;
 		if (os.iopts[IOPT_SENSOR1_TYPE] == SENSOR_TYPE_FLOW)
 		{
 			if (curr_time % FLOWCOUNT_RT_WINDOW == 0)
@@ -608,7 +608,7 @@ void do_loop()
 		// check weather
 		check_weather();
 
-		byte wuf = os.weather_update_flag;
+		unsigned char wuf = os.weather_update_flag;
 		if (wuf) {
 			if ((wuf & WEATHER_UPDATE_EIP) | (wuf & WEATHER_UPDATE_WL))
 			{
@@ -619,7 +619,7 @@ void do_loop()
 			}
 			os.weather_update_flag = 0;
 		}
-		static byte reboot_notification = 1;
+		static unsigned char reboot_notification = 1;
 		if (reboot_notification)
 		{
 			reboot_notification = 0;
@@ -663,7 +663,7 @@ void check_weather()
 	if (os.status.program_busy)
 		return;
 
-	ulong ntz = os.now_tz();
+	unsigned long ntz = os.now_tz();
 	if (os.checkwt_success_lasttime && (ntz > os.checkwt_success_lasttime + CHECK_WEATHER_SUCCESS_TIMEOUT))
 	{
 		// if last successful weather call timestamp is more than allowed threshold
@@ -689,8 +689,7 @@ void check_weather()
 /** Turn on a station
  * This function turns on a scheduled station
  */
-void turn_on_station(byte sid)
-{
+void turn_on_station(unsigned char sid) {
 	// RAH implementation of flow sensor
 	flow_start = 0;
 
@@ -704,11 +703,10 @@ void turn_on_station(byte sid)
  * This function turns off a scheduled station
  * and writes log record
  */
-void turn_off_station(byte sid, ulong curr_time)
-{
+void turn_off_station(unsigned char sid, unsigned long curr_time) {
 	os.set_station_bit(sid, 0);
 
-	byte qid = pd.station_qid[sid];
+	unsigned char qid = pd.station_qid[sid];
 	// ignore if we are turning off a station that's not running or scheduled to run
 	if (qid >= pd.nqueue)
 		return;
@@ -755,8 +753,7 @@ void turn_off_station(byte sid, ulong curr_time)
  * such as rain delay, rain sensing
  * and turn off stations accordingly
  */
-void process_dynamic_events(ulong curr_time)
-{
+void process_dynamic_events(unsigned long curr_time) {
 	// check if rain is detected
 	bool sn1 = false;
 	bool sn2 = false;
@@ -769,7 +766,7 @@ void process_dynamic_events(ulong curr_time)
 	if ((os.iopts[IOPT_SENSOR2_TYPE] == SENSOR_TYPE_RAIN || os.iopts[IOPT_SENSOR2_TYPE] == SENSOR_TYPE_SOIL) && os.status.sensor2_active)
 		sn2 = true;
 
-	byte sid, s, bid, qid, igs, igs2, igrd;
+	unsigned char sid, s, bid, qid, igs, igs2, igrd;
 	for (bid = 0; bid < os.nboards; bid++)
 	{
 		igs = os.attrib_igs[bid];
@@ -812,11 +809,9 @@ void process_dynamic_events(ulong curr_time)
  * This function loops through the queue
  * and schedules the start time of each station
  */
-void schedule_all_stations(ulong curr_time)
-{
-
-	ulong con_start_time = curr_time + 1;  // concurrent start time
-	ulong seq_start_time = con_start_time; // sequential start time
+void schedule_all_stations(unsigned long curr_time) {
+	unsigned long con_start_time = curr_time + 1;	// concurrent start time
+	unsigned long seq_start_time = con_start_time;	// sequential start time
 
 	int16_t station_delay = water_time_decode_signed(os.iopts[IOPT_STATION_DELAY_TIME]);
 	// if the sequential queue has stations running
@@ -826,7 +821,7 @@ void schedule_all_stations(ulong curr_time)
 	}
 
 	RuntimeQueueStruct *q = pd.queue;
-	byte re = os.iopts[IOPT_REMOTE_EXT_MODE];
+	unsigned char re = os.iopts[IOPT_REMOTE_EXT_MODE];
 	// go through runtime queue and calculate start time of each station
 	for (; q < pd.queue + pd.nqueue; q++)
 	{
@@ -834,9 +829,9 @@ void schedule_all_stations(ulong curr_time)
 			continue; // if this queue element has already been scheduled, skip
 		if (!q->dur)
 			continue; // if the element has been marked to reset, skip
-		byte sid = q->sid;
-		byte bid = sid >> 3;
-		byte s = sid & 0x07;
+		unsigned char sid = q->sid;
+		unsigned char bid = sid >> 3;
+		unsigned char s = sid & 0x07;
 
 		// if this is a sequential station and the controller is not in remote extension mode
 		// use sequential scheduling. station delay time apples
@@ -906,13 +901,12 @@ void reset_all_stations()
  * If pid==255, this is a short test program (2 second per station)
  * If pid > 0. run program pid-1
  */
-void manual_start_program(byte pid, byte uwt)
-{
+void manual_start_program(unsigned char pid, unsigned char uwt) {
 	bool match_found = false;
 	reset_all_stations_immediate();
 	ProgramStruct prog;
-	ulong dur;
-	byte sid, bid, s;
+	unsigned long dur;
+	unsigned char sid, bid, s;
 	if ((pid > 0) && (pid < 255))
 	{
 		pd.read(pid - 1, &prog);
@@ -956,8 +950,7 @@ void manual_start_program(byte pid, byte uwt)
 // ==========================================
 // ====== PUSH NOTIFICATION FUNCTIONS =======
 // ==========================================
-void ip2string(char *str, byte ip[4])
-{
+void ip2string(char *str, unsigned char ip[4]) {
 	sprintf(str + strlen(str), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
 }
 
@@ -1108,10 +1101,10 @@ void push_message(int type, uint32_t lval, float fval, const char *sval)
 			if (lval > 0)
 			{
 				strcat(postval, "External IP updated: ");
-				byte ip[4] = {(byte)((lval >> 24) & 0xFF),
-							  (byte)((lval >> 16) & 0xFF),
-							  (byte)((lval >> 8) & 0xFF),
-							  (byte)(lval & 0xFF)};
+				unsigned char ip[4] = {(unsigned char)((lval >> 24) & 0xFF),
+									   (unsigned char)((lval >> 16) & 0xFF),
+									   (unsigned char)((lval >> 8) & 0xFF),
+									   (unsigned char)(lval & 0xFF)};
 				ip2string(postval, ip);
 			}
 			if (fval >= 0)
@@ -1187,9 +1180,7 @@ static const char log_type_names[] =
 	"cu\0";
 
 /** write run record to log on SD card */
-void write_log(byte type, ulong curr_time)
-{
-
+void write_log(unsigned char type, unsigned long curr_time) {
 	if (!os.iopts[IOPT_ENABLE_LOGGING])
 		return;
 
@@ -1231,12 +1222,12 @@ void write_log(byte type, ulong curr_time)
 		sprintf(tmp_buffer + strlen(tmp_buffer), "%d", pd.lastrun.station);
 		strcat(tmp_buffer, ",");
 		// duration is unsigned integer
-		// ultoa((ulong)pd.lastrun.duration, tmp_buffer + strlen(tmp_buffer), 10);
-		sprintf(tmp_buffer + strlen(tmp_buffer), "%lu", (ulong)pd.lastrun.duration);
+		// ultoa((unsigned long)pd.lastrun.duration, tmp_buffer + strlen(tmp_buffer), 10);
+		sprintf(tmp_buffer + strlen(tmp_buffer), "%lu", (unsigned long)pd.lastrun.duration);
 	}
 	else
 	{
-		ulong lvalue = 0;
+		unsigned long lvalue = 0;
 		if (type == LOGDATA_FLOWSENSE)
 		{
 			lvalue = (flow_count > os.flowcount_log_start) ? (flow_count - os.flowcount_log_start) : 0;

@@ -25,44 +25,8 @@
 #include "OpenSprinkler.h"
 extern OpenSprinkler os;
 
-char *get_runtime_path()
-{
-	static char path[PATH_MAX];
-	static byte query = 1;
-
-#ifdef __APPLE__
-	strcpy(path, "./");
-	return path;
-#endif
-
-	if (query)
-	{
-		if (readlink("/proc/self/exe", path, PATH_MAX) <= 0)
-		{
-			return NULL;
-		}
-		char *path_end = strrchr(path, '/');
-		if (path_end == NULL)
-		{
-			return NULL;
-		}
-		path_end++;
-		*path_end = 0;
-		query = 0;
-	}
-	return path;
-}
-
-char *get_filename_fullpath(const char *filename)
-{
-	static char fullpath[PATH_MAX];
-	strcpy(fullpath, get_runtime_path());
-	strcat(fullpath, filename);
-	return fullpath;
-}
-
-void delay(ulong howLong)
-{
+/* DO NOT PORT, Use equivalent in ported func */
+void delay(unsigned long howLong) {
 	struct timespec sleeper, dummy;
 
 	sleeper.tv_sec = (time_t)(howLong / 1000);
@@ -71,8 +35,8 @@ void delay(ulong howLong)
 	nanosleep(&sleeper, &dummy);
 }
 
-void delayMicrosecondsHard(ulong howLong)
-{
+/* DO NOT PORT, Use equivalent in ported func */
+void delayMicrosecondsHard(unsigned long howLong) {
 	struct timeval tNow, tLong, tEnd;
 
 	gettimeofday(&tNow, NULL);
@@ -84,8 +48,8 @@ void delayMicrosecondsHard(ulong howLong)
 		gettimeofday(&tNow, NULL);
 }
 
-void delayMicroseconds(ulong howLong)
-{
+/* DO NOT PORT, Use equivalent in ported func */
+void delayMicroseconds(unsigned long howLong) {
 	struct timespec sleeper;
 	unsigned int uSecs = howLong % 1000000;
 	unsigned int wSecs = howLong / 1000000;
@@ -113,29 +77,28 @@ void initialiseEpoch()
 	epochMicro = (uint64_t)tv.tv_sec * (uint64_t)1000000 + (uint64_t)(tv.tv_usec);
 }
 
-ulong millis(void)
-{
+unsigned long millis(void) {
 	struct timeval tv;
 	uint64_t now;
 
 	gettimeofday(&tv, NULL);
 	now = (uint64_t)tv.tv_sec * (uint64_t)1000 + (uint64_t)(tv.tv_usec / 1000);
 
-	return (ulong)(now - epochMilli);
+	return (unsigned long)(now - epochMilli);
 }
 
-ulong micros(void)
-{
+unsigned long micros(void) {
 	struct timeval tv;
 	uint64_t now;
 
 	gettimeofday(&tv, NULL);
 	now = (uint64_t)tv.tv_sec * (uint64_t)1000000 + (uint64_t)tv.tv_usec;
 
-	return (ulong)(now - epochMicro);
+	return (unsigned long)(now - epochMicro);
 }
 
-void write_to_file(const char *fn, const char *data, ulong size, ulong pos, bool trunc) {
+/* DO NOT PORT, Use equivalent in ported func */
+void write_to_file(const char *fn, const char *data, unsigned long size, unsigned long pos, bool trunc) {
 	FILE *file;
 	if (trunc)
 	{
@@ -154,8 +117,8 @@ void write_to_file(const char *fn, const char *data, ulong size, ulong pos, bool
 	fclose(file);
 }
 
-void read_from_file(const char *fn, char *data, ulong maxsize, ulong pos)
-{
+/* DO NOT PORT, Use equivalent in ported func */
+void read_from_file(const char *fn, char *data, unsigned long maxsize, unsigned long pos) {
 	FILE *file;
 	file = fopen(get_filename_fullpath(fn), "rb");
 	if (!file)
@@ -184,28 +147,15 @@ void read_from_file(const char *fn, char *data, ulong maxsize, ulong pos)
 	return;
 }
 
+/* DO NOT PORT, Use equivalent in ported func */
 void remove_file(const char *fn)
 {
 	remove(get_filename_fullpath(fn));
 }
 
-bool file_exists(const char *fn) {
-	FILE *file;
-	file = fopen(get_filename_fullpath(fn), "rb");
-	if (file)
-	{
-		fclose(file);
-		return true;
-	}
-	else
-	{
-		return false;
-	}
-}
-
 // file functions
-void file_read_block(const char *fn, void *dst, ulong pos, ulong len)
-{
+/* DO NOT PORT, Use equivalent in ported func */
+void file_read_block(const char *fn, void *dst, unsigned long pos, unsigned long len) {
 	FILE *fp = fopen(get_filename_fullpath(fn), "rb");
 	if (fp)
 	{
@@ -215,8 +165,8 @@ void file_read_block(const char *fn, void *dst, ulong pos, ulong len)
 	}
 }
 
-void file_write_block(const char *fn, const void *src, ulong pos, ulong len)
-{
+/* DO NOT PORT, Use equivalent in ported func */
+void file_write_block(const char *fn, const void *src, unsigned long pos, unsigned long len) {
 	FILE *fp = fopen(get_filename_fullpath(fn), "rb+");
 	if (!fp)
 	{
@@ -230,10 +180,10 @@ void file_write_block(const char *fn, const void *src, ulong pos, ulong len)
 	}
 }
 
-void file_copy_block(const char *fn, ulong from, ulong to, ulong len, void *tmp)
-{
+/* DO NOT PORT, Use equivalent in ported func */
+void file_copy_block(const char *fn, unsigned long from, unsigned long to, unsigned long len, void *tmp) {
 	// assume tmp buffer is provided and is larger than len
-	// TODO future: if tmp buffer is not provided, do byte-to-byte copy
+	// TODO future: if tmp buffer is not provided, do byte-to-unsigned char copy
 	if (tmp == NULL)
 	{
 		return;
@@ -249,8 +199,8 @@ void file_copy_block(const char *fn, ulong from, ulong to, ulong len, void *tmp)
 }
 
 // compare a block of content
-byte file_cmp_block(const char *fn, const char *buf, ulong pos)
-{
+/* DO NOT PORT, Use equivalent in ported func */
+unsigned char file_cmp_block(const char *fn, const char *buf, unsigned long pos) {
 	FILE *fp = fopen(get_filename_fullpath(fn), "rb");
 	if (fp)
 	{
@@ -268,22 +218,23 @@ byte file_cmp_block(const char *fn, const char *buf, ulong pos)
 	return 1;
 }
 
-byte file_read_byte(const char *fn, ulong pos)
-{
-	byte v = 0;
+/* DO NOT PORT, Use equivalent in ported func */
+unsigned char file_read_byte(const char *fn, unsigned long pos) {
+	unsigned char v = 0;
 	file_read_block(fn, &v, pos, 1);
 	return v;
 }
 
-void file_write_byte(const char *fn, ulong pos, byte v)
-{
+/* DO NOT PORT, Use equivalent in ported func */
+void file_write_byte(const char *fn, unsigned long pos, unsigned char v) {
 	file_write_block(fn, &v, pos, 1);
 }
 
 // copy n-character string from program memory with ending 0
+/* DO NOT PORT, Use equivalent in ported func */
 void strncpy_P0(char *dest, const char *src, int n)
 {
-	byte i;
+	unsigned char i;
 	for (i = 0; i < n; i++)
 	{
 		*dest = *(src++);
@@ -297,8 +248,7 @@ void strncpy_P0(char *dest, const char *src, int n)
  * 65534: sunrise to sunset duration
  * 65535: sunset to sunrise duration
  */
-ulong water_time_resolve(uint16_t v)
-{
+unsigned long water_time_resolve(uint16_t v) {
 	if (v == 65534)
 	{
 		return (os.nvdata.sunset_time - os.nvdata.sunrise_time) * 60L;
@@ -313,24 +263,8 @@ ulong water_time_resolve(uint16_t v)
 	}
 }
 
-// encode a 16-bit signed water time (-600 to 600)
-// to unsigned byte (0 to 240)
-byte water_time_encode_signed(int16_t i)
-{
-	i = (i > 600) ? 600 : i;
-	i = (i < -600) ? -600 : i;
-	return (i + 600) / 5;
-}
-
-// decode a 8-bit unsigned byte (0 to 240)
-// to a 16-bit signed water time (-600 to 600)
-int16_t water_time_decode_signed(byte i)
-{
-	i = (i > 240) ? 240 : i;
-	return ((int16_t)i - 120) * 5;
-}
-
 /** Convert a single hex digit character to its integer value */
+/* DO NOT PORT, Use equivalent in ported func */
 static unsigned char h2int(char c)
 {
 	if (c >= '0' && c <= '9')
@@ -349,6 +283,7 @@ static unsigned char h2int(char c)
 }
 
 /** Decode a url string e.g "hello%20joe" or "hello+joe" becomes "hello joe" */
+/* DO NOT PORT, Use equivalent in ported func */
 void urlDecode(char *urlbuf)
 {
 	if (!urlbuf)
@@ -370,6 +305,7 @@ void urlDecode(char *urlbuf)
 	*dst = '\0';
 }
 
+/* DO NOT PORT, Use equivalent in ported func */
 void peel_http_header(char *buffer)
 { // remove the HTTP header
 	uint16_t i = 0;

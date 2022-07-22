@@ -115,7 +115,30 @@ void OSMqtt::init(const char *clientId)
 
 	strncpy(_id, clientId, MQTT_MAX_ID_LEN);
 	_id[MQTT_MAX_ID_LEN] = 0;
-	_init();
+
+	int major, minor, revision;
+
+	mosquitto_lib_init();
+	mosquitto_lib_version(&major, &minor, &revision);
+	DEBUG_LOGF("MQTT Init: Mosquitto Library v%d.%d.%d\r\n", major, minor, revision);
+
+	if (mqtt_client) {
+		mosquitto_destroy(mqtt_client);
+		mqtt_client = NULL;
+	};
+
+	mqtt_client = mosquitto_new("OS", true, NULL);
+	if (mqtt_client == NULL) {
+		DEBUG_PRINTF("MQTT Init: Failed to initialise client\r\n");
+		// return MQTT_ERROR;
+	}
+
+	mosquitto_connect_callback_set(mqtt_client, _mqtt_connection_cb);
+	mosquitto_disconnect_callback_set(mqtt_client, _mqtt_disconnection_cb);
+	mosquitto_log_callback_set(mqtt_client, _mqtt_log_cb);
+	mosquitto_will_set(mqtt_client, MQTT_AVAILABILITY_TOPIC, strlen(MQTT_OFFLINE_PAYLOAD), MQTT_OFFLINE_PAYLOAD, 0, true);
+
+	// return MQTT_SUCCESS;
 };
 
 // Start the MQTT service and connect to the MQTT broker using the stored configuration.
@@ -158,9 +181,9 @@ void OSMqtt::begin(const char *host, int port, const char *username, const char 
 	if (mqtt_client == NULL || os.status.network_fails > 0)
 		return;
 
-	if (_connected())
-	{
-		_disconnect();
+	if (::_connected) {
+		int rc = mosquitto_disconnect(mqtt_client);
+		// return rc == MOSQ_ERR_SUCCESS ? MQTT_SUCCESS : MQTT_ERROR;
 	}
 
 	if (_enabled)
@@ -177,13 +200,17 @@ void OSMqtt::publish(const char *topic, const char *payload)
 	if (mqtt_client == NULL || !_enabled || os.status.network_fails > 0)
 		return;
 
-	if (!_connected())
-	{
+	if (!::_connected) {
 		DEBUG_LOGF("MQTT Publish: Not connected\r\n");
 		return;
 	}
 
-	_publish(topic, payload);
+	int rc = mosquitto_publish(mqtt_client, NULL, topic, strlen(payload), payload, 0, false);
+	if (rc != MOSQ_ERR_SUCCESS) {
+		DEBUG_LOGF("MQTT Publish: Failed (%s)\r\n", mosquitto_strerror(rc));
+		// return MQTT_ERROR;
+	}
+	// return MQTT_SUCCESS;
 }
 
 // Regularly call the loop function to ensure "keep alive" messages are sent to the broker and to reconnect if needed.
@@ -195,18 +222,17 @@ void OSMqtt::loop(void)
 		return;
 
 	// Only attemp to reconnect every MQTT_RECONNECT_DELAY seconds to avoid blocking the main loop
-	if (!_connected() && (millis() - last_reconnect_attempt >= MQTT_RECONNECT_DELAY * 1000UL))
-	{
+	if (!::_connected && (millis() - last_reconnect_attempt >= MQTT_RECONNECT_DELAY * 1000UL)) {
 		DEBUG_LOGF("MQTT Loop: Reconnecting\r\n");
 		_connect();
 		last_reconnect_attempt = millis();
 	}
 
-	int state = _loop();
+	int state = mosquitto_loop(mqtt_client, 0, 1);
 
 #if defined(ENABLE_DEBUG)
 	// Print a diagnostic message whenever the MQTT state changes
-	bool network = os.network_connected(), mqtt = _connected();
+	bool network = os.network_connected(), mqtt = ::_connected;
 	static bool last_network = 0, last_mqtt = 0;
 	static int last_state = 999;
 
@@ -215,7 +241,7 @@ void OSMqtt::loop(void)
 		DEBUG_LOGF("MQTT Loop: Network %s, MQTT %s, State - %s\r\n",
 				   network ? "UP" : "DOWN",
 				   mqtt ? "UP" : "DOWN",
-				   _state_string(state));
+				   mosquitto_strerror(state));
 		last_state = state;
 		last_network = network;
 		last_mqtt = mqtt;
@@ -256,35 +282,6 @@ static void _mqtt_log_cb(struct mosquitto *mqtt_client, void *obj, int level, co
 		DEBUG_LOGF("MQTT Log Callback: %s (%d)\r\n", message, level);
 }
 
-int OSMqtt::_init(void)
-{
-	int major, minor, revision;
-
-	mosquitto_lib_init();
-	mosquitto_lib_version(&major, &minor, &revision);
-	DEBUG_LOGF("MQTT Init: Mosquitto Library v%d.%d.%d\r\n", major, minor, revision);
-
-	if (mqtt_client)
-	{
-		mosquitto_destroy(mqtt_client);
-		mqtt_client = NULL;
-	};
-
-	mqtt_client = mosquitto_new("OS", true, NULL);
-	if (mqtt_client == NULL)
-	{
-		DEBUG_PRINTF("MQTT Init: Failed to initialise client\r\n");
-		return MQTT_ERROR;
-	}
-
-	mosquitto_connect_callback_set(mqtt_client, _mqtt_connection_cb);
-	mosquitto_disconnect_callback_set(mqtt_client, _mqtt_disconnection_cb);
-	mosquitto_log_callback_set(mqtt_client, _mqtt_log_cb);
-	mosquitto_will_set(mqtt_client, MQTT_AVAILABILITY_TOPIC, strlen(MQTT_OFFLINE_PAYLOAD), MQTT_OFFLINE_PAYLOAD, 0, true);
-
-	return MQTT_SUCCESS;
-}
-
 int OSMqtt::_connect(void)
 {
 	int rc;
@@ -311,31 +308,4 @@ int OSMqtt::_connect(void)
 	return MQTT_SUCCESS;
 }
 
-int OSMqtt::_disconnect(void)
-{
-	int rc = mosquitto_disconnect(mqtt_client);
-	return rc == MOSQ_ERR_SUCCESS ? MQTT_SUCCESS : MQTT_ERROR;
-}
-
-bool OSMqtt::_connected(void) { return ::_connected; }
-
-int OSMqtt::_publish(const char *topic, const char *payload)
-{
-	int rc = mosquitto_publish(mqtt_client, NULL, topic, strlen(payload), payload, 0, false);
-	if (rc != MOSQ_ERR_SUCCESS)
-	{
-		DEBUG_LOGF("MQTT Publish: Failed (%s)\r\n", mosquitto_strerror(rc));
-		return MQTT_ERROR;
-	}
-	return MQTT_SUCCESS;
-}
-
-int OSMqtt::_loop(void)
-{
-	return mosquitto_loop(mqtt_client, 0, 1);
-}
-
-const char *OSMqtt::_state_string(int error)
-{
-	return mosquitto_strerror(error);
-}
+// bool OSMqtt::_connected(void) { return ::_connected; }

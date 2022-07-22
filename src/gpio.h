@@ -41,12 +41,12 @@
 #define HIGH 1
 #define LOW 0
 
-void pinMode(int pin, byte mode);
-void digitalWrite(int pin, byte value);
+void pinMode(int pin, unsigned char mode);
+void digitalWrite(int pin, unsigned char value);
 int gpio_fd_open(int pin, int mode = O_WRONLY);
 void gpio_fd_close(int fd);
-void gpio_write(int fd, byte value);
-byte digitalRead(int pin);
+void gpio_write(int fd, unsigned char value);
+unsigned char digitalRead(int pin);
 // mode can be any of 'rising', 'falling', 'both'
 void attachInterrupt(int pin, const char *mode, void (*isr)(void));
 

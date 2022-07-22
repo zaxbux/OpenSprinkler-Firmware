@@ -17,10 +17,14 @@ if [ "$1" == "demo" ]; then
 	g++ -o OpenSprinkler -DDEMO -m32 main.cpp OpenSprinkler.cpp program.cpp opensprinkler_server.cpp utils.cpp weather.cpp gpio.cpp etherport.cpp mqtt.cpp -lpthread -lmosquitto
 else
 	echo "Installing required libraries..."
-	apt-get install -y libmosquitto-dev
-	apt-get install -y wiringpi
+	#apt-get install -y libmosquitto-dev
+	#apt-get install -y wiringpi
+	#source "$HOME/.cargo/env"
+	cargo build --verbose --release
+	#cp target/release/librs_open_sprinkler.so /usr/lib/librs_open_sprinkler.so
 	echo "Compiling firmware..."
-	g++ -o OpenSprinkler -DOSPI main.cpp OpenSprinkler.cpp program.cpp opensprinkler_server.cpp utils.cpp weather.cpp gpio.cpp etherport.cpp mqtt.cpp -lpthread -lmosquitto
+	cd src/
+	g++ -L../target/release -DOSPI main.cpp OpenSprinkler.cpp program.cpp opensprinkler_server.cpp utils.cpp weather.cpp gpio.cpp etherport.cpp mqtt.cpp -lrs_open_sprinkler -lpthread -lmosquitto -o OpenSprinkler
 fi
 
 if [ ! "$SILENT" = true ] && [ -f OpenSprinkler.launch ] && [ ! -f /etc/init.d/OpenSprinkler.sh ]; then

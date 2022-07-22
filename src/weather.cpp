@@ -33,8 +33,8 @@ extern char ether_buffer[];
 char wt_rawData[TMP_BUFFER_SIZE];
 int wt_errCode = HTTP_RQT_NOT_RECEIVED;
 
-byte findKeyVal(const char *str, char *strbuf, uint16_t maxlen, const char *key, bool key_in_pgm = false, uint8_t *keyfound = NULL);
-void write_log(byte type, ulong curr_time);
+unsigned char findKeyVal(const char *str, char *strbuf, uint16_t maxlen, const char *key, bool key_in_pgm = false, uint8_t *keyfound = NULL);
+void write_log(unsigned char type, unsigned long curr_time);
 
 // The weather function calls getweather.py on remote server to retrieve weather data
 // the default script is WEATHER_SCRIPT_HOST/weather?.py

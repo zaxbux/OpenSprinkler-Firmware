@@ -26,7 +26,7 @@
 
 #include <stdarg.h>
 
-char dec2hexchar(byte dec);
+char dec2hexchar(unsigned char dec);
 
 class BufferFiller
 {

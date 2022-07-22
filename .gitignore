@@ -4,3 +4,8 @@ OpenSprinkler
 *.dat
 *.sh
 .vscode
+
+
+# Added by cargo
+
+/target

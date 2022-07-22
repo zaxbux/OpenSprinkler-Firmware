@@ -43,16 +43,16 @@ extern char ether_buffer[];
 extern char tmp_buffer[];
 extern OpenSprinkler os;
 extern ProgramData pd;
-extern ulong flow_count;
+extern unsigned long flow_count;
 
-static byte return_code;
+static unsigned char return_code;
 static char *get_buffer = NULL;
 
 BufferFiller bfill;
 
-void schedule_all_stations(ulong curr_time);
-void turn_off_station(byte sid, ulong curr_time);
-void process_dynamic_events(ulong curr_time);
+void schedule_all_stations(unsigned long curr_time);
+void turn_off_station(unsigned char sid, unsigned long curr_time);
+void process_dynamic_events(unsigned long curr_time);
 void check_network(time_t curr_time);
 void check_weather(time_t curr_time);
 void perform_ntp_sync(time_t curr_time);
@@ -131,7 +131,7 @@ void print_json_header(bool bracket = true) {
 	else m_client->write((const uint8_t *)"\r\n", 2);*/
 }
 
-byte findKeyVal(const char *str, char *strbuf, uint16_t maxlen, const char *key, bool key_in_pgm = false, uint8_t *keyfound = NULL) {
+unsigned char findKeyVal(const char *str, char *strbuf, uint16_t maxlen, const char *key, bool key_in_pgm = false, uint8_t *keyfound = NULL) {
 	uint8_t found = 0;
 	// case 2: otherwise, assume the key-val is stored in str
 	uint16_t i = 0;
@@ -204,8 +204,7 @@ void send_packet(bool final = false) {
 	return;
 }
 
-char dec2hexchar(byte dec)
-{
+char dec2hexchar(unsigned char dec) {
 	if (dec < 10)
 		return '0' + dec;
 	else
@@ -229,11 +228,9 @@ bool check_password(char *p) {
 	return false;
 }
 
-void server_json_stations_attrib(const char *name, byte *attrib)
-{
+void server_json_stations_attrib(const char *name, unsigned char *attrib) {
 	bfill.emit_p("\"$F\":[", name);
-	for (byte i = 0; i < os.nboards; i++)
-	{
+	for (unsigned char i = 0; i < os.nboards; i++) {
 		bfill.emit_p("$D", attrib[i]);
 		if (i != os.nboards - 1)
 			bfill.emit_p(",");
@@ -253,7 +250,7 @@ void server_json_stations_main()
 	server_json_stations_attrib("stn_spe", os.attrib_spe);
 
 	bfill.emit_p("\"snames\":[");
-	byte sid;
+	unsigned char sid;
 	for (sid = 0; sid < os.nstations; sid++)
 	{
 		os.get_station_name(sid, tmp_buffer);
@@ -279,8 +276,8 @@ void server_json_stations()
 /** Output station special attribute */
 void server_json_station_special()
 {
-	byte sid;
-	byte comma = 0;
+	unsigned char sid;
+	unsigned char comma = 0;
 	StationData *data = (StationData *)tmp_buffer;
 	print_json_header();
 	for (sid = 0; sid < os.nstations; sid++)
@@ -305,10 +302,9 @@ void server_json_station_special()
 	handle_return(HTML_OK);
 }
 
-void server_change_stations_attrib(char *p, char header, byte *attrib)
-{
+void server_change_stations_attrib(char *p, char header, unsigned char *attrib) {
 	char tbuf2[5] = {0, 0, 0, 0, 0};
-	byte bid;
+	unsigned char bid;
 	tbuf2[0] = header;
 	for (bid = 0; bid < os.nboards; bid++)
 	{
@@ -337,7 +333,7 @@ void server_change_stations()
 {
 	char *p = get_buffer;
 
-	byte sid;
+	unsigned char sid;
 	char tbuf2[5] = {'s', 0, 0, 0, 0};
 	// process station names
 	for (sid = 0; sid < os.nstations; sid++)
@@ -374,13 +370,12 @@ void server_change_stations()
 			if (tmp_buffer[0] == STN_TYPE_GPIO)
 			{
 				// check that pin does not clash with OSPi pins
-				byte gpio = (tmp_buffer[1] - '0') * 10 + tmp_buffer[2] - '0';
-				byte activeState = tmp_buffer[3] - '0';
+				unsigned char gpio = (tmp_buffer[1] - '0') * 10 + tmp_buffer[2] - '0';
+				unsigned char activeState = tmp_buffer[3] - '0';
 
-				byte gpioList[] = PIN_FREE_LIST;
+				unsigned char gpioList[] = PIN_FREE_LIST;
 				bool found = false;
-				for (byte i = 0; i < sizeof(gpioList) && found == false; i++)
-				{
+				for (unsigned char i = 0; i < sizeof(gpioList) && found == false; i++) {
 					if (gpioList[i] == gpio)
 						found = true;
 				}
@@ -427,7 +422,7 @@ uint16_t parse_listdata(char **p)
 	return (uint16_t)atol(tmp_buffer);
 }
 
-void manual_start_program(byte, byte);
+void manual_start_program(unsigned char, unsigned char);
 /** Manual start program
  * Command: /mp?pw=xxx&pid=xxx&uwt=xxx
  *
@@ -448,7 +443,7 @@ void server_manual_program()
 		handle_return(HTML_DATA_OUTOFBOUND);
 	}
 
-	byte uwt = 0;
+	unsigned char uwt = 0;
 	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "uwt", true)) {
 		if (tmp_buffer[0] == '1')
 			uwt = 1;
@@ -494,7 +489,7 @@ void server_change_runonce()
 	// reset all stations and prepare to run one-time program
 	reset_all_stations_immediate();
 
-	byte sid, bid, s;
+	unsigned char sid, bid, s;
 	uint16_t dur;
 	bool match_found = false;
 	for (sid = 0; sid < os.nstations; sid++)
@@ -595,7 +590,7 @@ void server_change_program()
 {
 	char *p = get_buffer;
 
-	byte i;
+	unsigned char i;
 
 	ProgramStruct prog;
 
@@ -702,7 +697,7 @@ void server_change_program()
 }
 
 void server_json_options_main() {
-	byte oid;
+	unsigned char oid;
 	for (oid = 0; oid < NUM_IOPTS; oid++) {
 		//#if defined(PIN_SENSOR2)
 		// only OS 3.x or controllers that have PIN_SENSOR2 defined support sensor 2 options
@@ -741,7 +736,7 @@ void server_json_programs_main()
 {
 	bfill.emit_p("\"nprogs\":$D,\"nboards\":$D,\"mnp\":$D,\"mnst\":$D,\"pnsize\":$D,\"pd\":[",
 				 pd.nprograms, os.nboards, MAX_NUM_PROGRAMS, MAX_NUM_STARTTIMES, PROGRAM_NAME_SIZE);
-	byte pid, i;
+	unsigned char pid, i;
 	ProgramStruct prog;
 	for (pid = 0; pid < pd.nprograms; pid++) {
 		pd.read(pid, &prog);
@@ -749,7 +744,7 @@ void server_json_programs_main()
 			pd.drem_to_relative(prog.days);
 		}
 
-		byte bytedata = *(char *)(&prog);
+		unsigned char bytedata = *(char *)(&prog);
 		bfill.emit_p("[$D,$D,$D,[", bytedata, prog.days[0], prog.days[1]);
 		// start times data
 		for (i = 0; i < (MAX_NUM_STARTTIMES - 1); i++) {
@@ -802,8 +797,8 @@ void server_view_scripturl()
 
 void server_json_controller_main()
 {
-	byte bid, sid;
-	ulong curr_time = os.now_tz();
+	unsigned char bid, sid;
+	unsigned long curr_time = os.now_tz();
 	bfill.emit_p(
 		"\"devt\":$L,\"nbrd\":$D,\"en\":$D,\"sn1\":$D,\"sn2\":$D,\"rd\":$D,\"rdst\":$L,"
 		"\"sunrise\":$D,\"sunset\":$D,\"eip\":$L,\"lwc\":$L,\"lswc\":$L,"
@@ -827,7 +822,7 @@ void server_json_controller_main()
 		pd.lastrun.duration,
 		pd.lastrun.endtime);
 
-	byte mac[6] = {0};
+	unsigned char mac[6] = {0};
 	os.load_hardware_mac(mac);
 	bfill.emit_p("\"mac\":\"$X:$X:$X:$X:$X:$X\",", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
@@ -861,7 +856,7 @@ void server_json_controller_main()
 			send_packet();
 		}
 		unsigned long rem = 0;
-		byte qid = pd.station_qid[sid];
+		unsigned char qid = pd.station_qid[sid];
 		RuntimeQueueStruct *q = pd.queue + qid;
 		if (qid < 255)
 		{
@@ -1035,10 +1030,10 @@ void server_change_options()
 	// !!! p and bfill share the same buffer, so don't write
 	// to bfill before you are done analyzing the buffer !!!
 	// process option values
-	byte err = 0;
-	byte prev_value;
-	byte max_value;
-	for (byte oid = 0; oid < NUM_IOPTS; oid++) {
+	unsigned char err = 0;
+	unsigned char prev_value;
+	unsigned char max_value;
+	for (unsigned char oid = 0; oid < NUM_IOPTS; oid++) {
 		// skip options that cannot be set through /co command
 		if (oid == IOPT_FW_VERSION || oid == IOPT_HW_VERSION ||
 			oid == IOPT_DEVICE_ENABLE || oid == IOPT_FW_MINOR || oid == IOPT_REMOTE_EXT_MODE ||
@@ -1167,7 +1162,7 @@ void server_change_password()
 void server_json_status_main()
 {
 	bfill.emit_p("\"sn\":[");
-	byte sid;
+	unsigned char sid;
 
 	for (sid = 0; sid < os.nstations; sid++)
 	{
@@ -1208,7 +1203,7 @@ void server_change_manual()
 		handle_return(HTML_DATA_MISSING);
 	}
 
-	byte en = 0;
+	unsigned char en = 0;
 	if (findKeyVal(p, tmp_buffer, TMP_BUFFER_SIZE, "en", true)) {
 		en = atoi(tmp_buffer);
 	} else {
@@ -1232,7 +1227,7 @@ void server_change_manual()
 				handle_return(HTML_NOT_PERMITTED);
 
 			RuntimeQueueStruct *q = NULL;
-			byte sqi = pd.station_qid[sid];
+			unsigned char sqi = pd.station_qid[sid];
 			// check if the station already has a schedule
 			if (sqi != 0xFF)
 			{ // if so, we will overwrite the schedule
@@ -1501,7 +1496,7 @@ void handle_web_request(char *p)
 	else
 	{
 		// server funtion handlers
-		byte i;
+		unsigned char i;
 		for (i = 0; i < sizeof(urls) / sizeof(URLHandler); i++)
 		{
 			if (*(_url_keys + 2 * i) == com[0] && *(_url_keys + 2 * i + 1) == com[1]) {
