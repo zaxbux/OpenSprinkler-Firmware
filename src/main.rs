@@ -449,6 +449,11 @@ fn handle_master(master: MasterStation, open_sprinkler: &mut OpenSprinkler, prog
         MasterStation::ONE => open_sprinkler.status.mas.unwrap_or(0),
         MasterStation::TWO => open_sprinkler.status.mas2.unwrap_or(0),
     };
+
+    if mas == 0 {
+        return;
+    }
+
     let mas_on_adj: i64 = water_time_decode_signed(match master {
         MasterStation::ONE => open_sprinkler.iopts.mton,
         MasterStation::TWO => open_sprinkler.iopts.mton2,
