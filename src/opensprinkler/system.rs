@@ -24,8 +24,8 @@ pub async fn reboot() -> Result<(), Box<dyn Error>> {
 	Ok(())
 }
 
-pub fn is_interface_online(interface_name: String) -> bool {
-	let addrs = nix::ifaddrs::getifaddrs()?;
-	let ifaddr = addrs.find(|&a| a.interface_name == interface_name);
+pub fn is_interface_online(interface_name: &str) -> bool {
+	let mut addrs = nix::ifaddrs::getifaddrs().unwrap();
+	let ifaddr = addrs.find(|a| a.interface_name == interface_name).unwrap();
 	ifaddr.flags.contains(nix::net::if_::InterfaceFlags::IFF_RUNNING)
 }

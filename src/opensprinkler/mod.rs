@@ -312,7 +312,7 @@ impl OpenSprinkler {
     /// @todo Define primary interface e.g. `eth0` and check status (IFF_UP).
     pub fn network_connected(&self) -> bool {
         #[cfg(target_os = "linux")]
-        return system::network_connected("eth0").unwrap();
+        return system::is_interface_online("eth0");
 
         #[cfg(not(target_os = "linux"))]
         return true;
@@ -336,52 +336,46 @@ impl OpenSprinkler {
     /// Apply all station bits
     ///
     /// **This will actuate valves**
-    #[cfg(target_os = "linux")]
-    pub fn apply_all_station_bits(&self) {
+    pub fn apply_all_station_bits(&mut self) {
         self.gpio.lines.shift_register_latch.set_low();
 
         // @hack bit field?
-        let sbits: u8 = 0x00;
+        let mut sbits: u8 = 0x00;
 
         // Shift out all station bit values from the highest bit to the lowest
-        for board_index in 0..MAX_EXT_BOARDS {
-            sbits = if self.status.enabled { self.station_bits[MAX_EXT_BOARDS - board_index] } else { 0 };
+        for board_index in 0..station::MAX_EXT_BOARDS {
+            sbits = if self.status.enabled { self.station_bits[station::MAX_EXT_BOARDS - board_index] } else { 0 };
 
             for s in 0..SHIFT_REGISTER_LINES {
-                self.gpio.shift_register_clock.set_low();
+                self.gpio.lines.shift_register_clock.set_low();
 
-                if sbits & (1 << (7 - s)) {
-                    self.gpio.shift_register_data.set_high();
-                    self.gpio.shift_register_data.set_low();
+                if sbits & (1 << (7 - s)) != 0 {
+                    self.gpio.lines.shift_register_data.set_high();
+                    self.gpio.lines.shift_register_data.set_low();
                 }
 
-                self.gpio.shift_register_clock.set_high();
+                self.gpio.lines.shift_register_clock.set_high();
             }
         }
 
-        self.gpio.shift_register_latch.set_high();
+        self.gpio.lines.shift_register_latch.set_high();
 
-        if self.iopts.sar {
+        if self.iopts.sar == 1 {
             // Handle refresh of special stations. We refresh station that is next in line
 
-            let next_sid_to_refresh = MAX_NUM_STATIONS >> 1;
-            let last_now = 0;
-            let _now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs() & 0xFF;
+            let mut next_sid_to_refresh = station::MAX_NUM_STATIONS >> 1;
+            let mut last_now = 0;
+            let now = chrono::Utc::now().timestamp();
 
-            if last_now != _now {
+            if now > last_now {
                 // Perform this no more than once per second
-                last_now = _now;
-                next_sid_to_refresh = (next_sid_to_refresh + 1) % MAX_NUM_STATIONS;
+                last_now = now;
+                next_sid_to_refresh = (next_sid_to_refresh + 1) % station::MAX_NUM_STATIONS;
                 let board_index = next_sid_to_refresh >> 3;
                 let s = next_sid_to_refresh & 0x07;
-                self.switch_special_station(next_sid_to_refresh, (self.station_bits[board_index] >> s) & 0x01)
+                self.switch_special_station(next_sid_to_refresh, (self.station_bits[board_index] >> s) & 0x01 != 0);
             }
         }
-    }
-
-    #[cfg(not(target_os = "linux"))]
-    pub fn apply_all_station_bits(&self) {
-        unimplemented!();
     }
 
     /*     fn detect_sensor_1_status(&self, now_seconds: u64) {
@@ -585,12 +579,12 @@ impl OpenSprinkler {
     /// Switch Radio Frequency (RF) station
     ///
     /// This function takes an RF code, parses it into signals and timing, and sends it out through the RF transmitter.
-    fn switch_rf_station(&self, data: station::RFStationData, turn_on: bool) {
+    fn switch_rf_station(&mut self, data: station::RFStationData, turn_on: bool) {
         //let (on, off, length) = self.parse_rf_station_code(data);
         #[cfg(unix)]
         {
             let code = if turn_on { data.on } else { data.off };
-            rf::send_rf_signal(code.into(), data.timing.into());
+            rf::send_rf_signal(self, code.into(), data.timing.into());
         }
     }
 
@@ -662,7 +656,7 @@ impl OpenSprinkler {
     }
 
     /// Switch Special Station
-    pub fn switch_special_station(&self, station_index: usize, value: bool) {
+    pub fn switch_special_station(&mut self, station_index: usize, value: bool) {
         let station = self.stations.get(station_index).unwrap();
         //let station_type = self.get_station_type(station);
         // check if station is "special"

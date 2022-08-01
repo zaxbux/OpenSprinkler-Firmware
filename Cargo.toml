@@ -6,12 +6,12 @@ edition = "2021"
 [features]
 demo = []
 
-[patch.crates-io]
-paho-mqtt-sys = { path = "C:/Users/Zach/repos/github.com/paho.mqtt.rust/paho-mqtt-sys" }
-rppal = { path = "C:/Users/Zach/repos/github.com/zaxbux/rppal" }
+#[patch.crates-io]
+#paho-mqtt-sys = { path = "C:/Users/Zach/repos/github.com/paho.mqtt.rust/paho-mqtt-sys" }
+#rppal = { path = "C:/Users/Zach/repos/github.com/zaxbux/rppal" }
 
-[build-dependencies]
-cmake = "0.1.48"
+#[build-dependencies]
+#cmake = "0.1.48"
 
 [dependencies]
 libc = "0.2.126"
@@ -32,9 +32,9 @@ bson = "2.3.0"
 semver = "1.0.12"
 serde-big-array = "0.4.1"
 
-[dependencies.rppal]
-version = "0.13.1"
-features = ["gpio"]
+#[dependencies.rppal]
+#version = "0.13.1"
+#features = ["gpio"]
 
 [dependencies.serde]
 version = "1.0.140"
@@ -42,17 +42,15 @@ features = ["derive"]
 
 # Linux
 [target.'cfg(target_os = "linux")'.dependencies]
-#nix = { version = "0.24.2", features = ["fs", "reboot", "net"] }
+nix = { version = "0.24.2", features = ["fs", "reboot", "net"] }
 zbus = "2.3.2"
 ruspiro-timer = { version = "0.6.0", features = ["pi4_low"] }
+rppal = "0.13.1"
 
-# [target.'cfg(target_os = "unix")'.dependencies]
-# rppal = "0.13.1"
 
-[env]
-OPENSSL_DIR = "C:/Program Files/OpenSSL_1.1.1L-Win64"
+#[env]
+#OPENSSL_DIR = "C:/Program Files/OpenSSL_1.1.1L-Win64"
 
-#[lib]
-# name = "rs_open_sprinkler"
-# path = "src/OpenSprinkler.rs"
-# crate-type = ["cdylib"]
+[patch.crates-io]
+ruspiro-interrupt = { path = "/home/ospi/repos/ruspiro-interrupt/interrupt" }
+ruspiro-singleton = { path = "/home/ospi/repos/ruspiro-singleton" }

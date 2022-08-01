@@ -17,15 +17,15 @@ use super::OpenSprinkler;
 /// Transmit one RF signal bit
 ///
 /// This implementation uses the Pi's hardware timer.
-fn transmit_rf_bit(open_sprinkler: &OpenSprinkler, len_h: u64, len_l: u64) {
-		self.gpio.lines.rf_tx.set_high();
-		rusprio_timer::sleep(Duration::from_micros(len_h));
-		self.gpio.lines.rf_tx.set_low();
-		rusprio_timer::sleep(Duration::from_micros(len_l));
+fn transmit_rf_bit(open_sprinkler: &mut OpenSprinkler, len_h: u64, len_l: u64) {
+		open_sprinkler.gpio.lines.rf_tx.set_high();
+		ruspiro_timer::sleep(Duration::from_micros(len_h));
+		open_sprinkler.gpio.lines.rf_tx.set_low();
+		ruspiro_timer::sleep(Duration::from_micros(len_l));
 }
 
 /// Transmit RF signal
-pub fn send_rf_signal(open_sprinkler: &OpenSprinkler, code: u64, length: u64) {
+pub fn send_rf_signal(open_sprinkler: &mut OpenSprinkler, code: u64, length: u64) {
 	let len3 = length * 3;
 	let len31 = length * 31;
 
