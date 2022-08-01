@@ -1,6 +1,6 @@
 logs/**
 data/
-OpenSprinkler
+
 *.dat
 *.sh
 .vscode
