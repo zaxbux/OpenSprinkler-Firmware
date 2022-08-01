@@ -45,14 +45,14 @@ pub fn flow_poll(open_sprinkler: &OpenSprinkler, flow_state: &mut FlowSensor) {
     flow_state.flow_gallons += 1; // increment gallon count for each poll
 }
 
-pub fn check_rain_delay(open_sprinkler: &mut OpenSprinkler, program_data: &ProgramData, now_seconds: i64) {
+pub fn check_rain_delay(open_sprinkler: &mut OpenSprinkler, now_seconds: i64) {
     if open_sprinkler.status.rain_delayed {
-        if now_seconds as i64 >= open_sprinkler.nvdata.rd_stop_time.unwrap().timestamp() {
+        if now_seconds >= open_sprinkler.nvdata.rd_stop_time.unwrap_or(0) {
             // rain delay is over
             open_sprinkler.rain_delay_stop();
         }
     } else {
-        if open_sprinkler.nvdata.rd_stop_time.unwrap().timestamp() > now_seconds as i64 {
+        if open_sprinkler.nvdata.rd_stop_time.unwrap_or(0) > now_seconds {
             // rain delay starts now
             open_sprinkler.rain_delay_start();
         }
@@ -66,14 +66,7 @@ pub fn check_rain_delay(open_sprinkler: &mut OpenSprinkler, program_data: &Progr
             /* push_message(&open_sprinkler, NotifyEvent::RainDelay, RainDelay::new(true)); */
         } else {
             // rain delay stopped, write log
-            /*             log::write_log(
-                &open_sprinkler,
-                Some(program_data),
-                flow_state,
-                LogDataType::RainDelay,
-                *curr_time,
-            ); */
-            log::write_log_message(&open_sprinkler, &log::message::SensorMessage::new(LogDataType::RainDelay, now_seconds), now_seconds);
+            let _ = log::write_log_message(&open_sprinkler, &log::message::SensorMessage::new(LogDataType::RainDelay, now_seconds), now_seconds);
             /* push_message(&open_sprinkler, NotifyEvent::RainDelay, RainDelay::new(false)); */
         }
         push_message(&open_sprinkler, RainDelay::new(true));
@@ -81,7 +74,7 @@ pub fn check_rain_delay(open_sprinkler: &mut OpenSprinkler, program_data: &Progr
     }
 }
 
-pub fn check_binary_sensor_status(open_sprinkler: &mut OpenSprinkler, program_data: &ProgramData, now_seconds: i64) {
+pub fn check_binary_sensor_status(open_sprinkler: &mut OpenSprinkler, now_seconds: i64) {
     open_sprinkler.detect_binary_sensor_status(now_seconds);
 
     if open_sprinkler.old_status.sensors[0].active != open_sprinkler.status.sensors[0].active {
@@ -89,14 +82,14 @@ pub fn check_binary_sensor_status(open_sprinkler: &mut OpenSprinkler, program_da
         if open_sprinkler.status.sensors[0].active {
             open_sprinkler.sensor_status[0].active_last_time = Some(now_seconds);
         } else {
-            log::write_log_message(&open_sprinkler, &log::message::SensorMessage::new(log::LogDataType::Sensor1, now_seconds), now_seconds);
+            let _ = log::write_log_message(&open_sprinkler, &log::message::SensorMessage::new(log::LogDataType::Sensor1, now_seconds), now_seconds);
         }
         push_message(&open_sprinkler, Sensor1::new(open_sprinkler.status.sensors[0].active));
     }
     open_sprinkler.old_status.sensors[0].active = open_sprinkler.status.sensors[0].active;
 }
 
-pub fn check_program_switch_status(open_sprinkler: &mut OpenSprinkler, flow_state: &mut FlowSensor, program_data: &mut ProgramData, now_seconds: i64) {
+pub fn check_program_switch_status(open_sprinkler: &mut OpenSprinkler, flow_state: &mut FlowSensor, program_data: &mut ProgramData) {
     let program_switch = open_sprinkler.detect_program_switch_status();
     if program_switch[0] == true || program_switch[1] == true {
         reset_all_stations_immediate(open_sprinkler, program_data); // immediately stop all stations
@@ -277,7 +270,7 @@ pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, flow_state: &mut Flo
             if open_sprinkler.iopts.sn1t == SensorType::Flow as u8 {
                 message.with_flow(flow_state.flow_last_gpm);
             }
-            log::write_log_message(open_sprinkler, &message, now_seconds);
+            let _ = log::write_log_message(open_sprinkler, &message, now_seconds);
 
             let station_name = open_sprinkler.stations[station_id].name.clone();
             push_message(

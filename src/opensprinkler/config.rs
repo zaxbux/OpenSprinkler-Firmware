@@ -13,7 +13,6 @@ use super::{station::{Stations, self}, program::Programs, RebootCause};
 pub mod data_type {
     use std::net::IpAddr;
 
-    use chrono::{DateTime, Utc};
     use serde::{Deserialize, Serialize};
 
     use crate::opensprinkler::{
@@ -31,7 +30,7 @@ pub mod data_type {
         pub sunset_time: u16,
         /// Rain-delay stop time (seconds since unix epoch)
         /// Was: [u32]
-        pub rd_stop_time: Option<DateTime<Utc>>,
+        pub rd_stop_time: Option<i64>,
         /// External IP @todo Add support for IPv6
         /// Was: [u32]
         pub external_ip: Option<IpAddr>,
@@ -233,7 +232,7 @@ pub fn commit_config(config: &ConfigDocument) -> Result<(), io::Error> {
 	// Write config
 	let buf = bson::to_vec(config).unwrap();
 	let mut writer = io::BufWriter::new(OpenOptions::new().write(true).create(true).open("./config.dat")?);
-	writer.write_all(&buf);
+	writer.write_all(&buf)?;
 
 	Ok(())
 }
@@ -301,11 +300,11 @@ pub fn commit_programs(programs: &Programs) -> Result<(), io::Error>  {
 	Ok(commit_config(&config)?)
 }
 
-pub fn pre_factory_reset() {
-	fs::remove_file("./config.dat");
+pub fn pre_factory_reset() -> io::Result<()> {
+	fs::remove_file("./config.dat")
 }
 
-pub fn factory_reset() {
+pub fn factory_reset() -> io::Result<()> {
 	let config = ConfigDocument {
 		nv: data_type::ControllerNonVolatile {
 			reboot_cause: RebootCause::Reset,
@@ -317,5 +316,5 @@ pub fn factory_reset() {
 		programs: Vec::new(),
 	};
 
-	commit_config(&config);
+	commit_config(&config)
 }

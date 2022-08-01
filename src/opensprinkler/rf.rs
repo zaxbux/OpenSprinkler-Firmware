@@ -29,7 +29,7 @@ pub fn send_rf_signal(open_sprinkler: &mut OpenSprinkler, code: u64, length: u64
 	let len3 = length * 3;
 	let len31 = length * 31;
 
-	for n in 0..15 {
+	for _ in 0..15 {
 		let mut i = 23;
 		// send code
 		while i >= 0 {

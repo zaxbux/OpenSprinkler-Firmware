@@ -1,6 +1,6 @@
 use std::{
     fs::{create_dir_all, read_dir, remove_file, OpenOptions},
-    io::{BufWriter, Write},
+    io::{Write, self},
     path::PathBuf,
 };
 
@@ -35,25 +35,28 @@ const T24H_SECS: i64 = 86400;
 ///
 /// ### Arguments
 /// * `time` - If a [None] value, the log directory is emptied, otherwise the log file for the specified day is deleted.
-pub fn delete_log(time: Option<i64>) {
+pub fn delete_log(time: Option<i64>) -> io::Result<()> {
     let log_path = PathBuf::from("./logs/");
 
     if time.is_none() {
         // Empty the log directory
         // Note: we don't delete the directory since that could delete a symlink
         for file in read_dir(log_path).unwrap() {
-            remove_file(file.unwrap().path());
+            remove_file(file.unwrap().path())?;
         }
-    } else {
-        // Delete specific file
-        let mut log_file_path = log_path.clone();
-        log_file_path.set_file_name((time.unwrap() / 86400).to_string());
-        log_file_path.set_extension("txt");
-
-        if log_file_path.exists() {
-            remove_file(log_file_path);
-        }
+        return Ok(());
     }
+
+    // Delete specific file
+    let mut log_file_path = log_path.clone();
+    log_file_path.set_file_name((time.unwrap() / 86400).to_string());
+    log_file_path.set_extension("txt");
+
+    if log_file_path.exists() {
+        remove_file(log_file_path)?;
+    }
+
+    return Ok(());
 }
 
 fn get_log_type_name(log_type: &LogDataType) -> &'static str {
@@ -68,7 +71,7 @@ fn get_log_type_name(log_type: &LogDataType) -> &'static str {
     }
 }
 
-fn get_writer(timestamp: i64) -> Result<BufWriter<std::fs::File>, std::io::Error> {
+fn get_writer(timestamp: i64) -> Result<io::BufWriter<std::fs::File>, std::io::Error> {
     let log_path = PathBuf::from("./logs/");
 
     // file name will be logs/xxxxx.tx where xxxxx is the day in epoch time
@@ -81,7 +84,7 @@ fn get_writer(timestamp: i64) -> Result<BufWriter<std::fs::File>, std::io::Error
         create_dir_all(log_path)?;
     }
 
-    Ok(BufWriter::new(OpenOptions::new().create(true).append(true).open(log_file_path)?))
+    Ok(io::BufWriter::new(OpenOptions::new().create(true).append(true).open(log_file_path)?))
 }
 
 pub mod message {
@@ -162,7 +165,7 @@ pub mod message {
     }
     impl Message for FlowSenseMessage {
         fn to_string(&self) -> String {
-            serde_json::json!([0, get_log_type_name(&LogDataType::FlowSense), self.duration.unwrap_or(0), self.timestamp,]).to_string()
+            serde_json::json!([self.flow_count, get_log_type_name(&LogDataType::FlowSense), self.duration.unwrap_or(0), self.timestamp,]).to_string()
         }
     }
 

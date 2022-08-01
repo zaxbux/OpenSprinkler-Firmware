@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 mod opensprinkler;
 mod utils;
 use core::time;
@@ -95,13 +97,13 @@ fn main() {
             last_seconds = now_seconds;
 
             // Check rain delay status
-            loop_fns::check_rain_delay(&mut open_sprinkler, &program_data, now_seconds);
+            loop_fns::check_rain_delay(&mut open_sprinkler,  now_seconds);
 
             // Check binary sensor status (e.g. rain, soil)
-            loop_fns::check_binary_sensor_status(&mut open_sprinkler, &program_data, now_seconds);
+            loop_fns::check_binary_sensor_status(&mut open_sprinkler,  now_seconds);
 
             // Check program switch status
-            loop_fns::check_program_switch_status(&mut open_sprinkler, &mut flow_state, &mut program_data, now_seconds);
+            loop_fns::check_program_switch_status(&mut open_sprinkler, &mut flow_state, &mut program_data);
 
             // Schedule program data
             // region: Schedule program data
@@ -135,7 +137,7 @@ fn main() {
 
                             // if station has non-zero water time and the station is not disabled
                             if program.durations[station_index] > 0 && !open_sprinkler.stations[station_index].attrib.dis {
-                            //if program.durations[station_index] > 0 && !(open_sprinkler.attrib_dis[bid] & (1 << s)) {
+                                //if program.durations[station_index] > 0 && !(open_sprinkler.attrib_dis[bid] & (1 << s)) {
                                 // water time is scaled by watering percentage
                                 let mut water_time = water_time_resolve(program.durations[station_index], open_sprinkler.get_sunrise_time(), open_sprinkler.get_sunset_time());
                                 // if the program is set to use weather scaling
@@ -277,7 +279,7 @@ fn main() {
                     open_sprinkler.status.program_busy = false;
                     // log flow sensor reading if flow sensor is used
                     if open_sprinkler.get_sensor_type(0) == SensorType::Flow {
-                        log::write_log_message(&open_sprinkler, &log::message::FlowSenseMessage::new(flow_state.flow_count - open_sprinkler.flow_count_log_start, now_seconds), now_seconds);
+                        let _ = log::write_log_message(&open_sprinkler, &log::message::FlowSenseMessage::new(flow_state.flow_count - open_sprinkler.flow_count_log_start, now_seconds), now_seconds);
                         push_message(
                             &open_sprinkler,
                             FlowSensorEvent::new(
@@ -374,14 +376,14 @@ fn main() {
             }
 
             // Realtime flow count
-            
+
             if open_sprinkler.iopts.sn1t == SensorType::Flow as u8 && now_seconds % FLOW_COUNT_REALTIME_WINDOW == 0 {
                 open_sprinkler.flowcount_rt = if flow_state.flow_count > flow_count_rt_start { flow_state.flow_count - flow_count_rt_start } else { 0 };
                 flow_count_rt_start = flow_state.flow_count;
             }
 
             // Check weather
-            check_weather(&mut open_sprinkler, &|open_sprinkler, weather_update_flag| {
+            let _ = check_weather(&mut open_sprinkler, &|open_sprinkler, weather_update_flag| {
                 // at the moment, we only send notification if water level or external IP changed
                 // the other changes, such as sunrise, sunset changes are ignored for notification
                 match weather_update_flag {
@@ -398,19 +400,26 @@ fn main() {
 }
 
 /// Clean Queue
-/// 
+///
 /// This removes queue elements if:
 /// - water_time is not greater than zero; or
 /// - if current time is greater than element duration
 fn clean_queue(program_data: &mut ProgramData, now_seconds: i64) {
-    let mut qi = program_data.queue.len() - 1;
+    /* let mut qi = program_data.queue.len() as i64 - 1;
     while qi >= 0 {
         let q = program_data.queue.get(qi).unwrap();
-        
+
         if !(q.water_time > 0) || now_seconds >= q.start_time + q.water_time {
             program_data.dequeue(qi);
         }
         qi -= 1;
+    } */
+
+    for qi in 0..program_data.queue.len() {
+        let q = program_data.queue.get(qi).unwrap();
+        if !(q.water_time > 0) || now_seconds >= q.start_time + q.water_time {
+            program_data.dequeue(qi);
+        }
     }
 }
 
@@ -433,7 +442,7 @@ enum MasterStation {
 }
 
 /// Actuate master stations based on need
-/// 
+///
 /// This function iterates over all stations and activates the necessary "master" station.
 fn handle_master(master: MasterStation, open_sprinkler: &mut OpenSprinkler, program_data: &ProgramData, now_seconds: i64) {
     let mas = match master {
@@ -443,11 +452,13 @@ fn handle_master(master: MasterStation, open_sprinkler: &mut OpenSprinkler, prog
     let mas_on_adj: i64 = water_time_decode_signed(match master {
         MasterStation::ONE => open_sprinkler.iopts.mton,
         MasterStation::TWO => open_sprinkler.iopts.mton2,
-    }).into();
+    })
+    .into();
     let mas_off_adj: i64 = water_time_decode_signed(match master {
         MasterStation::ONE => open_sprinkler.iopts.mtof,
         MasterStation::TWO => open_sprinkler.iopts.mtof2,
-    }).into();
+    })
+    .into();
 
     let mut value = false;
 

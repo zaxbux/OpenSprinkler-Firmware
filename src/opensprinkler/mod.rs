@@ -339,12 +339,9 @@ impl OpenSprinkler {
     pub fn apply_all_station_bits(&mut self) {
         self.gpio.lines.shift_register_latch.set_low();
 
-        // @hack bit field?
-        let mut sbits: u8 = 0x00;
-
         // Shift out all station bit values from the highest bit to the lowest
         for board_index in 0..station::MAX_EXT_BOARDS {
-            sbits = if self.status.enabled { self.station_bits[station::MAX_EXT_BOARDS - board_index] } else { 0 };
+            let sbits = if self.status.enabled { self.station_bits[station::MAX_EXT_BOARDS - board_index] } else { 0 };
 
             for s in 0..SHIFT_REGISTER_LINES {
                 self.gpio.lines.shift_register_clock.set_low();
@@ -369,6 +366,7 @@ impl OpenSprinkler {
 
             if now > last_now {
                 // Perform this no more than once per second
+                // @fixme variable lifetime
                 last_now = now;
                 next_sid_to_refresh = (next_sid_to_refresh + 1) % station::MAX_NUM_STATIONS;
                 let board_index = next_sid_to_refresh >> 3;
@@ -540,7 +538,7 @@ impl OpenSprinkler {
     /// Set station data
     pub fn set_station_data(&mut self, station: usize, data: Station) {
         self.stations[station] = data;
-        config::commit_stations(&self.stations);
+        let _ = config::commit_stations(&self.stations);
     }
 
     /// Get station name
@@ -682,14 +680,14 @@ impl OpenSprinkler {
     ///
     /// @todo: delete log files and/or wipe SD card
     pub fn pre_factory_reset() {
-        config::pre_factory_reset();
+        let _ = config::pre_factory_reset();
     }
 
     /// "Factory Reset"
     ///
     /// This function should be called if the config does not exist.
     pub fn factory_reset(&self) {
-        config::factory_reset();
+        let _ = config::factory_reset();
     }
 
     // Setup function for options
@@ -721,7 +719,7 @@ impl OpenSprinkler {
 
     /// Save non-volatile controller status data
     pub fn nvdata_save(&self) {
-        config::commit_controller_nv(&self.nvdata);
+        let _ = config::commit_controller_nv(&self.nvdata);
     }
 
     /// Load integer options from file
@@ -736,7 +734,7 @@ impl OpenSprinkler {
 
     /// Save integer options to file
     pub fn iopts_save(&mut self) {
-        config::commit_integer_options(&self.iopts);
+        let _ = config::commit_integer_options(&self.iopts);
 
         self.nboards = self.iopts.ext + 1;
         self.nstations = self.nboards * SHIFT_REGISTER_LINES;
