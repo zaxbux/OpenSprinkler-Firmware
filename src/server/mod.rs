@@ -1,5 +1,49 @@
 #![feature(proc_macro_hygiene, decl_macro)]
 
+const IOPT_JSON_NAMES: [&str; IOPT_COUNT] = [
+    "fwv", "tz", "hp0", "hp1", "hwv", "ext", "sdt", "mas", "mton", "mtof", "wl", "den", "con",
+    "lit", "dim", "uwt", "lg", "mas2", "mton2", "mtof2", "fwm", "fpr0", "fpr1", "re", "sar", "ife",
+    "sn1t", "sn1o", "sn2t", "sn2o", "sn1on", "sn1of", "sn2on", "sn2of", "reset",
+];
+
+enum IOPT_MAX {
+    fwv = 0,
+    tz = 108,
+    hp0 = 255,
+    hp1 = 255,
+    hwv = 0,
+    ext = MAX_EXT_BOARDS,
+    sdt = 255,
+    mas = MAX_NUM_STATIONS,
+    mton = 255,
+    mtof = 255,
+    wl = 250,
+    den = 1,
+    con = 255,
+    lit = 255,
+    dim = 255,
+    uwt = 255,
+    lg = 1,
+    mas2 = MAX_NUM_STATIONS,
+    mton2 = 255,
+    mtof2 = 255,
+    fwm = 0,
+    fpr0 = 255,
+    fpr1 = 255,
+    re = 1,
+    sar = 1,
+    ife = 255,
+    sn1t = 255,
+    sn1o = 1,
+    sn2t = 255,
+    sn2o = 1,
+    sn1on = 255,
+    sn1of = 255,
+    sn2on = 255,
+    sn2of = 255,
+    reset = 1,
+}
+
 use rocket::response::status;
 
 pub extern "C" fn string_remove_space(s: &mut String) {

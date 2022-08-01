@@ -6,21 +6,53 @@ edition = "2021"
 [features]
 demo = []
 
+[patch.crates-io]
+paho-mqtt-sys = { path = "C:/Users/Zach/repos/github.com/paho.mqtt.rust/paho-mqtt-sys" }
+rppal = { path = "C:/Users/Zach/repos/github.com/zaxbux/rppal" }
+
+[build-dependencies]
+cmake = "0.1.48"
+
 [dependencies]
 libc = "0.2.126"
 mac_address = "1.1.3"
 md5 = "0.7.0"
-#mosquitto-client = "0.1.5"
 paho-mqtt = "0.11.1"
 tracing = "0.1.35"
-rocket = { version = "0.4.11"}
+#rocket = { version = "0.4.11"}
 system_shutdown = "3.0.0"
-nix = { version = "0.24.2", features = ["fs", "reboot"] }
-zbus = "2.3.2"
-#gpio-cdev = "0.5.1"
-rppal = "0.13.1"
 
-[lib]
-name = "rs_open_sprinkler"
-path = "src/OpenSprinkler.rs"
-crate-type = ["cdylib"]
+reqwest = { version = "0.11.11", features = ["blocking", "json"] }
+
+serde_json = "1.0.82"
+byteorder = "1.4.3"
+queues = "1.1.0"
+chrono = { version = "0.4.20-beta.1", features = ["serde"] }
+bson = "2.3.0"
+semver = "1.0.12"
+serde-big-array = "0.4.1"
+
+[dependencies.rppal]
+version = "0.13.1"
+features = ["gpio"]
+
+[dependencies.serde]
+version = "1.0.140"
+features = ["derive"]
+
+# Linux
+[target.'cfg(target_os = "linux")'.dependencies]
+#nix = { version = "0.24.2", features = ["fs", "reboot", "net"] }
+zbus = "2.3.2"
+ruspiro-timer = { version = "0.6.0", features = ["pi4_low"] }
+
+# [target.'cfg(target_os = "unix")'.dependencies]
+# rppal = "0.13.1"
+
+[env]
+OPENSSL_DIR = "C:/Program Files/OpenSSL_1.1.1L-Win64"
+
+#[lib]
+# name = "rs_open_sprinkler"
+# path = "src/OpenSprinkler.rs"
+# crate-type = ["cdylib"]
