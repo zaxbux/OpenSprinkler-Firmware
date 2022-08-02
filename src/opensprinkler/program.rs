@@ -159,10 +159,12 @@ impl Program {
 
         if (t >> START_TIME_SUNRISE_BIT) & 1 != 0 {
             // limit to 0
-            return max(0, open_sprinkler.nvdata.sunrise_time as i16 + offset);
+            //return max(0, open_sprinkler.nvdata.sunrise_time as i16 + offset);
+            return max(0, open_sprinkler.controller_config.nv.sunrise_time as i16 + offset);
         } else if (t >> START_TIME_SUNSET_BIT) & 1 != 0 {
             // limit to 1440
-            return min(1440, open_sprinkler.nvdata.sunset_time as i16 + offset);
+            //return min(1440, open_sprinkler.nvdata.sunset_time as i16 + offset);
+            return min(1440, open_sprinkler.controller_config.nv.sunset_time as i16 + offset);
         }
 
         return t;

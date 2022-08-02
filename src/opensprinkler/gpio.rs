@@ -1,7 +1,7 @@
 // #[cfg(target_os = "linux")]
 use rppal::gpio;
 
-pub struct Lines {
+/* pub struct Lines {
     pub shift_register_clock: gpio::OutputPin,
     pub shift_register_oe: gpio::OutputPin,
     pub shift_register_latch: gpio::OutputPin,
@@ -10,9 +10,9 @@ pub struct Lines {
     // pub sensor_1: gpio::InputPin,
     // pub sensor_2: gpio::InputPin,
     pub rf_tx: gpio::OutputPin,
-}
+} */
 
-mod pin {
+pub mod pin {
     /// Shift register **CLOCK** pin
     pub const SHIFT_REGISTER_CLOCK: u8 = 4;
     /// Shift register **OE** (output enable) pin
@@ -29,7 +29,7 @@ mod pin {
     pub const RF_TX: u8 = 15;
 }
 
-pub struct GPIO {
+/* pub struct GPIO {
     gpio: gpio::Gpio,
     pub lines: Lines,
 }
@@ -66,4 +66,4 @@ impl GPIO {
     pub fn get_pin(&self, pin: u8) -> rppal::gpio::Result<rppal::gpio::Pin> {
         self.gpio.get(pin)
     }
-}
+} */

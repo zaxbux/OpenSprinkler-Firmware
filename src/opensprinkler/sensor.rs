@@ -1,3 +1,5 @@
+use serde::{Serialize, Deserialize};
+
 // flow count window (for computing real-time flow rate), 30 seconds
 pub const FLOW_COUNT_REALTIME_WINDOW: i64 = 30;
 
@@ -16,6 +18,13 @@ pub enum SensorType {
     ProgramSwitch = 0xF0,
     /// Other sensor
     Other = 0xFF,
+}
+
+#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum SensorOption {
+    NormallyClosed = 0,
+    NormallyOpen = 1,
 }
 
 #[derive(Default)]
