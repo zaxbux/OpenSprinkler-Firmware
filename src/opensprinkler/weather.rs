@@ -87,7 +87,7 @@ pub fn check_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&Ope
         open_sprinkler.weather_status.checkwt_success_lasttime = None;
 
         //if !(open_sprinkler.iopts.uwt == 0 || open_sprinkler.iopts.uwt == 2) {
-        if !(open_sprinkler.controller_config.iopts.uwt == 0 || open_sprinkler.controller_config.iopts.uwt == 2) {
+        if !(open_sprinkler.controller_config.uwt == 0 || open_sprinkler.controller_config.uwt == 2) {
             open_sprinkler.set_water_scale(100); // reset watering percentage to 100%
             open_sprinkler.weather_status.raw_data = None; // reset wt_rawData and errCode
             open_sprinkler.weather_status.last_response_code = None;
@@ -103,7 +103,7 @@ pub fn check_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&Ope
 fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprinkler, WeatherUpdateFlag)) -> result::Result<()> {
     // @todo use semver and cargo cfg version
     //let ua = HeaderValue::try_from(format!("OpenSprinkler/{} (rust)", open_sprinkler.iopts.fwv));
-    let ua = HeaderValue::try_from(format!("OpenSprinkler/{} (rust)", open_sprinkler.controller_config.iopts.fwv));
+    let ua = HeaderValue::try_from(format!("OpenSprinkler/{} (rust)", open_sprinkler.controller_config.fwv));
 
     //let mut url = reqwest::Url::parse(open_sprinkler.sopts.wsp.as_str()).unwrap();
     //url.path_segments_mut().unwrap().push(&open_sprinkler.iopts.uwt.to_string());
@@ -118,7 +118,7 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprin
         .header(USER_AGENT, ua.unwrap())
         // Prefer JSON over the original implementation that returned a form-urlencoded string
         .header(ACCEPT, HeaderValue::from_str("application/json,text/plain;q=0.9,text/html;q=0.8").unwrap())
-        .query(&[("loc", open_sprinkler.controller_config.sopts.loc.clone()), ("wto", open_sprinkler.controller_config.sopts.wto.clone()), ("fwv", open_sprinkler.controller_config.iopts.fwv.to_string())])
+        .query(&[("loc", open_sprinkler.controller_config.sopts.loc.clone()), ("wto", open_sprinkler.controller_config.sopts.wto.clone()), ("fwv", open_sprinkler.controller_config.fwv.to_string())])
         .send()
         .expect("Error making HTTP weather request");
 
@@ -158,7 +158,7 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprin
             if scale >= 0 && scale <= WATER_SCALE_MAX && scale != open_sprinkler.get_water_scale() as i32 {
                 // Only save if the value has changed
                 //open_sprinkler.iopts.wl = u8::try_from(scale).unwrap();
-                open_sprinkler.controller_config.iopts.wl = u8::try_from(scale).unwrap();
+                open_sprinkler.controller_config.wl = u8::try_from(scale).unwrap();
                 open_sprinkler.iopts_save();
                 update_fn(open_sprinkler, WeatherUpdateFlag::WL);
 
@@ -219,13 +219,13 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprin
         if params.contains_key("tz") {
             let tz = params.get("tz").unwrap().parse::<i8>().unwrap();
             //if tz >= 0 && tz <= 108 && tz != open_sprinkler.iopts.tz as i8 {
-            if tz >= 0 && tz <= 108 && tz != open_sprinkler.controller_config.iopts.tz as i8 {
+            if tz >= 0 && tz <= 108 && tz != open_sprinkler.controller_config.tz as i8 {
                 //open_sprinkler.iopts.tz = u8::try_from(tz).unwrap();
-                open_sprinkler.controller_config.iopts.tz = u8::try_from(tz).unwrap();
+                open_sprinkler.controller_config.tz = u8::try_from(tz).unwrap();
                 open_sprinkler.iopts_save();
                 update_fn(open_sprinkler, WeatherUpdateFlag::TZ);
 
-                tracing::trace!("Timezone: {}", open_sprinkler.controller_config.iopts.tz);
+                tracing::trace!("Timezone: {}", open_sprinkler.controller_config.tz);
             }
         }
 

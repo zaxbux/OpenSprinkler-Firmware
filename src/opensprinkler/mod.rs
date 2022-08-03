@@ -25,7 +25,7 @@ use std::path::PathBuf;
 
 use crate::opensprinkler::sensor::SensorOption;
 
-use self::config::ConfigDocument;
+use self::config::ControllerConfiguration;
 use self::sensor::{SensorType, MAX_SENSORS};
 use self::station::{StationType, MAX_NUM_BOARDS, SHIFT_REGISTER_LINES};
 
@@ -141,7 +141,7 @@ const FIRMWARE_VERSION_REVISION: u8 = 0;
 
 pub struct OpenSprinkler {
     config: config::Config,
-    pub controller_config: config::ConfigDocument,
+    pub controller_config: config::ControllerConfiguration,
 
     pub flow_state: sensor::flow::State,
 
@@ -210,7 +210,7 @@ impl OpenSprinkler {
 
         OpenSprinkler {
             config: config::Config::new(config_path),
-            controller_config: config::ConfigDocument::default(),
+            controller_config: config::ControllerConfiguration::default(),
 
             flow_state: sensor::flow::State::default(),
 
@@ -283,7 +283,7 @@ impl OpenSprinkler {
     }
     pub fn is_logging_enabled(&self) -> bool {
         //self.iopts.lg == 1
-        self.controller_config.iopts.lg
+        self.controller_config.lg
     }
 
     pub fn is_mqtt_enabled(&self) -> bool {
@@ -293,7 +293,7 @@ impl OpenSprinkler {
 
     pub fn is_remote_extension(&self) -> bool {
         //self.iopts.re == 1
-        self.controller_config.iopts.re
+        self.controller_config.re
     }
 
     pub fn get_weather_service_url(&self) -> Result<reqwest::Url, url::ParseError> {
@@ -307,7 +307,7 @@ impl OpenSprinkler {
 
     pub fn get_water_scale(&self) -> u8 {
         //self.iopts.wl
-        self.controller_config.iopts.wl
+        self.controller_config.wl
     }
 
     pub fn get_sunrise_time(&self) -> u16 {
@@ -324,7 +324,7 @@ impl OpenSprinkler {
     pub fn get_board_count(&self) -> usize {
         //self.nboards
         //self.iopts.ext + 1
-        self.controller_config.iopts.ext + 1
+        self.controller_config.ext + 1
     }
 
     pub fn get_station_count(&self) -> usize {
@@ -345,10 +345,10 @@ impl OpenSprinkler {
     pub fn get_sensor_type(&self, i: usize) -> SensorType {
         let st = if i == 0 {
             //self.iopts.sn1t
-            self.controller_config.iopts.sn1t
+            self.controller_config.sn1t
         } else if i == 1 {
             //self.iopts.sn2t
-            self.controller_config.iopts.sn2t
+            self.controller_config.sn2t
         } else {
             return SensorType::None;
         };
@@ -368,32 +368,32 @@ impl OpenSprinkler {
         // sensor_option: 0 if normally closed; 1 if normally open
         match i {
             //0 => self.iopts.sn1o,
-            0 => self.controller_config.iopts.sn1o,
+            0 => self.controller_config.sn1o,
             //1 => self.iopts.sn2o,
-            1 => self.controller_config.iopts.sn2o,
+            1 => self.controller_config.sn2o,
             _ => unreachable!(),
         }
     }
 
     pub fn get_sensor_on_delay(&self, i: usize) -> u8 {
         match i {
-            0 => self.controller_config.iopts.sn1on,
-            1 => self.controller_config.iopts.sn2on,
+            0 => self.controller_config.sn1on,
+            1 => self.controller_config.sn2on,
             _ => unreachable!(),
         }
     }
 
     pub fn get_sensor_off_delay(&self, i: usize) -> u8 {
         match i {
-            0 => self.controller_config.iopts.sn1of,
-            1 => self.controller_config.iopts.sn2of,
+            0 => self.controller_config.sn1of,
+            1 => self.controller_config.sn2of,
             _ => unreachable!(),
         }
     }
 
     pub fn get_flow_pulse_rate(&self) -> u16 {
         //(u16::from(self.iopts.fpr1) << 8) + u16::from(self.iopts.fpr0)
-        (u16::from(self.controller_config.iopts.fpr1) << 8) + u16::from(self.controller_config.iopts.fpr0)
+        (u16::from(self.controller_config.fpr1) << 8) + u16::from(self.controller_config.fpr0)
     }
     // endregion GETTERS
 
@@ -401,7 +401,7 @@ impl OpenSprinkler {
 
     pub fn set_water_scale(&mut self, scale: u8) {
         //self.iopts.wl = scale;
-        self.controller_config.iopts.wl = scale;
+        self.controller_config.wl = scale;
     }
 
     /// Update the weather service request success timestamp
@@ -440,7 +440,7 @@ impl OpenSprinkler {
     /// @todo Separate server into separate process and use IPC
     pub fn start_network(&self) -> bool {
         //let _port: u16 = if cfg!(demo) { 80 } else { (self.iopts.hp1 as u16) << 8 + &self.iopts.hp0.into() };
-        let _port: u16 = if cfg!(demo) { 80 } else { (self.controller_config.iopts.hp1 as u16) << 8 + &self.controller_config.iopts.hp0.into() };
+        let _port: u16 = if cfg!(demo) { 80 } else { (self.controller_config.hp1 as u16) << 8 + &self.controller_config.hp0.into() };
 
         return true;
     }
@@ -521,7 +521,7 @@ impl OpenSprinkler {
         }
 
         //if self.iopts.sar == 1 {
-        if self.controller_config.iopts.sar {
+        if self.controller_config.sar {
             // Handle refresh of special stations. We refresh station that is next in line
 
             let mut next_sid_to_refresh = station::MAX_NUM_STATIONS >> 1;
@@ -723,7 +723,7 @@ impl OpenSprinkler {
         let mut host = String::from("http://"); // @todo HTTPS?
         host.push_str(&data.ip.to_string());
         //let timer = match self.iopts.sar {
-        let timer = match self.controller_config.iopts.sar {
+        let timer = match self.controller_config.sar {
             true => (station::MAX_NUM_STATIONS * 4) as i64,
             false => 64800, // 18 hours
         };
@@ -797,7 +797,7 @@ impl OpenSprinkler {
     // Setup function for options
     pub fn options_setup(&mut self) {
         // Check reset conditions
-        let config = self.config.get::<ConfigDocument>();
+        let config = self.config.get::<ControllerConfiguration>();
         if let Err(error) = config {
             tracing::error!("Error reading config: {:?}", error);
             self.reset_to_defaults();
@@ -808,8 +808,8 @@ impl OpenSprinkler {
         if config.is_ok() {
             let config = config.unwrap();
 
-            if config.iopts.fwv < FIRMWARE_VERSION {
-                tracing::debug!("Invalid firmware version: {:?}", config.iopts.fwv);
+            if config.fwv < FIRMWARE_VERSION {
+                tracing::debug!("Invalid firmware version: {:?}", config.fwv);
                 self.reset_to_defaults();
                 return;
             }
@@ -838,9 +838,9 @@ impl OpenSprinkler {
         //self.nboards = self.iopts.ext + 1;
         //self.nstations = self.nboards * SHIFT_REGISTER_LINES;
         //self.iopts.fwv = FIRMWARE_VERSION;
-        self.controller_config.iopts.fwv = FIRMWARE_VERSION;
+        self.controller_config.fwv = FIRMWARE_VERSION;
         //self.iopts.fwm = FIRMWARE_VERSION_REVISION;
-        self.controller_config.iopts.fwm = FIRMWARE_VERSION_REVISION;
+        self.controller_config.fwm = FIRMWARE_VERSION_REVISION;
         //};
         //{
         //let ref mut this = self;
@@ -870,7 +870,7 @@ impl OpenSprinkler {
         //self.nboards = self.iopts.ext + 1;
         //self.nstations = self.nboards * SHIFT_REGISTER_LINES;
         //self.status.enabled = match self.iopts.den {
-        self.status.enabled = self.controller_config.iopts.den;
+        self.status.enabled = self.controller_config.den;
     }
 
     /*     /// Load a string option from file into a buffer.
@@ -906,7 +906,7 @@ impl OpenSprinkler {
     pub fn enable(&mut self) {
         self.status.enabled = true;
         //self.iopts.den = 1;
-        self.controller_config.iopts.den = true;
+        self.controller_config.den = true;
         self.iopts_save();
     }
 
@@ -914,7 +914,7 @@ impl OpenSprinkler {
     pub fn disable(&mut self) {
         self.status.enabled = false;
         //self.iopts.den = 0;
-        self.controller_config.iopts.den = false;
+        self.controller_config.den = false;
         self.iopts_save();
     }
 

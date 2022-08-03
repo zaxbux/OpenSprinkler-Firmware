@@ -76,7 +76,7 @@ pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, program_data: &mut Pr
 			// only need to update last_seq_stop_time for sequential stations
 			//if open_sprinkler.attrib_seq[bid] & (1 << s) && !re {
 			//if open_sprinkler.stations[station_index].attrib.seq && !re {
-			if open_sprinkler.controller_config.stations[station_index].attrib.seq && !open_sprinkler.controller_config.iopts.re {
+			if open_sprinkler.controller_config.stations[station_index].attrib.seq && !open_sprinkler.controller_config.re {
 				program_data.last_seq_stop_time = if sequential_stop_time > program_data.last_seq_stop_time.unwrap() {
 					Some(sequential_stop_time)
 				} else {
@@ -111,9 +111,9 @@ pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, program_data: &mut Pr
 
 		// in case some options have changed while executing the program
 		//open_sprinkler.status.mas = open_sprinkler.iopts.mas; // update master station
-		open_sprinkler.status.mas = open_sprinkler.controller_config.iopts.mas; // update master station
+		open_sprinkler.status.mas = open_sprinkler.controller_config.mas; // update master station
 																				//open_sprinkler.status.mas2 = open_sprinkler.iopts.mas2; // update master2 station
-		open_sprinkler.status.mas2 = open_sprinkler.controller_config.iopts.mas2;
+		open_sprinkler.status.mas2 = open_sprinkler.controller_config.mas2;
 		// update master2 station
 	}
 }

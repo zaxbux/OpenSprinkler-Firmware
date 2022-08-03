@@ -3,11 +3,12 @@ use super::{
     station::{self, Stations},
     RebootCause,
 };
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     fs::OpenOptions,
     io::{self, Write},
-    path::PathBuf, sync::Arc,
+    path::PathBuf,
+    sync::Arc,
 };
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
@@ -47,12 +48,16 @@ impl Default for EventsEnabled {
     pub const PROGRAMS: &'static str = "prog.dat";
     pub const DONE: &'static str = "done.dat";
 } */
+
+use crate::opensprinkler::{sensor::SensorOption, FIRMWARE_VERSION, FIRMWARE_VERSION_REVISION, HARDWARE_VERSION};
+use std::net::IpAddr;
+
 pub mod data_type {
     use std::net::IpAddr;
 
     use serde::{Deserialize, Serialize};
 
-    use crate::opensprinkler::{RebootCause, FIRMWARE_VERSION, FIRMWARE_VERSION_REVISION, HARDWARE_VERSION, sensor::SensorOption};
+    use crate::opensprinkler::{sensor::SensorOption, RebootCause, FIRMWARE_VERSION, FIRMWARE_VERSION_REVISION, HARDWARE_VERSION};
 
     /// Non-volatile controller data
     #[derive(Clone, Serialize, Deserialize)]
@@ -85,125 +90,18 @@ pub mod data_type {
         }
     }
 
-    #[derive(Clone, Serialize, Deserialize)]
+    /* #[derive(Clone, Serialize, Deserialize)]
     pub struct IntegerOptions {
-        /// firmware version
-        pub fwv: u16,
-        /// Time Zone
-        ///
-        /// Default: UTC
-        pub tz: u8,
-        /// this and the next unsigned char define HTTP port
-        pub hp0: u8,
-        /// -
-        pub hp1: u8,
-        /// -
-        pub hwv: u8,
-        /// number of 8-station extension board. 0: no extension boards
-        pub ext: usize,
-        /// station delay time (-10 minutes to 10 minutes).
-        pub sdt: u8,
-        /// index of master station. 0: no master station
-        pub mas: Option<usize>,
-        /// master on time adjusted time (-10 minutes to 10 minutes)
-        pub mton: u8,
-        /// master off adjusted time (-10 minutes to 10 minutes)
-        pub mtof: u8,
-        /// water level (default 100%),
-        pub wl: u8,
-        /// device enable
-        pub den: bool,
-        /// lcd contrast
-        pub con: u8,
-        /// lcd backlight
-        pub lit: u8,
-        /// lcd dimming
-        pub dim: u8,
-        /// weather algorithm (0 means not using weather algorithm)
-        pub uwt: u8,
-        /// enable logging: 0: disable; 1: enable.
-        pub lg: bool,
-        /// index of master2. 0: no master2 station
-        pub mas2: Option<usize>,
-        /// master2 on adjusted time
-        pub mton2: u8,
-        /// master2 off adjusted time
-        pub mtof2: u8,
-        /// firmware minor version
-        pub fwm: u8,
-        /// this and next unsigned char define flow pulse rate (100x)
-        pub fpr0: u8,
-        /// default is 1.00 (100)
-        pub fpr1: u8,
-        /// set as remote extension
-        pub re: bool,
-        /// special station auto refresh
-        pub sar: bool,
-        //pub ife: u8,
-        /// ifttt enabled events
-        pub ifttt_events: super::EventsEnabled,
-        /// sensor 1 type (see SENSOR_TYPE macro defines)
-        pub sn1t: u8,
-        /// sensor 1 option. 0: normally closed; 1: normally open.	default 1.
-        pub sn1o: SensorOption,
-        /// sensor 2 type
-        pub sn2t: u8,
-        /// sensor 2 option. 0: normally closed; 1: normally open. default 1.
-        pub sn2o: SensorOption,
-        /// sensor 1 on delay
-        pub sn1on: u8,
-        /// sensor 1 off delay
-        pub sn1of: u8,
-        /// sensor 2 on delay
-        pub sn2on: u8,
-        /// sensor 2 off delay
-        pub sn2of: u8,
-        /// reset
-        pub reset: u8,
+
     }
 
     impl Default for IntegerOptions {
         fn default() -> Self {
             IntegerOptions {
-                fwv: FIRMWARE_VERSION,
-                tz: 48, // UTC
-                hp0: 80,
-                hp1: 0,
-                hwv: HARDWARE_VERSION,
-                ext: 0,
-                sdt: 120,
-                mas: None,
-                mton: 120,
-                mtof: 120,
-                wl: 100,
-                den: true,
-                con: 150,
-                lit: 100,
-                dim: 50,
-                uwt: 0,
-                lg: true,
-                mas2: None,
-                mton2: 120,
-                mtof2: 120,
-                fwm: FIRMWARE_VERSION_REVISION,
-                fpr0: 100,
-                fpr1: 0,
-                re: false,
-                sar: false,
-                //ife: 0,
-                ifttt_events: super::EventsEnabled::default(),
-                sn1t: 0,
-                sn1o: SensorOption::NormallyOpen,
-                sn2t: 0,
-                sn2o: SensorOption::NormallyOpen,
-                sn1on: 0,
-                sn1of: 0,
-                sn2on: 0,
-                sn2of: 0,
-                reset: 0,
+
             }
         }
-    }
+    } */
 
     #[derive(Clone, Serialize, Deserialize)]
     pub struct StringOptions {
@@ -252,22 +150,133 @@ pub mod data_type {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct ConfigDocument {
+pub struct ControllerConfiguration {
     pub nv: data_type::ControllerNonVolatile,
-    pub iopts: data_type::IntegerOptions,
+    //pub iopts: data_type::IntegerOptions,
+    /// firmware version
+    pub fwv: u16,
+    /// Time Zone
+    ///
+    /// Default: UTC
+    pub tz: u8,
+    /// this and the next unsigned char define HTTP port
+    pub hp0: u8,
+    /// -
+    pub hp1: u8,
+    /// -
+    pub hwv: u8,
+    /// number of 8-station extension board. 0: no extension boards
+    pub ext: usize,
+    /// station delay time (-10 minutes to 10 minutes).
+    pub sdt: u8,
+    /// index of master station. 0: no master station
+    pub mas: Option<usize>,
+    /// master on time adjusted time (-10 minutes to 10 minutes)
+    pub mton: u8,
+    /// master off adjusted time (-10 minutes to 10 minutes)
+    pub mtof: u8,
+    /// water level (default 100%),
+    pub wl: u8,
+    /// device enable
+    pub den: bool,
+    /// lcd contrast
+    pub con: u8,
+    /// lcd backlight
+    pub lit: u8,
+    /// lcd dimming
+    pub dim: u8,
+    /// weather algorithm (0 means not using weather algorithm)
+    pub uwt: u8,
+    /// enable logging: 0: disable; 1: enable.
+    pub lg: bool,
+    /// index of master2. 0: no master2 station
+    pub mas2: Option<usize>,
+    /// master2 on adjusted time
+    pub mton2: u8,
+    /// master2 off adjusted time
+    pub mtof2: u8,
+    /// firmware minor version
+    pub fwm: u8,
+    /// this and next unsigned char define flow pulse rate (100x)
+    pub fpr0: u8,
+    /// default is 1.00 (100)
+    pub fpr1: u8,
+    /// set as remote extension
+    pub re: bool,
+    /// special station auto refresh
+    pub sar: bool,
+    //pub ife: u8,
+    /// ifttt enabled events
+    pub ifttt_events: EventsEnabled,
+    /// sensor 1 type (see SENSOR_TYPE macro defines)
+    pub sn1t: u8,
+    /// sensor 1 option. 0: normally closed; 1: normally open.	default 1.
+    pub sn1o: SensorOption,
+    /// sensor 2 type
+    pub sn2t: u8,
+    /// sensor 2 option. 0: normally closed; 1: normally open. default 1.
+    pub sn2o: SensorOption,
+    /// sensor 1 on delay
+    pub sn1on: u8,
+    /// sensor 1 off delay
+    pub sn1of: u8,
+    /// sensor 2 on delay
+    pub sn2on: u8,
+    /// sensor 2 off delay
+    pub sn2of: u8,
+    /// reset
+    pub reset: u8,
+
     pub sopts: data_type::StringOptions,
     pub stations: Stations,
     pub programs: Programs,
 }
 
-impl Default for ConfigDocument {
+impl Default for ControllerConfiguration {
     fn default() -> Self {
-        ConfigDocument {
+        ControllerConfiguration {
             nv: data_type::ControllerNonVolatile {
                 reboot_cause: RebootCause::Reset,
                 ..Default::default()
             },
-            iopts: data_type::IntegerOptions::default(),
+            //iopts: data_type::IntegerOptions::default(),
+            fwv: FIRMWARE_VERSION,
+            tz: 48, // UTC
+            hp0: 80,
+            hp1: 0,
+            hwv: HARDWARE_VERSION,
+            ext: 0,
+            sdt: 120,
+            mas: None,
+            mton: 120,
+            mtof: 120,
+            wl: 100,
+            den: true,
+            con: 150,
+            lit: 100,
+            dim: 50,
+            uwt: 0,
+            lg: true,
+            mas2: None,
+            mton2: 120,
+            mtof2: 120,
+            fwm: FIRMWARE_VERSION_REVISION,
+            fpr0: 100,
+            fpr1: 0,
+            re: false,
+            sar: false,
+            //ife: 0,
+            ifttt_events: EventsEnabled::default(),
+            sn1t: 0,
+            sn1o: SensorOption::NormallyOpen,
+            sn2t: 0,
+            sn2o: SensorOption::NormallyOpen,
+            sn1on: 0,
+            sn1of: 0,
+            sn2on: 0,
+            sn2of: 0,
+            reset: 0,
+
             sopts: data_type::StringOptions::default(),
             stations: station::default(),
             programs: Vec::new(),
@@ -329,11 +338,11 @@ impl Config {
     }
 
     pub fn commit_defaults(&self) -> Result<(), Error> {
-        let document = ConfigDocument::default();
+        let document = ControllerConfiguration::default();
         Ok(self.commit(&document)?)
     }
 }
-/* 
+/*
 pub fn get_config<P: AsRef<Path>>(path: P) -> Result<ConfigDocument, io::Error> {
     let reader = io::BufReader::new(File::open(path)?);
     Ok(bson::from_reader(reader).unwrap())

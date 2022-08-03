@@ -207,7 +207,7 @@ fn schedule_all_stations(open_sprinkler: &mut OpenSprinkler, program_data: &mut 
     let mut seq_start_time = con_start_time; // sequential start time
 
     //let station_delay: i64 = water_time_decode_signed(open_sprinkler.iopts.sdt).into();
-    let station_delay: i64 = water_time_decode_signed(open_sprinkler.controller_config.iopts.sdt).into();
+    let station_delay: i64 = water_time_decode_signed(open_sprinkler.controller_config.sdt).into();
 
     // if the sequential queue has stations running
     if program_data.last_seq_stop_time.unwrap_or(0) > now_seconds {
@@ -304,7 +304,7 @@ fn manual_start_program(open_sprinkler: &mut OpenSprinkler, program_data: &mut P
 
     if pid > 0 && pid < 255 {
         //events::push_message(open_sprinkler, &events::ProgramSchedEvent::new(pid - 1, prog.name, !uwt, if uwt { open_sprinkler.iopts.wl } else { 100 }));
-        events::push_message(open_sprinkler, &events::ProgramSchedEvent::new(pid - 1, &program.name, !uwt, if uwt { open_sprinkler.controller_config.iopts.wl } else { 100 }));
+        events::push_message(open_sprinkler, &events::ProgramSchedEvent::new(pid - 1, &program.name, !uwt, if uwt { open_sprinkler.controller_config.wl } else { 100 }));
     }
 
     for station_index in 0..open_sprinkler.get_station_count() {
@@ -322,7 +322,7 @@ fn manual_start_program(open_sprinkler: &mut OpenSprinkler, program_data: &mut P
         }
         if uwt {
             //water_time = water_time * (i64::try_from(open_sprinkler.iopts.wl).unwrap() / 100);
-            water_time = water_time * (i64::try_from(open_sprinkler.controller_config.iopts.wl).unwrap() / 100);
+            water_time = water_time * (i64::try_from(open_sprinkler.controller_config.wl).unwrap() / 100);
         }
         //if water_time > 0 && !(open_sprinkler.attrib_dis[bid] & (1 << s)) {
         //if water_time > 0 && !open_sprinkler.stations[sid].attrib.dis {
@@ -384,7 +384,7 @@ pub fn check_program_schedule(open_sprinkler: &mut OpenSprinkler, program_data: 
                     // if the program is set to use weather scaling
                     if program.use_weather != 0 {
                         //let wl = open_sprinkler.iopts.wl;
-                        let wl = open_sprinkler.controller_config.iopts.wl;
+                        let wl = open_sprinkler.controller_config.wl;
                         water_time = water_time * i64::from(wl) / 100;
                         if wl < 20 && water_time < 10 {
                             // if water_percentage is less than 20% and water_time is less than 10 seconds
@@ -414,7 +414,7 @@ pub fn check_program_schedule(open_sprinkler: &mut OpenSprinkler, program_data: 
                 tracing::trace!("Program {{id = {}, name = {}}} scheduled", program_index, program.name);
                 events::push_message(
                     &open_sprinkler,
-                    &events::ProgramSchedEvent::new(program_index, &program.name, program.use_weather == 0, if program.use_weather != 0 { open_sprinkler.controller_config.iopts.wl } else { 100 }),
+                    &events::ProgramSchedEvent::new(program_index, &program.name, program.use_weather == 0, if program.use_weather != 0 { open_sprinkler.controller_config.wl } else { 100 }),
                 );
             }
         }

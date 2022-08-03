@@ -109,18 +109,18 @@ pub fn activate_master_station(master: usize, open_sprinkler: &mut OpenSprinkler
     }
 
     let mas_on_adj: i64 = utils::water_time_decode_signed(match master {
-        0 => open_sprinkler.controller_config.iopts.mton,
+        0 => open_sprinkler.controller_config.mton,
         //0 => open_sprinkler.iopts.mton,
         //1 => open_sprinkler.iopts.mton2,
-        1 => open_sprinkler.controller_config.iopts.mton2,
+        1 => open_sprinkler.controller_config.mton2,
 		_ => todo!(),
     })
     .into();
     let mas_off_adj: i64 = utils::water_time_decode_signed(match master {
-        0 => open_sprinkler.controller_config.iopts.mtof,
+        0 => open_sprinkler.controller_config.mtof,
         //0 => open_sprinkler.iopts.mtof,
         //1 => open_sprinkler.iopts.mtof2,
-        1 => open_sprinkler.controller_config.iopts.mtof2,
+        1 => open_sprinkler.controller_config.mtof2,
 		_ => todo!(),
     })
     .into();

@@ -244,15 +244,15 @@ fn ifttt_event_enabled(open_sprinkler: &OpenSprinkler, event: &dyn EventType) ->
     //let ifttt_enabled: bool = (open_sprinkler.iopts.ife & (event.event_type() as u8)) == 1;
     // @todo This can be more efficient:
     match event.event_type() {
-        NotifyEvent::ProgramSched => open_sprinkler.controller_config.iopts.ifttt_events.program_sched,
-        NotifyEvent::Sensor1 => open_sprinkler.controller_config.iopts.ifttt_events.sensor1,
-        NotifyEvent::FlowSensor => open_sprinkler.controller_config.iopts.ifttt_events.flow_sensor,
-        NotifyEvent::WeatherUpdate => open_sprinkler.controller_config.iopts.ifttt_events.weather_update,
-        NotifyEvent::Reboot => open_sprinkler.controller_config.iopts.ifttt_events.reboot,
-        NotifyEvent::StationOff => open_sprinkler.controller_config.iopts.ifttt_events.station_off,
-        NotifyEvent::Sensor2 => open_sprinkler.controller_config.iopts.ifttt_events.sensor2,
-        NotifyEvent::RainDelay => open_sprinkler.controller_config.iopts.ifttt_events.rain_delay,
-        NotifyEvent::StationOn => open_sprinkler.controller_config.iopts.ifttt_events.station_on,
+        NotifyEvent::ProgramSched => open_sprinkler.controller_config.ifttt_events.program_sched,
+        NotifyEvent::Sensor1 => open_sprinkler.controller_config.ifttt_events.sensor1,
+        NotifyEvent::FlowSensor => open_sprinkler.controller_config.ifttt_events.flow_sensor,
+        NotifyEvent::WeatherUpdate => open_sprinkler.controller_config.ifttt_events.weather_update,
+        NotifyEvent::Reboot => open_sprinkler.controller_config.ifttt_events.reboot,
+        NotifyEvent::StationOff => open_sprinkler.controller_config.ifttt_events.station_off,
+        NotifyEvent::Sensor2 => open_sprinkler.controller_config.ifttt_events.sensor2,
+        NotifyEvent::RainDelay => open_sprinkler.controller_config.ifttt_events.rain_delay,
+        NotifyEvent::StationOn => open_sprinkler.controller_config.ifttt_events.station_on,
     }
 }
 
