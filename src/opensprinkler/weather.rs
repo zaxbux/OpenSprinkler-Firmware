@@ -173,7 +173,7 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprin
             if sunrise >= 0 && sunrise <= 1440 && sunrise != open_sprinkler.get_sunrise_time() as i16 {
                 // Only save if the value has changed
                 //open_sprinkler.nvdata.sunrise_time = u16::try_from(sunrise).unwrap();
-                open_sprinkler.controller_config.nv.sunrise_time = u16::try_from(sunrise).unwrap();
+                open_sprinkler.controller_config.sunrise_time = u16::try_from(sunrise).unwrap();
                 save_nvdata = true;
                 update_fn(open_sprinkler, WeatherUpdateFlag::SUNRISE);
 
@@ -188,7 +188,7 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprin
             if sunset >= 0 && sunset <= 1440 && sunset != open_sprinkler.get_sunset_time() as i16 {
                 // Only save if the value has changed
                 //open_sprinkler.nvdata.sunset_time = u16::try_from(sunset).unwrap();
-                open_sprinkler.controller_config.nv.sunset_time = u16::try_from(sunset).unwrap();
+                open_sprinkler.controller_config.sunset_time = u16::try_from(sunset).unwrap();
                 save_nvdata = true;
                 update_fn(open_sprinkler, WeatherUpdateFlag::SUNSET);
 
@@ -203,10 +203,10 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprin
             if ip_uint.is_ok() {
                 let eip = Ipv4Addr::from(ip_uint.unwrap());
                 //if open_sprinkler.nvdata.external_ip.is_none() || (open_sprinkler.nvdata.external_ip.is_some() && eip != open_sprinkler.nvdata.external_ip.unwrap()) {
-                if eip != open_sprinkler.controller_config.nv.external_ip.unwrap_or_else(|| IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))) {
+                if eip != open_sprinkler.controller_config.external_ip.unwrap_or_else(|| IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))) {
                     // Only save if the value has changed
                     //open_sprinkler.nvdata.external_ip = Some(std::net::IpAddr::V4(eip));
-                    open_sprinkler.controller_config.nv.external_ip = Some(std::net::IpAddr::V4(eip));
+                    open_sprinkler.controller_config.external_ip = Some(std::net::IpAddr::V4(eip));
                     save_nvdata = true;
                     update_fn(open_sprinkler, WeatherUpdateFlag::EIP);
 
@@ -237,7 +237,7 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprin
 
                 if rd > 0 {
                     //open_sprinkler.nvdata.rd_stop_time = Some((chrono::Utc::now() + chrono::Duration::hours(rd)).timestamp());
-                    open_sprinkler.controller_config.nv.rd_stop_time = Some((chrono::Utc::now() + chrono::Duration::hours(rd)).timestamp());
+                    open_sprinkler.controller_config.rd_stop_time = Some((chrono::Utc::now() + chrono::Duration::hours(rd)).timestamp());
                     open_sprinkler.rain_delay_start();
                     update_fn(open_sprinkler, WeatherUpdateFlag::RD);
                     tracing::trace!("Starting rain delay for: {}h", rd);

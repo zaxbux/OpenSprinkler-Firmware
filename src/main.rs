@@ -110,9 +110,9 @@ fn main() {
         }
 
         //open_sprinkler.status.mas = open_sprinkler.iopts.mas;
-        open_sprinkler.status.mas = open_sprinkler.controller_config.iopts.mas;
+        open_sprinkler.status.mas = open_sprinkler.controller_config.mas;
         //open_sprinkler.status.mas2 = open_sprinkler.iopts.mas2;
-        open_sprinkler.status.mas2 = open_sprinkler.controller_config.iopts.mas2;
+        open_sprinkler.status.mas2 = open_sprinkler.controller_config.mas2;
 
         now_seconds = chrono::Utc::now().timestamp();
 
@@ -174,7 +174,7 @@ fn main() {
                 //if !open_sprinkler.status.program_busy && !program_pending_soon(&open_sprinkler, &program_data, now_seconds + 60) {
                 if !open_sprinkler.status.program_busy && !program_pending_soon(&open_sprinkler, now_seconds + 60) {
                     //open_sprinkler.reboot_dev(open_sprinkler.nvdata.reboot_cause);
-                    open_sprinkler.reboot_dev(open_sprinkler.controller_config.nv.reboot_cause);
+                    open_sprinkler.reboot_dev(open_sprinkler.controller_config.reboot_cause);
                 }
             } else if open_sprinkler.status.reboot_timer != 0 && (now_seconds > open_sprinkler.status.reboot_timer) {
                 open_sprinkler.reboot_dev(RebootCause::Timer);
@@ -196,9 +196,9 @@ fn main() {
                 // @fixme Should this be in the weather module?
                 match weather_update_flag {
                     //WeatherUpdateFlag::EIP => push_message(&open_sprinkler, WeatherUpdateEvent::new(Some(open_sprinkler.iopts.wl), None)),
-                    WeatherUpdateFlag::EIP => push_message(&open_sprinkler, &WeatherUpdateEvent::new(Some(open_sprinkler.controller_config.iopts.wl), None)),
+                    WeatherUpdateFlag::EIP => push_message(&open_sprinkler, &WeatherUpdateEvent::new(Some(open_sprinkler.controller_config.wl), None)),
                     //WeatherUpdateFlag::WL => push_message(&open_sprinkler, WeatherUpdateEvent::new(None, open_sprinkler.nvdata.external_ip)),
-                    WeatherUpdateFlag::WL => push_message(&open_sprinkler, &WeatherUpdateEvent::new(None, open_sprinkler.controller_config.nv.external_ip)),
+                    WeatherUpdateFlag::WL => push_message(&open_sprinkler, &WeatherUpdateEvent::new(None, open_sprinkler.controller_config.external_ip)),
                     _ => (),
                 }
             });

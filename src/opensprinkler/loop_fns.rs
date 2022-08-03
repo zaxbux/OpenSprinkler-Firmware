@@ -28,13 +28,13 @@ pub fn flow_poll(open_sprinkler: &mut OpenSprinkler) {
 pub fn check_rain_delay(open_sprinkler: &mut OpenSprinkler, now_seconds: i64) {
     if open_sprinkler.status.rain_delayed {
         //if now_seconds >= open_sprinkler.nvdata.rd_stop_time.unwrap_or(0) {
-        if now_seconds >= open_sprinkler.controller_config.nv.rd_stop_time.unwrap_or(0) {
+        if now_seconds >= open_sprinkler.controller_config.rd_stop_time.unwrap_or(0) {
             // rain delay is over
             open_sprinkler.rain_delay_stop();
         }
     } else {
         //if open_sprinkler.nvdata.rd_stop_time.unwrap_or(0) > now_seconds {
-        if open_sprinkler.controller_config.nv.rd_stop_time.unwrap_or(0) > now_seconds {
+        if open_sprinkler.controller_config.rd_stop_time.unwrap_or(0) > now_seconds {
             // rain delay starts now
             open_sprinkler.rain_delay_start();
         }

@@ -312,12 +312,12 @@ impl OpenSprinkler {
 
     pub fn get_sunrise_time(&self) -> u16 {
         //self.nvdata.sunrise_time
-        self.controller_config.nv.sunrise_time
+        self.controller_config.sunrise_time
     }
 
     pub fn get_sunset_time(&self) -> u16 {
         //self.nvdata.sunset_time
-        self.controller_config.nv.sunset_time
+        self.controller_config.sunset_time
     }
 
     /// Number of eight-zone station boards (including master controller)
@@ -459,7 +459,7 @@ impl OpenSprinkler {
 
     pub fn reboot_dev(&mut self, cause: RebootCause) {
         //self.nvdata.reboot_cause = cause;
-        self.controller_config.nv.reboot_cause = cause;
+        self.controller_config.reboot_cause = cause;
         self.nvdata_save();
 
         if cfg!(not(demo)) {
@@ -849,9 +849,9 @@ impl OpenSprinkler {
         self.old_status = self.status;
         //};
         //self.last_reboot_cause = self.nvdata.reboot_cause;
-        self.last_reboot_cause = self.controller_config.nv.reboot_cause;
+        self.last_reboot_cause = self.controller_config.reboot_cause;
         //self.nvdata.reboot_cause = RebootCause::PowerOn;
-        self.controller_config.nv.reboot_cause = RebootCause::PowerOn;
+        self.controller_config.reboot_cause = RebootCause::PowerOn;
         self.nvdata_save();
         //self.stations = config::get_stations().unwrap();
     }
@@ -928,7 +928,7 @@ impl OpenSprinkler {
     pub fn rain_delay_stop(&mut self) {
         self.status.rain_delayed = false;
         //self.nvdata.rd_stop_time = None;
-        self.controller_config.nv.rd_stop_time = None;
+        self.controller_config.rd_stop_time = None;
         self.nvdata_save();
     }
 

@@ -59,36 +59,19 @@ pub mod data_type {
 
     use crate::opensprinkler::{sensor::SensorOption, RebootCause, FIRMWARE_VERSION, FIRMWARE_VERSION_REVISION, HARDWARE_VERSION};
 
-    /// Non-volatile controller data
+    /* /// Non-volatile controller data
     #[derive(Clone, Serialize, Deserialize)]
     pub struct ControllerNonVolatile {
-        /// Sunrise time (minutes)
-        /// Was: [u16]
-        pub sunrise_time: u16,
-        /// Sunset time (minutes)
-        /// Was: [u16]
-        pub sunset_time: u16,
-        /// Rain-delay stop time (seconds since unix epoch)
-        /// Was: [u32]
-        pub rd_stop_time: Option<i64>,
-        /// External IP @todo Add support for IPv6
-        /// Was: [u32]
-        pub external_ip: Option<IpAddr>,
-        /// Reboot Cause
-        pub reboot_cause: RebootCause,
+        
     }
 
     impl Default for ControllerNonVolatile {
         fn default() -> Self {
             ControllerNonVolatile {
-                sunrise_time: 360, // 0600 default sunrise
-                sunset_time: 1080, // 1800 default sunrise
-                rd_stop_time: None,
-                external_ip: None,
-                reboot_cause: RebootCause::None,
+                
             }
         }
-    }
+    } */
 
     /* #[derive(Clone, Serialize, Deserialize)]
     pub struct IntegerOptions {
@@ -151,7 +134,17 @@ pub mod data_type {
 
 #[derive(Serialize, Deserialize)]
 pub struct ControllerConfiguration {
-    pub nv: data_type::ControllerNonVolatile,
+    //pub nv: data_type::ControllerNonVolatile,
+    /// Sunrise time (minutes)
+    pub sunrise_time: u16,
+    /// Sunset time (minutes)
+    pub sunset_time: u16,
+    /// Rain-delay stop time (seconds since unix epoch)
+    pub rd_stop_time: Option<i64>,
+    /// External IP @todo Add support for IPv6
+    pub external_ip: Option<IpAddr>,
+    /// Reboot Cause
+    pub reboot_cause: RebootCause,
     //pub iopts: data_type::IntegerOptions,
     /// firmware version
     pub fwv: u16,
@@ -235,10 +228,15 @@ pub struct ControllerConfiguration {
 impl Default for ControllerConfiguration {
     fn default() -> Self {
         ControllerConfiguration {
-            nv: data_type::ControllerNonVolatile {
+            /* nv: data_type::ControllerNonVolatile {
                 reboot_cause: RebootCause::Reset,
                 ..Default::default()
-            },
+            }, */
+            sunrise_time: 360, // 0600 default sunrise
+            sunset_time: 1080, // 1800 default sunrise
+            rd_stop_time: None,
+            external_ip: None,
+            reboot_cause: RebootCause::Reset,
             //iopts: data_type::IntegerOptions::default(),
             fwv: FIRMWARE_VERSION,
             tz: 48, // UTC
