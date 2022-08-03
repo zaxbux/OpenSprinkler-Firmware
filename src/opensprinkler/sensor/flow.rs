@@ -1,3 +1,5 @@
+use rppal::gpio::Level;
+
 /// Robert Hillman (RAH)'s implementation of flow sensor
 ///
 /// @todo Move into [OpenSprinkler] to simplify main loop calls.
@@ -21,36 +23,39 @@ pub struct State {
     /// current flow count
     flow_count: u64,
 
-    prev_flow_state: Option<rppal::gpio::Level>,
+    previous_logic_level: Option<Level>,
 }
 
 impl State {
-	pub fn poll(&mut self, sensor_state: rppal::gpio::Level) {
-		if !(self.prev_flow_state.is_some() && self.prev_flow_state.unwrap() == rppal::gpio::Level::High && sensor_state == rppal::gpio::Level::Low) {
+	pub fn poll(&mut self, logic_level: Level) {
+		//if !(self.previous_logic_level.unwrap_or(Level::Low) == Level::High && logic_level == Level::Low) {
+		if self.previous_logic_level.unwrap_or(Level::Low) == Level::Low && logic_level != Level::Low {
 			// only record on falling edge
-			self.prev_flow_state = Some(sensor_state);
+			self.previous_logic_level = Some(logic_level);
 			return;
 		}
-		self.prev_flow_state = Some(sensor_state);
+		self.previous_logic_level = Some(logic_level);
 		let now_millis = chrono::Utc::now().timestamp_millis();
 		self.flow_count += 1;
 	
 		/* RAH implementation of flow sensor */
 		if self.time_measure_start == 0 {
+			// if first pulse, record time
 			self.gallons = 0;
 			self.time_measure_start = now_millis;
-		} // if first pulse, record time
-		if (now_millis - self.time_measure_start) < 90000 {
+		} 
+		if now_millis - self.time_measure_start < 90000 {
+			// wait 90 seconds before recording time_begin
 			self.gallons = 0;
-		}
-		// wait 90 seconds before recording flow_begin
-		else {
+		} else {
 			if self.gallons == 1 {
 				self.time_begin = now_millis;
 			}
 		}
-		self.time_measure_stop = now_millis; // get time in ms for stop
-		self.gallons += 1; // increment gallon count for each poll
+		// get time in ms for stop
+		self.time_measure_stop = now_millis;
+		// increment gallon count for each poll
+		self.gallons += 1;
 	}
 
 	/// Reset the current flow measurement state

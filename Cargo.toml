@@ -4,6 +4,7 @@ version = "3.0.0"
 edition = "2021"
 
 [features]
+default = ["demo"]
 demo = []
 mqtt = ["paho-mqtt"]
 
@@ -34,6 +35,7 @@ ctrlc = { version = "3.2.2", features = ["termination"] }
 paho-mqtt = { version =  "0.11.1",  optional = true, features=["bundled"], default-features = false}
 clap = { version = "3.2.16", features = ["derive"] }
 url = "2.2.2"
+nix = { version = "0.24.2", features = ["fs", "reboot", "net", "time"] }
 
 [dependencies.rppal]
 version = "0.13.1"
@@ -45,7 +47,7 @@ features = ["derive"]
 
 # Linux
 [target.'cfg(target_os = "linux")'.dependencies]
-nix = { version = "0.24.2", features = ["fs", "reboot", "net"] }
+#nix = { version = "0.24.2", features = ["fs", "reboot", "net", "time"] }
 zbus = "2.3.2"
 ruspiro-timer = { version = "0.6.0", features = ["pi4_low"] }
 

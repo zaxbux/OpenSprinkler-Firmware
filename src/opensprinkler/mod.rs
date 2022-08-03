@@ -16,6 +16,8 @@ mod demo;
 mod mqtt;
 #[cfg(target_os = "linux")]
 pub mod system;
+pub mod scheduler;
+pub mod controller;
 
 use serde::{Deserialize, Serialize};
 use std::cmp::max;
@@ -102,21 +104,6 @@ impl Default for ControllerStatus {
     }
 }
 
-#[derive(Default)]
-pub struct WeatherStatus {
-    /// time when weather was checked (seconds)
-    pub checkwt_lasttime: Option<i64>,
-
-    /// time when weather check was successful (seconds)
-    pub checkwt_success_lasttime: Option<i64>,
-
-    /// Result of the most recent request to the weather service
-    pub last_response_code: Option<i8>,
-
-    /// Data returned by the weather service (used by web server)
-    pub raw_data: Option<String>,
-}
-
 #[repr(u8)]
 #[derive(Clone, Copy, Serialize, Deserialize)]
 pub enum RebootCause {
@@ -144,7 +131,7 @@ pub enum RebootCause {
 /// Flow Count Window (seconds)
 ///
 /// For computing real-time flow rate.
-const FLOW_COUNT_RT_WINDOW: u8 = 30;
+const FLOW_COUNT_REALTIME_WINDOW: i64 = 30;
 
 const HARDWARE_VERSION: u8 = HardwareVersionBase::OpenSprinklerPi as u8;
 
@@ -192,13 +179,16 @@ pub struct OpenSprinkler {
     pub flow_count_log_start: u64,
 
     // flow count (for computing real-time flow rate)
-    pub flowcount_rt: u64,
+    flow_count_rt: u64,
+    flow_count_rt_start: u64,
 
     /// Weather service status
-    pub weather_status: WeatherStatus,
+    pub weather_status: weather::WeatherStatus,
 
     /// time when controller is powered up most recently (seconds)
-    powerup_lasttime: Option<i64>,
+    /// 
+    /// When the program was started
+    boot_time: chrono::DateTime<chrono::Utc>,
 
     /// Last reboot cause
     last_reboot_cause: RebootCause,
@@ -214,9 +204,7 @@ impl OpenSprinkler {
         let gpio = rppal::gpio::Gpio::new();
         if let Err(ref error) = gpio {
             tracing::error!("Failed to obtain GPIO chip: {:?}", error);
-        }
-
-        if gpio.is_ok() {
+        } else if gpio.is_ok() {
             OpenSprinkler::setup_gpio_pins(gpio.as_ref().unwrap());
         }
 
@@ -238,12 +226,13 @@ impl OpenSprinkler {
             //nboards,
             //nstations: nboards * SHIFT_REGISTER_LINES,
             station_bits: [0u8; MAX_NUM_BOARDS],
-            powerup_lasttime: None,
+            boot_time: chrono::Utc::now(),
             raindelay_on_last_time: None,
             flow_count_log_start: 0,
-            flowcount_rt: 0,
+            flow_count_rt: 0,
+            flow_count_rt_start: 0,
 
-            weather_status: WeatherStatus::default(),
+            weather_status: weather::WeatherStatus::default(),
 
             // Initalize defaults
             //nvdata: config::data_type::ControllerNonVolatile::default(),
@@ -282,6 +271,16 @@ impl OpenSprinkler {
     }
 
     // region: GETTERS
+
+    /// Get the uptime of the system
+    /// 
+    /// Will return [None] if the uptime could not be obtained.
+    pub fn get_system_uptime() -> Option<std::time::Duration> {
+        #[cfg(unix)]
+        return std::time::Duration::from(nix::time::clock_gettime(nix::time::ClockId::CLOCK_MONOTONIC)?);
+
+        None
+    }
     pub fn is_logging_enabled(&self) -> bool {
         //self.iopts.lg == 1
         self.controller_config.iopts.lg
@@ -299,7 +298,7 @@ impl OpenSprinkler {
 
     pub fn get_weather_service_url(&self) -> Result<reqwest::Url, url::ParseError> {
         let mut url = url::Url::parse(self.controller_config.sopts.wsp.as_str())?;
-        url.path_segments_mut().and_then(|mut p| {
+        let _ = url.path_segments_mut().and_then(|mut p| {
             p.push(&self.controller_config.sopts.wsp);
             Ok(())
         });
@@ -418,6 +417,16 @@ impl OpenSprinkler {
     pub fn get_flow_log_count(&self) -> u64 {
         // @fixme potential subtraction overflow
         self.flow_state.get_flow_count() - self.flow_count_log_start
+    }
+
+    /// Realtime flow count
+    pub fn update_realtime_flow_count(&mut self, now_seconds: i64) {
+        //if open_sprinkler.iopts.sn1t == SensorType::Flow as u8 && now_seconds % FLOW_COUNT_REALTIME_WINDOW == 0 {
+        if self.get_sensor_type(0) == SensorType::Flow && now_seconds % FLOW_COUNT_REALTIME_WINDOW == 0 {
+            //open_sprinkler.flowcount_rt = if flow_state.flow_count > flow_count_rt_start { flow_state.flow_count - flow_count_rt_start } else { 0 };
+            self.flow_count_rt = max(0, self.flow_state.get_flow_count() - self.flow_count_rt_start); // @fixme subtraction overflow
+            self.flow_count_rt_start = self.flow_state.get_flow_count();
+        }
     }
 
     // Calculate local time (UTC time plus time zone offset)
@@ -681,11 +690,12 @@ impl OpenSprinkler {
         #[cfg(not(feature = "demo"))]
         let pin = self.gpio.get(data.pin).and_then(|pin| Ok(pin.into_output()));
         #[cfg(feature = "demo")]
-        let mut pin = demo::get_gpio_pin(data.pin);
+        let pin = demo::get_gpio_pin(data.pin);
         if let Err(ref error) = pin {
             tracing::error!("[GPIO Station] pin {} Failed to obtain output pin: {:?}", data.pin, error);
             return;
         } else if pin.is_ok() {
+            let mut pin = pin.unwrap();
             /* if state {
                 if data.active_level() {
                     pin.unwrap().set_high();
@@ -699,7 +709,7 @@ impl OpenSprinkler {
                     pin.unwrap().set_high();
                 }
             } */
-            pin.unwrap().write(match state {
+            pin.write(match state {
                 false => !data.active_level(),
                 true => data.active_level(),
             });

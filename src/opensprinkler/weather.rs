@@ -5,6 +5,21 @@ use std::{
     net::{IpAddr, Ipv4Addr},
 };
 
+#[derive(Default)]
+pub struct WeatherStatus {
+    /// time when weather was checked (seconds)
+    pub checkwt_lasttime: Option<i64>,
+
+    /// time when weather check was successful (seconds)
+    pub checkwt_success_lasttime: Option<i64>,
+
+    /// Result of the most recent request to the weather service
+    pub last_response_code: Option<i8>,
+
+    /// Data returned by the weather service (used by web server)
+    pub raw_data: Option<String>,
+}
+
 #[repr(u8)]
 pub enum WeatherUpdateFlag {
     SUNRISE = 0x01,

@@ -2,9 +2,6 @@ pub mod flow;
 
 use serde::{Serialize, Deserialize};
 
-// flow count window (for computing real-time flow rate), 30 seconds
-pub const FLOW_COUNT_REALTIME_WINDOW: i64 = 30;
-
 #[derive(PartialEq)]
 #[repr(u8)]
 pub enum SensorType {
