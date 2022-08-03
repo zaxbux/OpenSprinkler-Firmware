@@ -86,25 +86,31 @@ fn main() {
     // open_sprinkler.start_network() was here!
 
     //open_sprinkler.mqtt.init();
-    open_sprinkler.status.req_mqtt_restart = true;
+    //open_sprinkler.status.req_mqtt_restart = true;
 
+    // Time-keeping
+    let mut now_seconds: i64;
     let mut last_seconds = 0;
+    let mut now_minute: i64;
     let mut last_minute = 0;
-
-    let mut flow_poll_timeout = 0;
+    let mut now_millis: i64;
+    let mut last_millis = 0;
 
     let mut flow_count_rt_start: u64 = 0;
 
+    // Do-once flags
     let mut reboot_notification = true;
+    let mut start_mqtt = true;
+    
 
     // Main loop
     while running.load(Ordering::SeqCst) {
         // handle flow sensor using polling every 1ms (maximum freq 1/(2*1ms)=500Hz)
         if open_sprinkler.get_sensor_type(0) == SensorType::Flow {
-            let now_millis = chrono::Utc::now().timestamp_millis();
+            now_millis = chrono::Utc::now().timestamp_millis();
 
-            if now_millis != flow_poll_timeout {
-                flow_poll_timeout = now_millis;
+            if now_millis != last_millis {
+                last_millis = now_millis;
                 //loop_fns::flow_poll(&open_sprinkler, &mut flow_state);
                 loop_fns::flow_poll(&mut open_sprinkler);
             }
@@ -115,19 +121,21 @@ fn main() {
         //open_sprinkler.status.mas2 = open_sprinkler.iopts.mas2;
         open_sprinkler.status.mas2 = open_sprinkler.controller_config.iopts.mas2;
 
-        let now_seconds = chrono::Utc::now().timestamp();
-
-        // Start MQTT when there is a network connection
-        if open_sprinkler.status.req_mqtt_restart && open_sprinkler.network_connected() {
-            tracing::debug!("Network is OK, starting MQTT");
-            //open_sprinkler.mqtt.begin();
-            open_sprinkler.status.req_mqtt_restart = false;
-        }
-        //open_sprinkler.mqtt.loop();
+        now_seconds = chrono::Utc::now().timestamp();
 
         // The main control loop runs once every second
         if now_seconds > last_seconds {
             last_seconds = now_seconds;
+
+            // Start MQTT when there is a network connection
+            //if open_sprinkler.status.req_mqtt_restart && open_sprinkler.network_connected() {
+            // @todo use [paho_mqtt::async_client::AsyncClient#is_connected()] instead of start_mqtt
+            if start_mqtt && open_sprinkler.is_mqtt_enabled() && open_sprinkler.network_connected() {
+                tracing::debug!("Network is OK, starting MQTT");
+                //open_sprinkler.mqtt.begin(); @todo
+                //open_sprinkler.status.req_mqtt_restart = false;
+                start_mqtt = false
+            }
 
             // Check rain delay status
             loop_fns::check_rain_delay(&mut open_sprinkler,  now_seconds);
@@ -141,14 +149,14 @@ fn main() {
 
             // Schedule program data
             // region: Schedule program data
-            let curr_minute = now_seconds / 60;
+            now_minute = now_seconds / 60;
             let mut match_found = false;
 
             // since the granularity of start time is minute
             // we only need to check once every minute
-            if curr_minute > last_minute {
+            if now_minute > last_minute {
                 tracing::trace!("Checking stations");
-                last_minute = curr_minute;
+                last_minute = now_minute;
 
                 // check through all programs
                 //for program_index in 0..program_data.nprograms {

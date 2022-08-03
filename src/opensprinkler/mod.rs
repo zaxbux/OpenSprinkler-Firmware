@@ -72,8 +72,8 @@ pub struct ControllerStatus {
     //pub sensor1_active: bool,
     // sensor2 active bit (when set, sensor2 is activated)
     //pub sensor2_active: bool,
-    /// request mqtt restart
-    pub req_mqtt_restart: bool,
+    // request mqtt restart
+    //pub req_mqtt_restart: bool,
 
     sensors: [ControllerSensorStatus; 2],
 
@@ -94,7 +94,7 @@ impl Default for ControllerStatus {
             //sensor2: false,
             //sensor1_active: false,
             //sensor2_active: false,
-            req_mqtt_restart: false,
+            //req_mqtt_restart: false,
             reboot_timer: 0,
 
             sensors: [ControllerSensorStatus { detected: false, active: false }, ControllerSensorStatus { detected: false, active: false }],
@@ -162,7 +162,7 @@ pub struct OpenSprinkler {
     gpio: rppal::gpio::Gpio,
 
     #[cfg(feature = "mqtt")]
-    mqtt: mqtt::OSMqtt,
+    pub mqtt: mqtt::OSMqtt,
 
     pub status: ControllerStatus,
     pub old_status: ControllerStatus,
