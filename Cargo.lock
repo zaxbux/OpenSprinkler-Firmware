@@ -926,6 +926,7 @@ dependencies = [
  "system_shutdown",
  "tracing",
  "tracing-subscriber",
+ "url",
  "zbus",
 ]
 

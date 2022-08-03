@@ -1,3 +1,5 @@
+use std::net::IpAddr;
+
 use serde::{Deserialize, Serialize};
 
 /// Stations/Zones per board
@@ -102,9 +104,9 @@ pub struct RFStationData {
 /// @todo: Support for IPv6, string hostname, path, and custom password (or deprecate in favour of HTTP station type?)
 #[derive(Clone, Serialize, Deserialize)]
 pub struct RemoteStationData {
-    pub ip: u32,
+    pub ip: IpAddr,
     pub port: u16,
-    pub sid: u8,
+    pub sid: usize,
 }
 
 /// GPIO station data structures - Must fit in STATION_SPECIAL_DATA_SIZE
@@ -116,6 +118,15 @@ pub struct GPIOStationData {
     /// - `true` = High
     /// - `false` = Low
     pub active: bool,
+}
+
+impl GPIOStationData {
+    pub fn active_level(&self) -> rppal::gpio::Level {
+        match self.active {
+            false => rppal::gpio::Level::Low,
+            true => rppal::gpio::Level::High,
+        }
+    }
 }
 
 /// HTTP station data structures - Must fit in STATION_SPECIAL_DATA_SIZE

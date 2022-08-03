@@ -26,8 +26,8 @@ pub struct RainDelayPayload {
 
 #[derive(Serialize, Deserialize)]
 pub struct FlowSensorPayload {
-    pub count: u32,
-    pub volume: f32,
+    pub count: u64,
+    pub volume: f64,
 }
 
 /// Weather Update
@@ -47,8 +47,8 @@ pub struct RebootPayload {
 #[derive(Serialize, Deserialize)]
 pub struct StationPayload {
     pub state: bool,
-    pub duration: Option<u32>,
-    pub flow: Option<f32>,
+    pub duration: Option<i64>,
+    pub flow: Option<f64>,
 }
 
 pub trait Payload<P>

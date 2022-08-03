@@ -33,6 +33,7 @@ ctrlc = { version = "3.2.2", features = ["termination"] }
 
 paho-mqtt = { version =  "0.11.1",  optional = true, features=["bundled"], default-features = false}
 clap = { version = "3.2.16", features = ["derive"] }
+url = "2.2.2"
 
 [dependencies.rppal]
 version = "0.13.1"

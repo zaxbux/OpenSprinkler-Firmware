@@ -1,8 +1,5 @@
-use std::time::SystemTime;
-
 use crate::{
     utils::{water_time_decode_signed, water_time_resolve},
-    FlowSensor,
 };
 
 use super::{
@@ -10,51 +7,24 @@ use super::{
     log::{self, message::StationMessage, LogDataType},
     program::{Program, RuntimeQueueStruct, MANUAL_PROGRAM_ID, TEST_PROGRAM_ID},
     sensor::MAX_SENSORS,
-    OpenSprinkler, SensorType, StationBitChange, REBOOT_DELAY, SHIFT_REGISTER_LINES,
+    OpenSprinkler, SensorType, StationBitChange, REBOOT_DELAY, SHIFT_REGISTER_LINES, demo,
 };
 
 use super::program::ProgramData;
 
-pub fn flow_poll(open_sprinkler: &OpenSprinkler, flow_state: &mut FlowSensor) {
+//pub fn flow_poll(open_sprinkler: &OpenSprinkler, flow_state: &mut FlowSensor) {
+pub fn flow_poll(open_sprinkler: &mut OpenSprinkler) {
     #[cfg(not(feature = "demo"))]
-    {
-        let sensor1_pin = open_sprinkler.gpio.get(super::gpio::pin::SENSOR_1).and_then(|pin| Ok(pin.into_input()));
-        if let Err(ref error) = sensor1_pin {
-            tracing::error!("Failed to obtain sensor input pin (flow): {:?}", error);
-            return;
-        }
-
-        let curr_flow_state = sensor1_pin.unwrap().read();
-    }
-    
+    let sensor1_pin = open_sprinkler.gpio.get(super::gpio::pin::SENSOR_1).and_then(|pin| Ok(pin.into_input()));
     #[cfg(feature = "demo")]
-    let curr_flow_state = rppal::gpio::Level::Low;
-
-    if !(flow_state.prev_flow_state.is_some() && flow_state.prev_flow_state.unwrap() == rppal::gpio::Level::High && curr_flow_state == rppal::gpio::Level::Low) {
-        // only record on falling edge
-        flow_state.prev_flow_state = Some(curr_flow_state);
+    let sensor1_pin = demo::get_gpio_pin(super::gpio::pin::SENSOR_1);
+    if let Err(ref error) = sensor1_pin {
+        tracing::error!("Failed to obtain sensor input pin (flow): {:?}", error);
         return;
+    } else if sensor1_pin.is_ok() {
+        // Perform calculations using the current state of the sensor
+        open_sprinkler.flow_state.poll(sensor1_pin.unwrap().read());
     }
-    flow_state.prev_flow_state = Some(curr_flow_state);
-    let curr: u32 = SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis().try_into().unwrap();
-    flow_state.flow_count += 1;
-
-    /* RAH implementation of flow sensor */
-    if flow_state.flow_start == 0 {
-        flow_state.flow_gallons = 0;
-        flow_state.flow_start = curr;
-    } // if first pulse, record time
-    if (curr - flow_state.flow_start) < 90000 {
-        flow_state.flow_gallons = 0;
-    }
-    // wait 90 seconds before recording flow_begin
-    else {
-        if flow_state.flow_gallons == 1 {
-            flow_state.flow_begin = curr;
-        }
-    }
-    flow_state.flow_stop = curr; // get time in ms for stop
-    flow_state.flow_gallons += 1; // increment gallon count for each poll
 }
 
 pub fn check_rain_delay(open_sprinkler: &mut OpenSprinkler, now_seconds: i64) {
@@ -103,15 +73,18 @@ pub fn check_binary_sensor_status(open_sprinkler: &mut OpenSprinkler, now_second
     open_sprinkler.old_status.sensors[0].active = open_sprinkler.status.sensors[0].active;
 }
 
-pub fn check_program_switch_status(open_sprinkler: &mut OpenSprinkler, flow_state: &mut FlowSensor, program_data: &mut ProgramData) {
+//pub fn check_program_switch_status(open_sprinkler: &mut OpenSprinkler, flow_state: &mut FlowSensor, program_data: &mut ProgramData) {
+pub fn check_program_switch_status(open_sprinkler: &mut OpenSprinkler, program_data: &mut ProgramData) {
     let program_switch = open_sprinkler.detect_program_switch_status();
     if program_switch[0] == true || program_switch[1] == true {
         reset_all_stations_immediate(open_sprinkler, program_data); // immediately stop all stations
     }
 
     for i in 0..MAX_SENSORS {
-        if program_data.nprograms > i {
-            manual_start_program(open_sprinkler, flow_state, program_data, i + 1, false);
+        //if program_data.nprograms > i {
+        if open_sprinkler.controller_config.programs.len() > i {
+            //manual_start_program(open_sprinkler, flow_state, program_data, i + 1, false);
+            manual_start_program(open_sprinkler, program_data, i + 1, false);
         }
     }
 }
@@ -119,7 +92,8 @@ pub fn check_program_switch_status(open_sprinkler: &mut OpenSprinkler, flow_stat
 /// Process dynamic events
 ///
 /// Processes events such as: Rain delay, rain sensing, station state changes, etc.
-pub fn process_dynamic_events(open_sprinkler: &mut OpenSprinkler, program_data: &mut ProgramData, flow_state: &mut FlowSensor, now_seconds: i64) {
+//pub fn process_dynamic_events(open_sprinkler: &mut OpenSprinkler, program_data: &mut ProgramData, flow_state: &mut FlowSensor, now_seconds: i64) {
+pub fn process_dynamic_events(open_sprinkler: &mut OpenSprinkler, program_data: &mut ProgramData, now_seconds: i64) {
     // Check if rain is detected
     /* let sn1 = if (open_sprinkler.iopts.sn1t == SensorType::Rain as u8 || open_sprinkler.iopts.sn1t == SensorType::Soil as u8) && open_sprinkler.status.sensors[0].active {
         true
@@ -169,28 +143,32 @@ pub fn process_dynamic_events(open_sprinkler: &mut OpenSprinkler, program_data: 
 
             // If system is disabled, turn off zone
             if !open_sprinkler.status.enabled {
-                turn_off_station(open_sprinkler, flow_state, program_data, now_seconds, station_index);
+                //turn_off_station(open_sprinkler, flow_state, program_data, now_seconds, station_index);
+                turn_off_station(open_sprinkler, program_data, now_seconds, station_index);
             }
 
             // if rain delay is on and zone does not ignore rain delay, turn it off
             //if rd && !(igrd & (1 << s)) {
             //if rd && !open_sprinkler.stations[station_index].attrib.igrd {
             if open_sprinkler.status.rain_delayed && !open_sprinkler.controller_config.stations[station_index].attrib.igrd {
-                turn_off_station(open_sprinkler, flow_state, program_data, now_seconds, station_index);
+                //turn_off_station(open_sprinkler, flow_state, program_data, now_seconds, station_index);
+                turn_off_station(open_sprinkler, program_data, now_seconds, station_index);
             }
 
             // if sensor1 is on and zone does not ignore sensor1, turn it off
             //if sn1 && !(igs1 & (1 << s)) {
             //if sn1 && !open_sprinkler.stations[station_index].attrib.igs {
             if sn1 && !open_sprinkler.controller_config.stations[station_index].attrib.igs {
-                turn_off_station(open_sprinkler, flow_state, program_data, now_seconds, station_index);
+                //turn_off_station(open_sprinkler, flow_state, program_data, now_seconds, station_index);
+                turn_off_station(open_sprinkler, program_data, now_seconds, station_index);
             }
 
             // if sensor2 is on and zone does not ignore sensor2, turn it off
             //if sn2 && !(igs2 & (1 << s)) {
             //if sn2 && !open_sprinkler.stations[station_index].attrib.igs2 {
             if sn2 && !open_sprinkler.controller_config.stations[station_index].attrib.igs2 {
-                turn_off_station(open_sprinkler, flow_state, program_data, now_seconds, station_index);
+                //turn_off_station(open_sprinkler, flow_state, program_data, now_seconds, station_index);
+                turn_off_station(open_sprinkler, program_data, now_seconds, station_index);
             }
         }
     }
@@ -222,9 +200,11 @@ pub fn process_special_program_command(open_sprinkler: &mut OpenSprinkler, now_s
 }
 
 /// Turn on a station
-pub fn turn_on_station(open_sprinkler: &mut OpenSprinkler, flow_state: &mut FlowSensor, station_id: usize) {
+//pub fn turn_on_station(open_sprinkler: &mut OpenSprinkler, flow_state: &mut FlowSensor, station_id: usize) {
+pub fn turn_on_station(open_sprinkler: &mut OpenSprinkler, station_id: usize) {
     // RAH implementation of flow sensor
-    flow_state.flow_start = 0;
+    //flow_state.flow_start = 0;
+    open_sprinkler.flow_state.reset();
 
     if open_sprinkler.set_station_bit(station_id, true) == StationBitChange::On {
         //let station_name = open_sprinkler.stations.get(station_id).unwrap().name.to_string();
@@ -248,7 +228,8 @@ pub fn turn_on_station(open_sprinkler: &mut OpenSprinkler, flow_state: &mut Flow
 /// Turns off a scheduled station, writes a log record, and pushes a notification event.
 ///
 /// @todo Make member of [OpenSprinkler]
-pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, flow_state: &mut FlowSensor, program_data: &mut ProgramData, now_seconds: i64, station_id: usize) {
+//pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, flow_state: &mut FlowSensor, program_data: &mut ProgramData, now_seconds: i64, station_id: usize) {
+pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, program_data: &mut ProgramData, now_seconds: i64, station_id: usize) {
     open_sprinkler.set_station_bit(station_id, false);
 
     let qid = program_data.station_qid[station_id];
@@ -259,24 +240,13 @@ pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, flow_state: &mut Flo
     }
 
     // RAH implementation of flow sensor
-    if flow_state.flow_gallons > 1 {
-        // RAH calculate GPM, 1 pulse per gallon
-
-        if flow_state.flow_stop <= flow_state.flow_begin {
-            flow_state.flow_last_gpm = 0.0;
-        } else {
-            flow_state.flow_last_gpm = (60000 / ((flow_state.flow_stop - flow_state.flow_begin) / (flow_state.flow_gallons - 1))) as f32;
-        }
-    } else {
-        // RAH if not one gallon (two pulses) measured then record 0 gpm
-        flow_state.flow_last_gpm = 0.0;
-    }
+    let flow_volume = open_sprinkler.flow_state.measure();
 
     let q = program_data.queue.get(qid).unwrap();
 
     // check if the current time is past the scheduled start time,
     // because we may be turning off a station that hasn't started yet
-    if now_seconds > q.start_time.into() {
+    if now_seconds > q.start_time {
         // record lastrun log (only for non-master stations)
         if (open_sprinkler.status.mas.unwrap_or(0) != station_id + 1) && (open_sprinkler.status.mas2.unwrap_or(0) != station_id + 1) {
             let duration = u16::try_from(now_seconds - q.start_time).unwrap();
@@ -294,12 +264,13 @@ pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, flow_state: &mut Flo
 
             //if open_sprinkler.iopts.sn1t == SensorType::Flow as u8 {
             if open_sprinkler.get_sensor_type(0) == SensorType::Flow {
-                message.with_flow(flow_state.flow_last_gpm);
+                //message.with_flow(flow_state.flow_last_gpm);
+                message.with_flow(flow_volume);
             }
             let _ = log::write_log_message(open_sprinkler, &message, now_seconds);
 
             //let station_name = open_sprinkler.stations[station_id].name.clone();
-            let station_name = open_sprinkler.controller_config.stations.get(station_id).unwrap().name;
+            let station_name = &open_sprinkler.controller_config.stations[station_id].name;
             events::push_message(
                 open_sprinkler,
                 &events::StationEvent::new(
@@ -308,7 +279,8 @@ pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, flow_state: &mut Flo
                     false,
                     Some(duration.into()),
                     //if open_sprinkler.iopts.sn1t == SensorType::Flow as u8 { Some(flow_state.flow_last_gpm) } else { None },
-                    if open_sprinkler.get_sensor_type(0) == SensorType::Flow { Some(flow_state.flow_last_gpm) } else { None },
+                    //if open_sprinkler.get_sensor_type(0) == SensorType::Flow { Some(flow_state.flow_last_gpm) } else { None },
+                    if open_sprinkler.get_sensor_type(0) == SensorType::Flow { Some(flow_volume) } else { None },
                 ),
             );
         }
@@ -322,7 +294,8 @@ pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, flow_state: &mut Flo
 /// Scheduler
 ///
 /// This function loops through the queue and schedules the start time of each station
-pub fn schedule_all_stations(open_sprinkler: &mut OpenSprinkler, flow_state: &mut FlowSensor, program_data: &mut ProgramData, now_seconds: i64) {
+//pub fn schedule_all_stations(open_sprinkler: &mut OpenSprinkler, flow_state: &mut FlowSensor, program_data: &mut ProgramData, now_seconds: i64) {
+pub fn schedule_all_stations(open_sprinkler: &mut OpenSprinkler, program_data: &mut ProgramData, now_seconds: i64) {
     tracing::trace!("Scheduling all stations");
     let mut con_start_time = now_seconds + 1; // concurrent start time
     let mut seq_start_time = con_start_time; // sequential start time
@@ -373,7 +346,9 @@ pub fn schedule_all_stations(open_sprinkler: &mut OpenSprinkler, flow_state: &mu
             // start flow count
             if open_sprinkler.get_sensor_type(0) == SensorType::Flow {
                 // if flow sensor is connected
-                open_sprinkler.flow_count_log_start = flow_state.flow_count;
+                //open_sprinkler.flow_count_log_start = flow_state.flow_count;
+                //open_sprinkler.flow_count_log_start = open_sprinkler.flow_state.get_flow_count();
+                open_sprinkler.start_flow_log_count();
                 open_sprinkler.sensor_status[0].active_last_time = Some(now_seconds);
             }
         }
@@ -406,22 +381,24 @@ fn reset_all_stations(program_data: &mut ProgramData) {
 /// - If `pid == 0`,	this is a test program (1 minute per station)
 /// - If `pid == 255`,	this is a short test program (2 second per station)
 /// - If `pid > 0`,		run program `pid - 1`
-fn manual_start_program(open_sprinkler: &mut OpenSprinkler, flow_state: &mut FlowSensor, program_data: &mut ProgramData, pid: usize, uwt: bool) {
+//fn manual_start_program(open_sprinkler: &mut OpenSprinkler, flow_state: &mut FlowSensor, program_data: &mut ProgramData, pid: usize, uwt: bool) {
+fn manual_start_program(open_sprinkler: &mut OpenSprinkler, program_data: &mut ProgramData, pid: usize, uwt: bool) {
     let mut match_found = false;
     reset_all_stations_immediate(open_sprinkler, program_data);
-    let prog: Program;
     //let sid: u8;
     //let bid: usize;
     //let s: usize;
 
+    //prog = program_data.read(pid - 1).unwrap();
+    let program = match pid {
+        0 => Program::test_program(60),
+        255 => Program::test_program(2),
+        _ => open_sprinkler.controller_config.programs[pid - 1].clone(),
+    };
+
     if pid > 0 && pid < 255 {
-        prog = program_data.read(pid - 1).unwrap();
         //events::push_message(open_sprinkler, &events::ProgramSchedEvent::new(pid - 1, prog.name, !uwt, if uwt { open_sprinkler.iopts.wl } else { 100 }));
-        events::push_message(open_sprinkler, &events::ProgramSchedEvent::new(pid - 1, prog.name, !uwt, if uwt { open_sprinkler.controller_config.iopts.wl } else { 100 }));
-    } else if pid == 255 {
-        prog = Program::test_program(2);
-    } else {
-        prog = Program::test_program(60);
+        events::push_message(open_sprinkler, &events::ProgramSchedEvent::new(pid - 1, &program.name, !uwt, if uwt { open_sprinkler.controller_config.iopts.wl } else { 100 }));
     }
 
     for station_index in 0..open_sprinkler.get_station_count() {
@@ -435,7 +412,7 @@ fn manual_start_program(open_sprinkler: &mut OpenSprinkler, flow_state: &mut Flo
         if pid == MANUAL_PROGRAM_ID + 1 {
             water_time = 2;
         } else if pid > 0 {
-            water_time = water_time_resolve(prog.durations[station_index], open_sprinkler.get_sunrise_time(), open_sprinkler.get_sunset_time());
+            water_time = water_time_resolve(program.durations[station_index], open_sprinkler.get_sunrise_time(), open_sprinkler.get_sunset_time());
         }
         if uwt {
             //water_time = water_time * (i64::try_from(open_sprinkler.iopts.wl).unwrap() / 100);
@@ -451,6 +428,7 @@ fn manual_start_program(open_sprinkler: &mut OpenSprinkler, flow_state: &mut Flo
     }
     if match_found {
         //let now: i64 = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs() as i64;
-        schedule_all_stations(open_sprinkler, flow_state, program_data, chrono::Utc::now().timestamp());
+        //schedule_all_stations(open_sprinkler, flow_state, program_data, chrono::Utc::now().timestamp());
+        schedule_all_stations(open_sprinkler, program_data, chrono::Utc::now().timestamp());
     }
 }

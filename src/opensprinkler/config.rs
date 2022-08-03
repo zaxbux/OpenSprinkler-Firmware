@@ -319,13 +319,13 @@ impl Config {
     }
 
     pub fn get<T: DeserializeOwned>(&self) -> Result<T, Error> {
-        let reader = io::BufReader::new(OpenOptions::new().open(self.path)?);
+        let reader = io::BufReader::new(OpenOptions::new().open(&self.path)?);
         Ok(bson::from_reader(reader)?)
     }
 
     pub fn commit<T: Serialize>(&self, document: &T) -> Result<(), Error> {
         let buf = bson::to_vec(document)?;
-        Ok(io::BufWriter::new(OpenOptions::new().write(true).create(true).open(self.path)?).write_all(&buf)?)
+        Ok(io::BufWriter::new(OpenOptions::new().write(true).create(true).open(&self.path)?).write_all(&buf)?)
     }
 
     pub fn commit_defaults(&self) -> Result<(), Error> {

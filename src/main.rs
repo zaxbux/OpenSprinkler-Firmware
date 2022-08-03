@@ -4,6 +4,7 @@ mod opensprinkler;
 mod utils;
 
 use core::time;
+use std::cmp::max;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -20,32 +21,6 @@ use opensprinkler::OpenSprinkler;
 use opensprinkler::{loop_fns, RebootCause};
 use utils::{water_time_decode_signed, water_time_resolve};
 
-/// Robert Hillman (RAH)'s implementation of flow sensor
-///
-/// @todo Move into [OpenSprinkler] to simplify main loop calls.
-/// - turn_on_station()
-/// - turn_off_station()
-/// - schedule_all_stations()
-/// -
-#[derive(Default)]
-pub struct FlowSensor {
-    /// time when valve turns on
-    pub flow_begin: u32,
-    /// time when flow starts being measured (i.e. 2 mins after flow_begin approx
-    pub flow_start: u32,
-    /// time when valve turns off (last rising edge pulse detected before off)
-    pub flow_stop: u32,
-    /// total # of gallons+1 from flow_start to flow_stop
-    pub flow_gallons: u32,
-    /// last flow rate measured (averaged over flow_gallons) from last valve stopped (used to write to log file).
-    pub flow_last_gpm: f32,
-
-    /// current flow count
-    pub flow_count: u32,
-
-    pub prev_flow_state: Option<rppal::gpio::Level>,
-}
-
 #[cfg(unix)]
 const CONFIG_FILE_PATH: &'static str = "/etc/opt/config.dat";
 
@@ -58,6 +33,19 @@ struct Args {
     /// Binary config file path
     #[clap(short = 'c', long = "config", default_value = CONFIG_FILE_PATH, parse(from_os_str))]
     config: std::path::PathBuf,
+}
+
+fn setup_tracing() {
+    // a builder for `FmtSubscriber`.
+    let subscriber = FmtSubscriber::builder()
+        // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
+        // will be written to stdout.
+        .with_max_level(tracing::Level::TRACE)
+        // completes the builder.
+        .finish();
+    
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("setting default subscriber failed");
 }
 
 fn main() {
@@ -73,16 +61,7 @@ fn main() {
     // endregion SIGNALS
 
     // region: TRACING
-    // a builder for `FmtSubscriber`.
-    let subscriber = FmtSubscriber::builder()
-        // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
-        // will be written to stdout.
-        .with_max_level(tracing::Level::TRACE)
-        // completes the builder.
-        .finish();
-    
-    tracing::subscriber::set_global_default(subscriber)
-        .expect("setting default subscriber failed");
+    setup_tracing();
 
     #[cfg(feature = "demo")]
     tracing::info!("DEMO MODE");
@@ -100,7 +79,7 @@ fn main() {
     // ProgramData initialization
     let mut program_data = ProgramData::new();
 
-    let mut flow_state = FlowSensor::default();
+    //let mut flow_state = FlowSensor::default();
 
     //let mut reboot_timer = 0; // use open_sprinkler.status.reboot_timer
 
@@ -114,10 +93,11 @@ fn main() {
 
     let mut flow_poll_timeout = 0;
 
-    let mut flow_count_rt_start: u32 = 0;
+    let mut flow_count_rt_start: u64 = 0;
 
     let mut reboot_notification = true;
 
+    // Main loop
     while running.load(Ordering::SeqCst) {
         // handle flow sensor using polling every 1ms (maximum freq 1/(2*1ms)=500Hz)
         if open_sprinkler.get_sensor_type(0) == SensorType::Flow {
@@ -125,7 +105,8 @@ fn main() {
 
             if now_millis != flow_poll_timeout {
                 flow_poll_timeout = now_millis;
-                loop_fns::flow_poll(&open_sprinkler, &mut flow_state);
+                //loop_fns::flow_poll(&open_sprinkler, &mut flow_state);
+                loop_fns::flow_poll(&mut open_sprinkler);
             }
         }
 
@@ -155,7 +136,8 @@ fn main() {
             loop_fns::check_binary_sensor_status(&mut open_sprinkler,  now_seconds);
 
             // Check program switch status
-            loop_fns::check_program_switch_status(&mut open_sprinkler, &mut flow_state, &mut program_data);
+            //loop_fns::check_program_switch_status(&mut open_sprinkler, &mut flow_state, &mut program_data);
+            loop_fns::check_program_switch_status(&mut open_sprinkler, &mut program_data);
 
             // Schedule program data
             // region: Schedule program data
@@ -169,8 +151,12 @@ fn main() {
                 last_minute = curr_minute;
 
                 // check through all programs
-                for program_index in 0..program_data.nprograms {
-                    let program = program_data.read(program_index).unwrap();
+                //for program_index in 0..program_data.nprograms {
+                let programs = open_sprinkler.controller_config.programs.clone();
+                for (program_index, program) in programs.iter().enumerate() {
+                    //let program = program_data.read(program_index).unwrap();
+                    //let program = open_sprinkler.controller_config.programs.get(program_index).unwrap();
+
                     if program.check_match(&open_sprinkler, now_seconds) {
                         // program match found
                         // check and process special program command
@@ -227,7 +213,7 @@ fn main() {
                             tracing::trace!("Program {{id = {}, name = {}}} scheduled", program_index, program.name);
                             push_message(
                                 &open_sprinkler,
-                                &ProgramSchedEvent::new(program_index, program.name, program.use_weather == 0, if program.use_weather != 0 { open_sprinkler.controller_config.iopts.wl } else { 100 }),
+                                &ProgramSchedEvent::new(program_index, &program.name, program.use_weather == 0, if program.use_weather != 0 { open_sprinkler.controller_config.iopts.wl } else { 100 }),
                             );
                         }
                     }
@@ -235,7 +221,8 @@ fn main() {
 
                 // calculate start and end time
                 if match_found {
-                    loop_fns::schedule_all_stations(&mut open_sprinkler, &mut flow_state, &mut program_data, now_seconds as i64);
+                    //loop_fns::schedule_all_stations(&mut open_sprinkler, &mut flow_state, &mut program_data, now_seconds as i64);
+                    loop_fns::schedule_all_stations(&mut open_sprinkler, &mut program_data, now_seconds as i64);
                 }
             }
 
@@ -277,13 +264,15 @@ fn main() {
                         if q.start_time > 0 {
                             // if so, check if we should turn it off
                             if now_seconds >= q.start_time + q.water_time {
-                                loop_fns::turn_off_station(&mut open_sprinkler, &mut flow_state, &mut program_data, now_seconds, station_index);
+                                //loop_fns::turn_off_station(&mut open_sprinkler, &mut flow_state, &mut program_data, now_seconds, station_index);
+                                loop_fns::turn_off_station(&mut open_sprinkler, &mut program_data, now_seconds, station_index);
                             }
                         }
                         // if current station is not running, check if we should turn it on
                         if !((bitvalue >> s) & 1 != 0) {
                             if now_seconds >= q.start_time && now_seconds < q.start_time + q.water_time {
-                                loop_fns::turn_on_station(&mut open_sprinkler, &mut flow_state, station_index);
+                                //loop_fns::turn_on_station(&mut open_sprinkler, &mut flow_state, station_index);
+                                loop_fns::turn_on_station(&mut open_sprinkler, station_index);
                             } // if curr_time > scheduled_start_time
                         } // if current station is not running
                     } // end_s
@@ -293,7 +282,8 @@ fn main() {
                 clean_queue(&mut program_data, now_seconds);
 
                 // process dynamic events
-                loop_fns::process_dynamic_events(&mut open_sprinkler, &mut program_data, &mut flow_state, now_seconds);
+                //loop_fns::process_dynamic_events(&mut open_sprinkler, &mut program_data, &mut flow_state, now_seconds);
+                loop_fns::process_dynamic_events(&mut open_sprinkler, &mut program_data, now_seconds);
 
                 // activate / deactivate valves
                 open_sprinkler.apply_all_station_bits();
@@ -336,11 +326,12 @@ fn main() {
                     open_sprinkler.status.program_busy = false;
                     // log flow sensor reading if flow sensor is used
                     if open_sprinkler.get_sensor_type(0) == SensorType::Flow {
-                        let _ = log::write_log_message(&open_sprinkler, &log::message::FlowSenseMessage::new(flow_state.flow_count - open_sprinkler.flow_count_log_start, now_seconds), now_seconds);
+                        let _ = log::write_log_message(&open_sprinkler, &log::message::FlowSenseMessage::new(open_sprinkler.get_flow_log_count(), now_seconds), now_seconds);
                         push_message(
                             &open_sprinkler,
                             &FlowSensorEvent::new(
-                                u32::try_from(flow_state.flow_count - open_sprinkler.flow_count_log_start).unwrap_or(0),
+                                //u32::try_from(flow_state.flow_count - open_sprinkler.flow_count_log_start).unwrap_or(0),
+                                open_sprinkler.get_flow_log_count(),
                                 /* if flow_state.flow_count > open_sprinkler.flow_count_log_start {flow_state.flow_count - open_sprinkler.flow_count_log_start} else {0}, */
                                 open_sprinkler.get_flow_pulse_rate(),
                             ),
@@ -361,7 +352,8 @@ fn main() {
             // endregion
 
             // Process dynamic events
-            loop_fns::process_dynamic_events(&mut open_sprinkler, &mut program_data, &mut flow_state, now_seconds);
+            //loop_fns::process_dynamic_events(&mut open_sprinkler, &mut program_data, &mut flow_state, now_seconds);
+            loop_fns::process_dynamic_events(&mut open_sprinkler, &mut program_data, now_seconds);
 
             // Actuate valves
             open_sprinkler.apply_all_station_bits();
@@ -369,7 +361,8 @@ fn main() {
             // Handle reboot request
             if open_sprinkler.status.safe_reboot && (now_seconds > open_sprinkler.status.reboot_timer) {
                 // if no program is running at the moment and if no program is scheduled to run in the next minute
-                if !open_sprinkler.status.program_busy && !program_pending_soon(&open_sprinkler, &program_data, now_seconds + 60) {
+                //if !open_sprinkler.status.program_busy && !program_pending_soon(&open_sprinkler, &program_data, now_seconds + 60) {
+                if !open_sprinkler.status.program_busy && !program_pending_soon(&open_sprinkler,  now_seconds + 60) {
                     //open_sprinkler.reboot_dev(open_sprinkler.nvdata.reboot_cause);
                     open_sprinkler.reboot_dev(open_sprinkler.controller_config.nv.reboot_cause);
                 }
@@ -387,9 +380,10 @@ fn main() {
             // Realtime flow count
 
             //if open_sprinkler.iopts.sn1t == SensorType::Flow as u8 && now_seconds % FLOW_COUNT_REALTIME_WINDOW == 0 {
-            if open_sprinkler.controller_config.iopts.sn1t == SensorType::Flow as u8 && now_seconds % FLOW_COUNT_REALTIME_WINDOW == 0 {
-                open_sprinkler.flowcount_rt = if flow_state.flow_count > flow_count_rt_start { flow_state.flow_count - flow_count_rt_start } else { 0 };
-                flow_count_rt_start = flow_state.flow_count;
+            if open_sprinkler.get_sensor_type(0) == SensorType::Flow && now_seconds % FLOW_COUNT_REALTIME_WINDOW == 0 {
+                //open_sprinkler.flowcount_rt = if flow_state.flow_count > flow_count_rt_start { flow_state.flow_count - flow_count_rt_start } else { 0 };
+                open_sprinkler.flowcount_rt = max(0, open_sprinkler.flow_state.get_flow_count() - flow_count_rt_start); // @fixme subtraction overflow
+                flow_count_rt_start = open_sprinkler.flow_state.get_flow_count();
             }
 
             // Check weather
@@ -438,17 +432,21 @@ fn clean_queue(program_data: &mut ProgramData, now_seconds: i64) {
     }
 }
 
-fn program_pending_soon(open_sprinkler: &OpenSprinkler, program_data: &ProgramData, timestamp: i64) -> bool {
-    let mut program_pending_soon = false;
-    // @todo iter over programs directly
-    for program_index in 0..program_data.nprograms {
-        if program_data.read(program_index).unwrap().check_match(&open_sprinkler, timestamp) {
-            program_pending_soon = true;
-            break;
+//fn program_pending_soon(open_sprinkler: &OpenSprinkler, program_data: &ProgramData, timestamp: i64) -> bool {
+fn program_pending_soon(open_sprinkler: &OpenSprinkler, timestamp: i64) -> bool {
+    //let mut program_pending_soon = false;
+    //for program_index in 0..program_data.nprograms {
+    for program in open_sprinkler.controller_config.programs.iter() {
+        //if program_data.read(program_index).unwrap().check_match(&open_sprinkler, timestamp) {
+        if program.check_match(&open_sprinkler, timestamp) {
+            //program_pending_soon = true;
+            //break;
+            return true;
         }
     }
 
-    program_pending_soon
+    //program_pending_soon
+    return false;
 }
 
 enum MasterStation {

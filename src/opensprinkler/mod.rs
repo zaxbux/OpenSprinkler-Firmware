@@ -1,33 +1,33 @@
-use rppal::gpio::OutputPin;
-use serde::{Deserialize, Serialize};
-use std::cmp::max;
-use std::net::Ipv4Addr;
-use std::path::PathBuf;
-use std::{path::Path, time::SystemTime};
-
-use crate::opensprinkler::sensor::SensorOption;
-
-use self::config::ConfigDocument;
-use self::program::Programs;
-use self::sensor::{SensorType, MAX_SENSORS};
-use self::station::{Station, StationType, Stations, MAX_NUM_BOARDS, SHIFT_REGISTER_LINES};
-
 pub mod config;
-#[cfg(feature = "demo")]
-mod demo;
 pub mod events;
 pub mod gpio;
 pub mod log;
 pub mod loop_fns;
-#[cfg(feature = "mqtt")]
-mod mqtt;
 pub mod program;
 mod rf;
+mod http;
 pub mod sensor;
 pub mod station;
+pub mod weather;
+
+#[cfg(feature = "demo")]
+mod demo;
+#[cfg(feature = "mqtt")]
+mod mqtt;
 #[cfg(target_os = "linux")]
 pub mod system;
-pub mod weather;
+
+use serde::{Deserialize, Serialize};
+use std::cmp::max;
+use std::path::PathBuf;
+
+use crate::opensprinkler::sensor::SensorOption;
+
+use self::config::ConfigDocument;
+use self::sensor::{SensorType, MAX_SENSORS};
+use self::station::{StationType, MAX_NUM_BOARDS, SHIFT_REGISTER_LINES};
+
+pub use rppal::gpio::Level as GpioLevel;
 
 /// Default reboot timer (seconds)
 pub const REBOOT_DELAY: i64 = 65;
@@ -156,6 +156,8 @@ pub struct OpenSprinkler {
     config: config::Config,
     pub controller_config: config::ConfigDocument,
 
+    pub flow_state: sensor::flow::State,
+
     #[cfg(not(feature = "demo"))]
     gpio: rppal::gpio::Gpio,
 
@@ -187,10 +189,10 @@ pub struct OpenSprinkler {
     pub raindelay_on_last_time: Option<i64>,
 
     /// Starting flow count (for logging)
-    pub flow_count_log_start: u32,
+    pub flow_count_log_start: u64,
 
     // flow count (for computing real-time flow rate)
-    pub flowcount_rt: u32,
+    pub flowcount_rt: u64,
 
     /// Weather service status
     pub weather_status: WeatherStatus,
@@ -221,6 +223,8 @@ impl OpenSprinkler {
         OpenSprinkler {
             config: config::Config::new(config_path),
             controller_config: config::ConfigDocument::default(),
+
+            flow_state: sensor::flow::State::default(),
 
             #[cfg(not(feature = "demo"))]
             gpio: gpio.unwrap(),
@@ -291,6 +295,15 @@ impl OpenSprinkler {
     pub fn is_remote_extension(&self) -> bool {
         //self.iopts.re == 1
         self.controller_config.iopts.re
+    }
+
+    pub fn get_weather_service_url(&self) -> Result<reqwest::Url, url::ParseError> {
+        let mut url = url::Url::parse(self.controller_config.sopts.wsp.as_str())?;
+        url.path_segments_mut().and_then(|mut p| {
+            p.push(&self.controller_config.sopts.wsp);
+            Ok(())
+        });
+        Ok(url)
     }
 
     pub fn get_water_scale(&self) -> u8 {
@@ -397,6 +410,15 @@ impl OpenSprinkler {
         self.weather_status.checkwt_success_lasttime = Some(chrono::Utc::now().timestamp());
     }
     // endregion SETTERS
+
+    pub fn start_flow_log_count(&mut self) {
+        self.flow_count_log_start = self.flow_state.get_flow_count();
+    }
+
+    pub fn get_flow_log_count(&self) -> u64 {
+        // @fixme potential subtraction overflow
+        self.flow_state.get_flow_count() - self.flow_count_log_start
+    }
 
     // Calculate local time (UTC time plus time zone offset)
     /* pub fn now_tz(&self) -> u64 {
@@ -644,24 +666,28 @@ impl OpenSprinkler {
     fn switch_rf_station(&mut self, data: station::RFStationData, turn_on: bool) {
         //let (on, off, length) = self.parse_rf_station_code(data);
         let code = if turn_on { data.on } else { data.off };
-        rf::send_rf_signal(self, code.into(), data.timing.into());
+
+        if let Err(ref error) = rf::send_rf_signal(self, code.into(), data.timing.into()) {
+            tracing::error!("Could not switch RF station: {:?}", error);
+        }
     }
 
     /// Switch GPIO station
     ///
     /// Special data for GPIO Station is three bytes of ascii decimal (not hex).
     fn switch_gpio_station(&self, data: station::GPIOStationData, state: bool) {
-        tracing::trace!("Switching GPIO station {} {}", data.pin, state);
-        #[cfg(not(feature = "demo"))]
-        {
-            let pin = self.gpio.get(data.pin).and_then(|pin| Ok(pin.into_output()));
-            if let Err(ref error) = pin {
-                tracing::error!("Failed to obtain output pin {} gpio_station: {:?}", data.pin, error);
-                return;
-            }
+        tracing::trace!("[GPIO Station] pin: {} state: {}", data.pin, state);
 
-            if state {
-                if data.active {
+        #[cfg(not(feature = "demo"))]
+        let pin = self.gpio.get(data.pin).and_then(|pin| Ok(pin.into_output()));
+        #[cfg(feature = "demo")]
+        let mut pin = demo::get_gpio_pin(data.pin);
+        if let Err(ref error) = pin {
+            tracing::error!("[GPIO Station] pin {} Failed to obtain output pin: {:?}", data.pin, error);
+            return;
+        } else if pin.is_ok() {
+            /* if state {
+                if data.active_level() {
                     pin.unwrap().set_high();
                 } else {
                     pin.unwrap().set_low();
@@ -672,41 +698,41 @@ impl OpenSprinkler {
                 } else {
                     pin.unwrap().set_high();
                 }
-            }
+            } */
+            pin.unwrap().write(match state {
+                false => !data.active_level(),
+                true => data.active_level(),
+            });
         }
     }
 
     /// Switch Remote Station
     /// This function takes a remote station code, parses it into remote IP, port, station index, and makes a HTTP GET request.
     /// The remote controller is assumed to have the same password as the main controller.
-    fn switch_remote_station(&self, data: station::RemoteStationData, turn_on: bool) {
-        let ip4 = Ipv4Addr::from(data.ip);
+    fn switch_remote_station(&self, data: station::RemoteStationData, value: bool) {
+        let mut host = String::from("http://"); // @todo HTTPS?
+        host.push_str(&data.ip.to_string());
         //let timer = match self.iopts.sar {
-        let timer = if self.controller_config.iopts.sar {
-            station::MAX_NUM_STATIONS * 4
-        } else {
-            // 18 hours
-            64800
+        let timer = match self.controller_config.iopts.sar {
+            true => (station::MAX_NUM_STATIONS * 4) as i64,
+            false => 64800, // 18 hours
         };
-        let en = if turn_on { String::from("1") } else { String::from("0") };
+        /* let en = match turn_on {
+            true => String::from("1"),
+            false => String::from("0"),
+        }; */
 
-        let client = reqwest::blocking::Client::new();
         // @todo log request failures
-        let _ = client
-            .get(ip4.to_string())
-            .query(&[
-                // Device key (MD5)
-                //("pw", self.sopts.dkey.clone()),
-                ("pw", self.controller_config.sopts.dkey.clone()),
-                // Station ID/index
-                ("sid", data.sid.to_string()),
-                // Enable bit
-                ("en", en),
-                // Timer (seconds)
-                ("t", timer.to_string()),
-            ])
-            .send()
-            .expect("Error making remote station request");
+        let response = reqwest::blocking::Client::new().get(host).query(&http::request::RemoteStationRequestParametersV219::new(
+            &self.controller_config.sopts.dkey,
+            data.sid,
+            value,
+            timer,
+        )).send();
+
+        if let Err(error) = response {
+            tracing::error!("[Remote Station] HTTP request error: {:?}", error);
+        }
     }
 
     /// Switch HTTP station
@@ -722,7 +748,10 @@ impl OpenSprinkler {
         }
 
         // @todo log request failures
-        let _ = reqwest::blocking::get(origin).expect("Error making HTTP station request");
+        let response = reqwest::blocking::get(origin);
+        if let Err(error) = response {
+            tracing::error!("[HTTP Station] HTTP request error: {:?}", error);
+        }
     }
 
     /// Switch Special Station
@@ -731,9 +760,9 @@ impl OpenSprinkler {
         let station = self.controller_config.stations.get(station_index).unwrap();
         //let station_type = self.get_station_type(station);
         // check if station is "special"
-        if station.r#type == StationType::Standard {
+        /* if station.r#type == StationType::Standard {
             return ();
-        }
+        } */ // Not necessary, match block ignores standard
 
         //let data: &StationData;
         //let data = self.get_station_data(station);

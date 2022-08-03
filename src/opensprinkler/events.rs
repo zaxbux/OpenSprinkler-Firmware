@@ -31,10 +31,10 @@ pub struct ProgramSchedEvent {
 }
 
 impl ProgramSchedEvent {
-    pub fn new(program_id: usize, program_name: String, manual: bool, water_level: u8) -> ProgramSchedEvent {
+    pub fn new(program_id: usize, program_name: &str, manual: bool, water_level: u8) -> ProgramSchedEvent {
         ProgramSchedEvent {
             program_id,
-            program_name,
+            program_name: program_name.to_string(),
             manual,
             water_level,
         }
@@ -73,15 +73,15 @@ impl EventType for BinarySensorEvent {
 
 // region: Flow Sensor
 pub struct FlowSensorEvent {
-    pub count: u32,
-    pub volume: f32,
+    pub count: u64,
+    pub volume: f64,
 }
 
 impl FlowSensorEvent {
-    pub fn new(count: u32, pulse_rate: u16) -> FlowSensorEvent {
+    pub fn new(count: u64, pulse_rate: u16) -> FlowSensorEvent {
         FlowSensorEvent {
             count,
-            volume: count as f32 * f32::from(pulse_rate),
+            volume: count as f64 * f64::from(pulse_rate),
         }
     }
 }
@@ -135,15 +135,15 @@ pub struct StationEvent {
     pub station_id: usize,
     pub station_name: String,
     pub state: bool,
-    pub duration: Option<u32>,
-    pub flow: Option<f32>,
+    pub duration: Option<i64>,
+    pub flow: Option<f64>,
 }
 
 impl StationEvent {
-    pub fn new(station_id: usize, station_name: String, state: bool, duration: Option<u32>, flow: Option<f32>) -> StationEvent {
+    pub fn new(station_id: usize, station_name: &str, state: bool, duration: Option<i64>, flow: Option<f64>) -> StationEvent {
         StationEvent {
             station_id,
-            station_name,
+            station_name: station_name.to_string(),
             state,
             duration,
             flow,

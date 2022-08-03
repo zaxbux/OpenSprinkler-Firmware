@@ -1,3 +1,5 @@
+pub mod flow;
+
 use serde::{Serialize, Deserialize};
 
 // flow count window (for computing real-time flow rate), 30 seconds

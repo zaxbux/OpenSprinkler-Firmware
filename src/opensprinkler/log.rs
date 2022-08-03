@@ -116,7 +116,7 @@ pub mod message {
         pub station_id: usize,
         pub duration: u16,
         pub timestamp: i64,
-        pub flow: Option<f32>,
+        pub flow: Option<f64>,
     }
 
     impl StationMessage {
@@ -130,7 +130,7 @@ pub mod message {
             }
         }
 
-        pub fn with_flow(&mut self, flow: f32) -> &mut Self {
+        pub fn with_flow(&mut self, flow: f64) -> &mut Self {
             self.flow = Some(flow);
             self
         }
@@ -146,13 +146,13 @@ pub mod message {
     }
 
     pub struct FlowSenseMessage {
-        flow_count: u32,
+        flow_count: u64,
         timestamp: i64,
         duration: Option<i64>,
     }
 
     impl FlowSenseMessage {
-        pub fn new(flow_count: u32, timestamp: i64) -> FlowSenseMessage {
+        pub fn new(flow_count: u64, timestamp: i64) -> FlowSenseMessage {
             FlowSenseMessage { flow_count, timestamp, duration: None }
         }
 

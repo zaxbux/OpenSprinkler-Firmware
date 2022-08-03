@@ -22,8 +22,35 @@ pub const CHECK_WEATHER_SUCCESS_TIMEOUT: i64 = 86400; // 24 hours
 
 pub const WATER_SCALE_MAX: i32 = 250;
 
+mod result {
+    use std::{error, fmt, result};
+
+    pub type Result<T> = result::Result<T, Error>;
+
+    #[derive(Debug)]
+    pub enum Error {
+        UrlParse(url::ParseError)
+    }
+
+    impl fmt::Display for Error {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match *self {
+                Error::UrlParse(ref err) => write!(f, "URL Parser error: {}", err),
+            }
+        }
+    }
+
+    impl error::Error for Error {}
+
+    impl From<url::ParseError> for Error {
+        fn from(err: url::ParseError) -> Error {
+            Error::UrlParse(err)
+        }
+    }
+}
+
 /// Make weather query
-pub fn check_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprinkler, WeatherUpdateFlag)) -> Result<(), &'static str> {
+pub fn check_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprinkler, WeatherUpdateFlag)) -> result::Result<()> {
     // Skip checking weather if a) network has failed; or b) controller is configured as remote extender
     if !open_sprinkler.network_connected() || open_sprinkler.is_remote_extension() {
         return Ok(());
@@ -44,27 +71,30 @@ pub fn check_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&Ope
         // use manual watering percentage (namely methods 0 and 2), this is not ideal
         open_sprinkler.weather_status.checkwt_success_lasttime = None;
 
-        if !(open_sprinkler.iopts.uwt == 0 || open_sprinkler.iopts.uwt == 2) {
+        //if !(open_sprinkler.iopts.uwt == 0 || open_sprinkler.iopts.uwt == 2) {
+        if !(open_sprinkler.controller_config.iopts.uwt == 0 || open_sprinkler.controller_config.iopts.uwt == 2) {
             open_sprinkler.set_water_scale(100); // reset watering percentage to 100%
             open_sprinkler.weather_status.raw_data = None; // reset wt_rawData and errCode
             open_sprinkler.weather_status.last_response_code = None;
         }
     } else if open_sprinkler.weather_status.checkwt_lasttime.is_none() || now > open_sprinkler.weather_status.checkwt_lasttime.unwrap() + CHECK_WEATHER_TIMEOUT {
         open_sprinkler.weather_status.checkwt_lasttime = Some(now);
-        return get_weather(open_sprinkler, update_fn);
+        return Ok(get_weather(open_sprinkler, update_fn)?);
     }
 
     Ok(())
 }
 
-fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprinkler, WeatherUpdateFlag)) -> Result<(), &'static str> {
+fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprinkler, WeatherUpdateFlag)) -> result::Result<()> {
     // @todo use semver and cargo cfg version
-    let ua = HeaderValue::try_from(format!("OpenSprinkler/{} (rust)", open_sprinkler.iopts.fwv));
+    //let ua = HeaderValue::try_from(format!("OpenSprinkler/{} (rust)", open_sprinkler.iopts.fwv));
+    let ua = HeaderValue::try_from(format!("OpenSprinkler/{} (rust)", open_sprinkler.controller_config.iopts.fwv));
 
-    tracing::debug!("Retrieving weather from {}", open_sprinkler.sopts.wsp.as_str());
+    //let mut url = reqwest::Url::parse(open_sprinkler.sopts.wsp.as_str()).unwrap();
+    //url.path_segments_mut().unwrap().push(&open_sprinkler.iopts.uwt.to_string());
+    let mut url = open_sprinkler.get_weather_service_url()?;
 
-    let mut url = reqwest::Url::parse(open_sprinkler.sopts.wsp.as_str()).unwrap();
-    url.path_segments_mut().unwrap().push(&open_sprinkler.iopts.uwt.to_string());
+    tracing::debug!("Retrieving weather from {}", url.host_str().unwrap_or(""));
 
     let client = reqwest::blocking::Client::new();
     // @todo log request failures, handle request failures
@@ -109,39 +139,45 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprin
         // Watering Level (scale)
         if open_sprinkler.weather_status.last_response_code.is_some() && open_sprinkler.weather_status.last_response_code.unwrap() == 0 && params.contains_key("scale") {
             let scale = params.get("scale").unwrap().parse::<i32>().unwrap_or(-1);
-            if scale >= 0 && scale <= WATER_SCALE_MAX && scale != open_sprinkler.iopts.wl as i32 {
+            //if scale >= 0 && scale <= WATER_SCALE_MAX && scale != open_sprinkler.iopts.wl as i32 {
+            if scale >= 0 && scale <= WATER_SCALE_MAX && scale != open_sprinkler.get_water_scale() as i32 {
                 // Only save if the value has changed
-                open_sprinkler.iopts.wl = u8::try_from(scale).unwrap();
+                //open_sprinkler.iopts.wl = u8::try_from(scale).unwrap();
+                open_sprinkler.controller_config.iopts.wl = u8::try_from(scale).unwrap();
                 open_sprinkler.iopts_save();
                 update_fn(open_sprinkler, WeatherUpdateFlag::WL);
 
-                tracing::trace!("Watering scale: {}", open_sprinkler.iopts.wl);
+                tracing::trace!("Watering scale: {}", open_sprinkler.get_water_scale());
             }
         }
 
         // Sunrise time
         if params.contains_key("sunrise") {
             let sunrise = params.get("sunrise").unwrap().parse::<i16>().unwrap();
-            if sunrise >= 0 && sunrise <= 1440 && sunrise != open_sprinkler.nvdata.sunrise_time as i16 {
+            //if sunrise >= 0 && sunrise <= 1440 && sunrise != open_sprinkler.nvdata.sunrise_time as i16 {
+            if sunrise >= 0 && sunrise <= 1440 && sunrise != open_sprinkler.get_sunrise_time() as i16 {
                 // Only save if the value has changed
-                open_sprinkler.nvdata.sunrise_time = u16::try_from(sunrise).unwrap();
+                //open_sprinkler.nvdata.sunrise_time = u16::try_from(sunrise).unwrap();
+                open_sprinkler.controller_config.nv.sunrise_time = u16::try_from(sunrise).unwrap();
                 save_nvdata = true;
                 update_fn(open_sprinkler, WeatherUpdateFlag::SUNRISE);
 
-                tracing::trace!("Sunrise: {}", open_sprinkler.nvdata.sunrise_time);
+                tracing::trace!("Sunrise: {}", open_sprinkler.get_sunrise_time());
             }
         }
 
         // Sunset time
         if params.contains_key("sunset") {
             let sunset = params.get("sunset").unwrap().parse::<i16>().unwrap();
-            if sunset >= 0 && sunset <= 1440 && sunset != open_sprinkler.nvdata.sunset_time as i16 {
+            //if sunset >= 0 && sunset <= 1440 && sunset != open_sprinkler.nvdata.sunset_time as i16 {
+            if sunset >= 0 && sunset <= 1440 && sunset != open_sprinkler.get_sunset_time() as i16 {
                 // Only save if the value has changed
-                open_sprinkler.nvdata.sunset_time = u16::try_from(sunset).unwrap();
+                //open_sprinkler.nvdata.sunset_time = u16::try_from(sunset).unwrap();
+                open_sprinkler.controller_config.nv.sunset_time = u16::try_from(sunset).unwrap();
                 save_nvdata = true;
                 update_fn(open_sprinkler, WeatherUpdateFlag::SUNSET);
 
-                tracing::trace!("Sunset: {}", open_sprinkler.nvdata.sunset_time);
+                tracing::trace!("Sunset: {}", open_sprinkler.get_sunset_time());
             }
         }
 
@@ -151,9 +187,11 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprin
             let ip_uint = params.get("eip").unwrap().parse::<u32>();
             if ip_uint.is_ok() {
                 let eip = Ipv4Addr::from(ip_uint.unwrap());
-                if open_sprinkler.nvdata.external_ip.is_none() || (open_sprinkler.nvdata.external_ip.is_some() && eip != open_sprinkler.nvdata.external_ip.unwrap()) {
+                //if open_sprinkler.nvdata.external_ip.is_none() || (open_sprinkler.nvdata.external_ip.is_some() && eip != open_sprinkler.nvdata.external_ip.unwrap()) {
+                if eip != open_sprinkler.controller_config.nv.external_ip.unwrap_or_else(|| IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))) {
                     // Only save if the value has changed
-                    open_sprinkler.nvdata.external_ip = Some(std::net::IpAddr::V4(eip));
+                    //open_sprinkler.nvdata.external_ip = Some(std::net::IpAddr::V4(eip));
+                    open_sprinkler.controller_config.nv.external_ip = Some(std::net::IpAddr::V4(eip));
                     save_nvdata = true;
                     update_fn(open_sprinkler, WeatherUpdateFlag::EIP);
 
@@ -165,27 +203,34 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprin
         // Timezone
         if params.contains_key("tz") {
             let tz = params.get("tz").unwrap().parse::<i8>().unwrap();
-            if tz >= 0 && tz <= 108 && tz != open_sprinkler.iopts.tz as i8 {
-                open_sprinkler.iopts.tz = u8::try_from(tz).unwrap();
+            //if tz >= 0 && tz <= 108 && tz != open_sprinkler.iopts.tz as i8 {
+            if tz >= 0 && tz <= 108 && tz != open_sprinkler.controller_config.iopts.tz as i8 {
+                //open_sprinkler.iopts.tz = u8::try_from(tz).unwrap();
+                open_sprinkler.controller_config.iopts.tz = u8::try_from(tz).unwrap();
                 open_sprinkler.iopts_save();
                 update_fn(open_sprinkler, WeatherUpdateFlag::TZ);
 
-                tracing::trace!("Timezone: {}", open_sprinkler.iopts.tz);
+                tracing::trace!("Timezone: {}", open_sprinkler.controller_config.iopts.tz);
             }
         }
 
         // Rain delay (returned as hours)
         if params.contains_key("rd") {
-            let rd: i64 = params.get("rd").unwrap().parse().unwrap_or(-1);
-            if rd > 0 {
-                open_sprinkler.nvdata.rd_stop_time = Some((chrono::Utc::now() + chrono::Duration::hours(rd)).timestamp());
-                open_sprinkler.rain_delay_start();
-                update_fn(open_sprinkler, WeatherUpdateFlag::RD);
-                tracing::trace!("Starting rain delay for: {}h", rd);
-            } else if rd == 0 {
-                open_sprinkler.rain_delay_stop();
-                update_fn(open_sprinkler, WeatherUpdateFlag::RD);
-                tracing::trace!("Ending rain delay");
+            let rd = params.get("rd").unwrap().parse::<i64>();
+            if rd.is_ok() {
+                let rd = rd.unwrap();
+
+                if rd > 0 {
+                    //open_sprinkler.nvdata.rd_stop_time = Some((chrono::Utc::now() + chrono::Duration::hours(rd)).timestamp());
+                    open_sprinkler.controller_config.nv.rd_stop_time = Some((chrono::Utc::now() + chrono::Duration::hours(rd)).timestamp());
+                    open_sprinkler.rain_delay_start();
+                    update_fn(open_sprinkler, WeatherUpdateFlag::RD);
+                    tracing::trace!("Starting rain delay for: {}h", rd);
+                } else if rd == 0 {
+                    open_sprinkler.rain_delay_stop();
+                    update_fn(open_sprinkler, WeatherUpdateFlag::RD);
+                    tracing::trace!("Ending rain delay");
+                }
             }
         }
 

@@ -1,14 +1,10 @@
-use core::fmt;
-use std::{
-    cmp::{max, min},
-    mem,
-};
+use std::cmp::{max, min};
 
 use chrono::{Datelike, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
-use super::{config, log::message::StationMessage, station, OpenSprinkler};
+use super::{log::message::StationMessage, station, OpenSprinkler};
 
 const SECS_PER_MIN: u32 = 60;
 const SECS_PER_HOUR: i64 = 3600;
@@ -18,7 +14,6 @@ const MAX_NUM_PROGRAMS: usize = 40;
 pub const MAX_NUM_START_TIMES: usize = 4;
 const PROGRAM_NAME_SIZE: usize = 32;
 const RUNTIME_QUEUE_SIZE: usize = station::MAX_NUM_STATIONS;
-//const PROGRAM_STRUCT_SIZE: u64 = 444;
 
 const START_TIME_SUNRISE_BIT: u8 = 14;
 const START_TIME_SUNSET_BIT: u8 = 13;
@@ -266,7 +261,7 @@ pub struct ProgramData {
     /// this array stores the queue element index for each scheduled station
     pub station_qid: [usize; station::MAX_NUM_STATIONS],
     /// Number of programs
-    pub nprograms: usize,
+    //pub nprograms: usize,
     pub last_run: Option<StationMessage>,
     // the last stop time of a sequential station
     pub last_seq_stop_time: Option<i64>,
@@ -276,13 +271,13 @@ impl ProgramData {
         let mut r = ProgramData {
             queue: std::collections::VecDeque::new(),
             station_qid: [0xFFusize; station::MAX_NUM_STATIONS],
-            nprograms: 0,
+            //nprograms: 0,
             last_run: None,
             last_seq_stop_time: None,
         };
 
         //r.reset_runtime(); <- This is unnecessary since the struct is initialized with these values by default
-        r.load_count();
+        //r.load_count();
 
         r
     }
@@ -312,8 +307,8 @@ impl ProgramData {
         }
     }
 
-    /// Read a program from program file
-    pub fn read(&self, index: usize) -> result::Result<Program> {
+    // Read a program from program file
+    /* pub fn read(&self, index: usize) -> result::Result<Program> {
         if index >= self.nprograms {
             return Err(result::ProgramError {
                 message: String::from("program index out of bounds"),
@@ -322,10 +317,11 @@ impl ProgramData {
 
         let programs = config::get_programs().unwrap();
         Ok(programs.get(index).unwrap().to_owned())
-    }
+    } */
 
-    /// Add a program
-    pub fn add(&mut self, program: Program) -> result::Result<()> {
+    // Add a program
+    // @todo used by web server
+    /* pub fn add(&mut self, program: Program) -> result::Result<()> {
         if self.nprograms > MAX_NUM_PROGRAMS {
             return Err(result::ProgramError {
                 message: String::from("program limit exceeded"),
@@ -338,10 +334,11 @@ impl ProgramData {
 
         self.nprograms += 1;
         Ok(())
-    }
+    } */
 
-    /// Delete a program
-    pub fn remove(&mut self, index: usize) -> result::Result<()> {
+    // Delete a program
+    // @todo used by web server
+    /* pub fn remove(&mut self, index: usize) -> result::Result<()> {
         if index >= self.nprograms {
             return Err(result::ProgramError {
                 message: String::from("program index out of bounds"),
@@ -359,10 +356,11 @@ impl ProgramData {
 
         self.nprograms -= 1;
         Ok(())
-    }
+    } */
 
-    /// Modify a program
-    pub fn modify(&self, index: usize, value: Program) -> result::Result<()> {
+    // Modify a program
+    // @todo used by web server
+    /* pub fn modify(&self, index: usize, value: Program) -> result::Result<()> {
         if index >= self.nprograms || index == 0 {
             return Err(result::ProgramError {
                 message: String::from("program index out of bounds"),
@@ -374,10 +372,11 @@ impl ProgramData {
         config::commit_programs(&programs);
 
         Ok(())
-    }
+    } */
 
-    /// Move a program up (i.e. swap a program with the one above it)
-    pub fn move_up(&self, index: usize) -> result::Result<()> {
+    // Move a program up (i.e. swap a program with the one above it)
+    // @todo used by web server
+    /* pub fn move_up(&self, index: usize) -> result::Result<()> {
         if index >= self.nprograms || index == 0 {
             return Err(result::ProgramError {
                 message: String::from("program index out of bounds"),
@@ -389,19 +388,20 @@ impl ProgramData {
         config::commit_programs(&programs);
 
         Ok(())
-    }
+    } */
 
-    /// Load program count from program file
-    pub fn load_count(&mut self) {
+    // Load program count from program file
+    /*pub fn load_count(&mut self) {
         self.nprograms = config::get_programs().unwrap().len();
-    }
+    }*/ // just use length of program vector
 
-    /// Delete all programs
-    pub fn erase_all(&mut self) {
+    // Delete all programs
+    // @todo used by web server
+    /* pub fn erase_all(&mut self) {
         self.nprograms = 0;
 
         config::commit_programs(&vec![]);
-    }
+    } */
 }
 
 /// days remaining - absolute to relative reminder conversion
