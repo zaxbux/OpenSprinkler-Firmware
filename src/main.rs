@@ -108,7 +108,7 @@ fn main() {
         if open_sprinkler.get_sensor_type(0) == SensorType::Flow {
             now_millis = chrono::Utc::now().timestamp_millis();
 
-            if now_millis != last_millis {
+            if now_millis > last_millis {
                 last_millis = now_millis;
                 //loop_fns::flow_poll(&open_sprinkler, &mut flow_state);
                 loop_fns::flow_poll(&mut open_sprinkler);
