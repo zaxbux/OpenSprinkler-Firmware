@@ -3,15 +3,15 @@
 mod opensprinkler;
 mod utils;
 
+use clap::Parser;
 use core::time;
 use std::cmp::max;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
-use clap::Parser;
 use tracing_subscriber::FmtSubscriber;
 
-use opensprinkler::events::{push_message, FlowSensorEvent as FlowSensorEvent, ProgramSchedEvent, RebootEvent, WeatherUpdateEvent};
+use opensprinkler::events::{push_message, FlowSensorEvent, ProgramSchedEvent, RebootEvent, WeatherUpdateEvent};
 use opensprinkler::log;
 use opensprinkler::program::{ProgramData, RuntimeQueueStruct};
 use opensprinkler::sensor::{SensorType, FLOW_COUNT_REALTIME_WINDOW};
@@ -43,9 +43,8 @@ fn setup_tracing() {
         .with_max_level(tracing::Level::TRACE)
         // completes the builder.
         .finish();
-    
-    tracing::subscriber::set_global_default(subscriber)
-        .expect("setting default subscriber failed");
+
+    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 }
 
 fn main() {
@@ -57,7 +56,8 @@ fn main() {
 
     ctrlc::set_handler(move || {
         r.store(false, Ordering::SeqCst);
-    }).expect("Error setting Ctrl-C handler");
+    })
+    .expect("Error setting Ctrl-C handler");
     // endregion SIGNALS
 
     // region: TRACING
@@ -68,7 +68,7 @@ fn main() {
     // endregion TRACING
 
     tracing::info!("Using config file: {}", args.config.display());
-    
+
     // OpenSprinkler initialization
     tracing::trace!("Initialize controller");
     let mut open_sprinkler = OpenSprinkler::new(args.config);
@@ -101,7 +101,6 @@ fn main() {
     // Do-once flags
     let mut reboot_notification = true;
     let mut start_mqtt = true;
-    
 
     // Main loop
     while running.load(Ordering::SeqCst) {
@@ -138,10 +137,10 @@ fn main() {
             }
 
             // Check rain delay status
-            loop_fns::check_rain_delay(&mut open_sprinkler,  now_seconds);
+            loop_fns::check_rain_delay(&mut open_sprinkler, now_seconds);
 
             // Check binary sensor status (e.g. rain, soil)
-            loop_fns::check_binary_sensor_status(&mut open_sprinkler,  now_seconds);
+            loop_fns::check_binary_sensor_status(&mut open_sprinkler, now_seconds);
 
             // Check program switch status
             //loop_fns::check_program_switch_status(&mut open_sprinkler, &mut flow_state, &mut program_data);
@@ -349,8 +348,9 @@ fn main() {
                     // in case some options have changed while executing the program
                     //open_sprinkler.status.mas = open_sprinkler.iopts.mas; // update master station
                     open_sprinkler.status.mas = open_sprinkler.controller_config.iopts.mas; // update master station
-                    //open_sprinkler.status.mas2 = open_sprinkler.iopts.mas2; // update master2 station
-                    open_sprinkler.status.mas2 = open_sprinkler.controller_config.iopts.mas2; // update master2 station
+                                                                                            //open_sprinkler.status.mas2 = open_sprinkler.iopts.mas2; // update master2 station
+                    open_sprinkler.status.mas2 = open_sprinkler.controller_config.iopts.mas2;
+                    // update master2 station
                 }
             }
 
@@ -370,7 +370,7 @@ fn main() {
             if open_sprinkler.status.safe_reboot && (now_seconds > open_sprinkler.status.reboot_timer) {
                 // if no program is running at the moment and if no program is scheduled to run in the next minute
                 //if !open_sprinkler.status.program_busy && !program_pending_soon(&open_sprinkler, &program_data, now_seconds + 60) {
-                if !open_sprinkler.status.program_busy && !program_pending_soon(&open_sprinkler,  now_seconds + 60) {
+                if !open_sprinkler.status.program_busy && !program_pending_soon(&open_sprinkler, now_seconds + 60) {
                     //open_sprinkler.reboot_dev(open_sprinkler.nvdata.reboot_cause);
                     open_sprinkler.reboot_dev(open_sprinkler.controller_config.nv.reboot_cause);
                 }
