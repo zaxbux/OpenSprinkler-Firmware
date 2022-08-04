@@ -37,6 +37,8 @@ pub const REBOOT_DELAY: i64 = 65;
 pub const MINIMUM_ON_DELAY: u8 = 5;
 pub const MINIMUM_OFF_DELAY: u8 = 5;
 
+pub type StationIndex = usize;
+
 #[repr(u8)]
 enum HardwareVersionBase {
     #[deprecated(since = "3.0.0", note = "Rust port of firmware is not compatible with Arduino/ESP platforms")]
@@ -64,10 +66,10 @@ pub struct ControllerStatus {
     pub program_busy: bool,
     /// [true] means a safe reboot has been marked
     pub safe_reboot: bool,
-    /// master station index
-    pub mas: Option<usize>,
-    /// master2 station index
-    pub mas2: Option<usize>,
+    // master station index
+    //pub mas: Option<usize>,
+    // master2 station index
+    //pub mas2: Option<usize>,
     // sensor2 status bit (when set, sensor2 on is detected)
     //pub sensor2: bool,
     // sensor1 active bit (when set, sensor1 is activated)
@@ -91,8 +93,8 @@ impl Default for ControllerStatus {
             //sensor1: false,
             program_busy: false,
             safe_reboot: false,
-            mas: None,
-            mas2: None,
+            //mas: None,
+            //mas2: None,
             //sensor2: false,
             //sensor1_active: false,
             //sensor2_active: false,
@@ -331,7 +333,7 @@ impl OpenSprinkler {
         self.get_board_count() * SHIFT_REGISTER_LINES
     }
 
-    pub fn is_station_running(&self, station_index: usize) -> bool {
+    pub fn is_station_running(&self, station_index: StationIndex) -> bool {
         let bid = station_index >> 3;
         let s = station_index & 0x07;
         self.station_bits[bid] & (1 << s) != 0
@@ -394,6 +396,19 @@ impl OpenSprinkler {
     pub fn get_flow_pulse_rate(&self) -> u16 {
         //(u16::from(self.iopts.fpr1) << 8) + u16::from(self.iopts.fpr0)
         (u16::from(self.controller_config.fpr1) << 8) + u16::from(self.controller_config.fpr0)
+    }
+
+    /// Returns the index (0-indexed) of a master station
+    pub fn get_master_station_index(&self, i: usize) -> Option<StationIndex> {
+        match i {
+            0 => self.controller_config.mas,
+            1 => self.controller_config.mas2,
+            _ => None,
+        }
+    }
+
+    pub fn is_master_station(&self, station_index: StationIndex) -> bool {
+        self.get_master_station_index(0) == Some(station_index) || self.get_master_station_index(1) == Some(station_index)
     }
     // endregion GETTERS
 
@@ -795,7 +810,7 @@ impl OpenSprinkler {
     }
 
     /// Switch Special Station
-    pub fn switch_special_station(&mut self, station_index: usize, value: bool) {
+    pub fn switch_special_station(&mut self, station_index: StationIndex, value: bool) {
         //let station = self.stations.get(station_index).unwrap();
         let station = self.controller_config.stations.get(station_index).unwrap();
         //let station_type = self.get_station_type(station);
@@ -876,7 +891,7 @@ impl OpenSprinkler {
         //let ref mut this = self;
         //self.nvdata = config::get_controller_nv().unwrap();
 
-        self.old_status = self.status;
+        //self.old_status = self.status; // Not necessary, both fields are initialized with the same values.
         //};
         //self.last_reboot_cause = self.nvdata.reboot_cause;
         self.last_reboot_cause = self.controller_config.reboot_cause;
@@ -965,9 +980,9 @@ impl OpenSprinkler {
     /// Set station bit
     ///
     /// This function sets the corresponding station bit. [OpenSprinkler::apply_all_station_bits()] must be called after to apply the bits (which results in physically actuating the valves).
-    pub fn set_station_bit(&mut self, station: usize, value: bool) -> StationBitChange {
+    pub fn set_station_bit(&mut self, station: StationIndex, value: bool) -> StationBitChange {
         // Pointer to the station byte
-        let data = self.station_bits[(station >> 3) as usize];
+        let data = self.station_bits[(station >> 3)];
         // Mask
         let mask = 1 << (station & 0x07);
 
@@ -976,7 +991,7 @@ impl OpenSprinkler {
                 // If bit is already set, return "no change"
                 return StationBitChange::NoChange;
             } else {
-                self.station_bits[(station >> 3) as usize] = data | mask;
+                self.station_bits[(station >> 3)] = data | mask;
                 // Handle special stations
                 self.switch_special_station(station, true);
                 return StationBitChange::On;
@@ -986,7 +1001,7 @@ impl OpenSprinkler {
                 // If bit is already set, return "no change"
                 return StationBitChange::NoChange;
             } else {
-                self.station_bits[(station >> 3) as usize] = data & !mask;
+                self.station_bits[(station >> 3)] = data & !mask;
                 // Handle special stations
                 self.switch_special_station(station, false);
                 return StationBitChange::Off;

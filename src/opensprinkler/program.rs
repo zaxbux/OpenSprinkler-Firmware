@@ -4,7 +4,7 @@ use chrono::{Datelike, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
-use super::{log::message::StationMessage, station, OpenSprinkler};
+use super::{log::message::StationMessage, station, OpenSprinkler, StationIndex};
 
 const SECS_PER_MIN: u32 = 60;
 const SECS_PER_HOUR: i64 = 3600;
@@ -250,7 +250,7 @@ pub struct ProgramQueueElement {
     /// Water time
     pub water_time: i64,
     /// Station ID
-    pub sid: usize,
+    pub sid: StationIndex,
     /// Program ID
     pub pid: usize,
 }

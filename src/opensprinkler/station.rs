@@ -2,6 +2,8 @@ use std::net::IpAddr;
 
 use serde::{Deserialize, Serialize};
 
+use super::StationIndex;
+
 /// Stations/Zones per board
 pub const SHIFT_REGISTER_LINES: usize = 8;
 
@@ -106,7 +108,7 @@ pub struct RFStationData {
 pub struct RemoteStationData {
     pub ip: IpAddr,
     pub port: u16,
-    pub sid: usize,
+    pub sid: StationIndex,
 }
 
 /// GPIO station data structures - Must fit in STATION_SPECIAL_DATA_SIZE

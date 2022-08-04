@@ -1,7 +1,7 @@
 use std::net::IpAddr;
 use reqwest::header;
 
-use super::OpenSprinkler;
+use super::{OpenSprinkler, StationIndex};
 
 pub mod ifttt;
 
@@ -132,7 +132,7 @@ impl EventType for RebootEvent {
 
 // region: Station
 pub struct StationEvent {
-    pub station_id: usize,
+    pub station_id: StationIndex,
     pub station_name: String,
     pub state: bool,
     pub duration: Option<i64>,
@@ -140,7 +140,7 @@ pub struct StationEvent {
 }
 
 impl StationEvent {
-    pub fn new(station_id: usize, station_name: &str, state: bool, duration: Option<i64>, flow: Option<f64>) -> StationEvent {
+    pub fn new(station_id: StationIndex, station_name: &str, state: bool, duration: Option<i64>, flow: Option<f64>) -> StationEvent {
         StationEvent {
             station_id,
             station_name: station_name.to_string(),

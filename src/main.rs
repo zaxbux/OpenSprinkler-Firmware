@@ -110,9 +110,9 @@ fn main() {
         }
 
         //open_sprinkler.status.mas = open_sprinkler.iopts.mas;
-        open_sprinkler.status.mas = open_sprinkler.controller_config.mas;
+        //open_sprinkler.status.mas = open_sprinkler.controller_config.mas; // Not needed anymore, getting masters directly from config
         //open_sprinkler.status.mas2 = open_sprinkler.iopts.mas2;
-        open_sprinkler.status.mas2 = open_sprinkler.controller_config.mas2;
+        //open_sprinkler.status.mas2 = open_sprinkler.controller_config.mas2; // Not needed anymore, getting masters directly from config
 
         now_seconds = chrono::Utc::now().timestamp();
 

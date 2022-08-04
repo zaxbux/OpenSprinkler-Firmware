@@ -1,7 +1,7 @@
 use super::{
     program::Programs,
     station::{self, Stations},
-    RebootCause,
+    RebootCause, StationIndex,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
@@ -163,7 +163,7 @@ pub struct ControllerConfiguration {
     /// station delay time (-10 minutes to 10 minutes).
     pub sdt: u8,
     /// index of master station. 0: no master station
-    pub mas: Option<usize>,
+    pub mas: Option<StationIndex>,
     /// master on time adjusted time (-10 minutes to 10 minutes)
     pub mton: u8,
     /// master off adjusted time (-10 minutes to 10 minutes)
@@ -183,7 +183,7 @@ pub struct ControllerConfiguration {
     /// enable logging: 0: disable; 1: enable.
     pub lg: bool,
     /// index of master2. 0: no master2 station
-    pub mas2: Option<usize>,
+    pub mas2: Option<StationIndex>,
     /// master2 on adjusted time
     pub mton2: u8,
     /// master2 off adjusted time

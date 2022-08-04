@@ -16,13 +16,14 @@ pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, program_data: &mut Pr
 		qid += 1;
 	}
 	// next, go through the stations and perform time keeping
-	for bid in 0..open_sprinkler.get_board_count() {
-		let bitvalue = open_sprinkler.station_bits[bid];
+	for board_index in 0..open_sprinkler.get_board_count() {
+		let bitvalue = open_sprinkler.station_bits[board_index];
 		for s in 0..SHIFT_REGISTER_LINES {
-			let station_index = bid * 8 + s;
+			let station_index = board_index * 8 + s;
 
 			// skip master station
-			if (open_sprinkler.status.mas.unwrap_or(0) == station_index + 1) || (open_sprinkler.status.mas2.unwrap_or(0) == station_index + 1) {
+			//if open_sprinkler.get_master_station_index(0) == Some(station_index) || open_sprinkler.get_master_station_index(1) == Some(station_index) {
+			if open_sprinkler.is_master_station(station_index) {
 				continue;
 			}
 
@@ -111,9 +112,9 @@ pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, program_data: &mut Pr
 
 		// in case some options have changed while executing the program
 		//open_sprinkler.status.mas = open_sprinkler.iopts.mas; // update master station
-		open_sprinkler.status.mas = open_sprinkler.controller_config.mas; // update master station
-																				//open_sprinkler.status.mas2 = open_sprinkler.iopts.mas2; // update master2 station
-		open_sprinkler.status.mas2 = open_sprinkler.controller_config.mas2;
+		//open_sprinkler.status.mas = open_sprinkler.controller_config.mas; // update master station
+		//open_sprinkler.status.mas2 = open_sprinkler.iopts.mas2; // update master2 station
+		//open_sprinkler.status.mas2 = open_sprinkler.controller_config.mas2;
 		// update master2 station
 	}
 }

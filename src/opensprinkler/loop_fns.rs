@@ -119,7 +119,8 @@ pub fn process_dynamic_events(open_sprinkler: &mut OpenSprinkler, program_data: 
             let station_index = board_id * SHIFT_REGISTER_LINES + s;
 
             // Ignore master stations because they are handles separately
-            if (open_sprinkler.status.mas.unwrap_or(0) == station_index + 1) || (open_sprinkler.status.mas2.unwrap_or(0) == station_index + 1) {
+            //if open_sprinkler.get_master_station_index(0) == Some(station_index) || open_sprinkler.get_master_station_index(1) == Some(station_index) {
+            if open_sprinkler.is_master_station(station_index) {
                 continue;
             }
 
@@ -311,7 +312,8 @@ fn manual_start_program(open_sprinkler: &mut OpenSprinkler, program_data: &mut P
         // bid = sid >> 3;
         // s = sid & 0x07;
         // skip if the station is a master station (because master cannot be scheduled independently
-        if (open_sprinkler.status.mas.unwrap_or(0) == station_index + 1) || (open_sprinkler.status.mas2.unwrap_or(0) == station_index + 1) {
+        //if open_sprinkler.get_master_station_index(0) == Some(station_index) || open_sprinkler.get_master_station_index(1) == Some(station_index) {
+        if open_sprinkler.is_master_station(station_index) {
             continue;
         }
         let mut water_time = 60;
@@ -371,7 +373,7 @@ pub fn check_program_schedule(open_sprinkler: &mut OpenSprinkler, program_data: 
                 //let s = station_index & 0x07; // 0..7
 
                 // skip if the station is a master station (because master cannot be scheduled independently
-                if (open_sprinkler.status.mas.unwrap_or(0) == station_index + 1) || (open_sprinkler.status.mas2.unwrap_or(0) == station_index + 1) {
+                if open_sprinkler.is_master_station(station_index) {
                     continue;
                 }
 

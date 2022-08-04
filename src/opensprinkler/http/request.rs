@@ -1,5 +1,7 @@
 use serde::{Serialize, Serializer};
 
+use crate::opensprinkler::StationIndex;
+
 #[derive(Debug, Serialize)]
 pub struct RemoteStationRequestParametersV219 {
     /// Device key (MD5)
@@ -7,7 +9,7 @@ pub struct RemoteStationRequestParametersV219 {
     device_key_md5: String,
     /// Station ID/index
     #[serde(rename = "sid")]
-    station: usize,
+    station: StationIndex,
     /// Enable bit
     #[serde(rename = "en", serialize_with = "char_from_bool")]
     value: bool,
@@ -17,7 +19,7 @@ pub struct RemoteStationRequestParametersV219 {
 }
 
 impl RemoteStationRequestParametersV219 {
-    pub fn new(device_key_md5: &str, station: usize, value: bool, timer: i64) -> Self {
+    pub fn new(device_key_md5: &str, station: StationIndex, value: bool, timer: i64) -> Self {
         RemoteStationRequestParametersV219 {
             device_key_md5: device_key_md5.to_string(),
             station,

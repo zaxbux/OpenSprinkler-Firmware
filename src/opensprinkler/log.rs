@@ -90,6 +90,8 @@ fn get_writer(timestamp: i64) -> Result<io::BufWriter<std::fs::File>, std::io::E
 pub mod message {
     use std::io::Write;
 
+    use crate::opensprinkler::StationIndex;
+
     //use serde::{Deserialize, Serialize};
     use super::{get_log_type_name, LogDataType, OpenSprinkler};
 
@@ -113,14 +115,14 @@ pub mod message {
     #[derive(Copy, Clone)]
     pub struct StationMessage {
         pub program_id: usize,
-        pub station_id: usize,
+        pub station_id: StationIndex,
         pub duration: u16,
         pub timestamp: i64,
         pub flow: Option<f64>,
     }
 
     impl StationMessage {
-        pub fn new(program_id: usize, station_id: usize, duration: u16, timestamp: i64) -> StationMessage {
+        pub fn new(program_id: usize, station_id: StationIndex, duration: u16, timestamp: i64) -> StationMessage {
             StationMessage {
                 program_id,
                 station_id,
