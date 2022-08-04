@@ -4,12 +4,21 @@ use super::{
     RebootCause, StationIndex,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use std::str::FromStr;
 use std::{
+    error, fmt,
     fs::OpenOptions,
     io::{self, Write},
+    num,
     path::PathBuf,
     sync::Arc,
 };
+
+use crate::opensprinkler::{sensor::SensorOption, FIRMWARE_VERSION, FIRMWARE_VERSION_REVISION, HARDWARE_VERSION};
+use std::net::IpAddr;
+
+#[cfg(feature = "mqtt")]
+use crate::opensprinkler::mqtt::MQTTConfig;
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
 pub struct EventsEnabled {
@@ -40,96 +49,55 @@ impl Default for EventsEnabled {
     }
 }
 
-/* pub mod data_file {
-    pub const INTEGER_OPTIONS: &'static str = "iopts.dat";
-    pub const STRING_OPTIONS: &'static str = "sopts.dat";
-    pub const STATIONS: &'static str = "stns.dat";
-    pub const NV_CONTROLLER: &'static str = "nvcon.dat";
-    pub const PROGRAMS: &'static str = "prog.dat";
-    pub const DONE: &'static str = "done.dat";
-} */
+#[derive(Debug)]
+pub enum ParseLocationError {
+    Invalid,
+    ParseFloatError(num::ParseFloatError),
+}
 
-use crate::opensprinkler::{sensor::SensorOption, FIRMWARE_VERSION, FIRMWARE_VERSION_REVISION, HARDWARE_VERSION};
-use std::net::IpAddr;
-
-pub mod data_type {
-    use std::net::IpAddr;
-
-    use serde::{Deserialize, Serialize};
-
-    use crate::opensprinkler::{sensor::SensorOption, RebootCause, FIRMWARE_VERSION, FIRMWARE_VERSION_REVISION, HARDWARE_VERSION};
-
-    /* /// Non-volatile controller data
-    #[derive(Clone, Serialize, Deserialize)]
-    pub struct ControllerNonVolatile {
-        
-    }
-
-    impl Default for ControllerNonVolatile {
-        fn default() -> Self {
-            ControllerNonVolatile {
-                
-            }
-        }
-    } */
-
-    /* #[derive(Clone, Serialize, Deserialize)]
-    pub struct IntegerOptions {
-
-    }
-
-    impl Default for IntegerOptions {
-        fn default() -> Self {
-            IntegerOptions {
-
-            }
-        }
-    } */
-
-    #[derive(Clone, Serialize, Deserialize)]
-    pub struct StringOptions {
-        /// Device key AKA password
-        pub dkey: String,
-        /// Device location (decimal coordinates)
-        /// @todo Represent as a vector using [f64] instead of a string. This means dropping support for using city name / postal code, but geocoder can find coordinates anyways.
-        pub loc: String,
-        /// Javascript URL for the web app
-        pub jsp: String,
-        /// Weather Service URL
-        pub wsp: String,
-        /// Weather adjustment options
-        /// This data is specific to the weather adjustment method.
-        pub wto: String,
-        /// IFTTT Webhooks API key
-        pub ifkey: String,
-        // Wi-Fi ESSID
-        //#[deprecated(since = "3.0.0")]
-        //pub ssid: String,
-        // Wi-Fi PSK
-        //#[deprecated(since = "3.0.0")]
-        //pub pass: String,
-        /// MQTT config @todo Use a struct?
-        pub mqtt: String,
-    }
-
-    impl Default for StringOptions {
-        fn default() -> Self {
-            StringOptions {
-                dkey: format!("{:x}", md5::compute(b"opendoor")).into(), // @todo Use modern hash like Argon2
-                loc: "0,0".into(),
-                jsp: "https://ui.opensprinkler.com".into(),
-                wsp: "https://weather.opensprinkler.com".into(),
-                wto: "".into(),
-                ifkey: "".into(),
-                //ssid: "".into(),
-                //pass: "".into(),
-                mqtt: "".into(),
-            }
+impl fmt::Display for ParseLocationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            Self::Invalid => write!(f, "Invalid location string"),
+            ParseLocationError::ParseFloatError(ref err) => write!(f, "Float Parse Error: {}", err),
         }
     }
+}
 
-    /// maximum number of characters in each station name
-    const STATION_NAME_SIZE: usize = 32;
+impl error::Error for ParseLocationError {}
+
+impl From<std::num::ParseFloatError> for ParseLocationError {
+    fn from(error: std::num::ParseFloatError) -> Self {
+        ParseLocationError::ParseFloatError(error)
+    }
+}
+
+#[derive(Default, Serialize, Deserialize)]
+pub struct Location {
+    lat: f32,
+    lng: f32,
+}
+
+impl TryFrom<String> for Location {
+    type Error = ParseLocationError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        if let Some((lat, lng)) = value.split_once(',') {
+            return Ok(Location {
+                lat: f32::from_str(lat)?,
+                lng: f32::from_str(lng)?,
+            });
+        }
+
+        Err(ParseLocationError::Invalid)
+    }
+}
+
+impl fmt::Display for Location {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // 4 decimal places gives ≈10 meters of accuracy and should be enough for this use case
+        write!(f, "{:.4},{:.4}", self.lat, self.lng)
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -220,7 +188,25 @@ pub struct ControllerConfiguration {
     /// reset
     pub reset: u8,
 
-    pub sopts: data_type::StringOptions,
+    //pub sopts: data_type::StringOptions,
+    /// Device key AKA password
+    pub dkey: String,
+    /// Device location (decimal coordinates)
+    /// @todo Represent as a vector using [f64] instead of a string. This means dropping support for using city name / postal code, but geocoder can find coordinates anyways.
+    pub loc: Location,
+    /// Javascript URL for the web app
+    pub jsp: String,
+    /// Weather Service URL
+    pub wsp: String,
+    /// Weather adjustment options
+    /// This data is specific to the weather adjustment method.
+    pub wto: Option<String>,
+    /// IFTTT Webhooks API key
+    pub ifkey: Option<String>,
+    /// MQTT config
+    #[cfg(feature = "mqtt")]
+    pub mqtt: MQTTConfig,
+
     pub stations: Stations,
     pub programs: Programs,
 }
@@ -275,7 +261,16 @@ impl Default for ControllerConfiguration {
             sn2of: 0,
             reset: 0,
 
-            sopts: data_type::StringOptions::default(),
+            //sopts: data_type::StringOptions::default(),
+            dkey: format!("{:x}", md5::compute(b"opendoor")).into(), // @todo Use modern hash like Argon2
+            loc: Location::default(),
+            jsp: core::option_env!("JAVASCRIPT_URL").unwrap_or("https://ui.opensprinkler.com").into(),
+            wsp: core::option_env!("WEATHER_SERVICE_URL").unwrap_or("https://weather.opensprinkler.com").into(),
+            wto: None,
+            ifkey: None,
+            #[cfg(feature = "mqtt")]
+            mqtt: MQTTConfig::default(),
+
             stations: station::default(),
             programs: Vec::new(),
         }

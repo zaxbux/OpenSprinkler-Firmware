@@ -289,7 +289,7 @@ impl OpenSprinkler {
     }
 
     pub fn is_mqtt_enabled(&self) -> bool {
-        true
+        self.controller_config.mqtt.enabled
         //self.sopts.mqtt
     }
 
@@ -298,10 +298,11 @@ impl OpenSprinkler {
         self.controller_config.re
     }
 
+    /// Gets the weather service URL (with adjustment method)
     pub fn get_weather_service_url(&self) -> Result<reqwest::Url, url::ParseError> {
-        let mut url = url::Url::parse(self.controller_config.sopts.wsp.as_str())?;
+        let mut url = url::Url::parse(&self.controller_config.wsp)?;
         let _ = url.path_segments_mut().and_then(|mut p| {
-            p.push(&self.controller_config.sopts.wsp);
+            p.push(&self.controller_config.uwt.to_string());
             Ok(())
         });
         Ok(url)
@@ -779,7 +780,7 @@ impl OpenSprinkler {
 
         // @todo log request failures
         let response = reqwest::blocking::Client::new().get(host).query(&http::request::RemoteStationRequestParametersV219::new(
-            &self.controller_config.sopts.dkey,
+            &self.controller_config.dkey,
             data.sid,
             value,
             timer,

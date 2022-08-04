@@ -221,7 +221,11 @@ where
 
     if ifttt_event_enabled(open_sprinkler, event) {
         //ifttt_webhook(event.ifttt_payload(), open_sprinkler.sopts.ifkey.as_str());
-        ifttt_webhook(event, open_sprinkler.controller_config.sopts.ifkey.as_str());
+        if let Some(ifttt_api_key) = &open_sprinkler.controller_config.ifkey {
+            ifttt_webhook(event, ifttt_api_key);
+        } else {
+            tracing::error!("IFTTT Web Hook API key unset");
+        }
     }
 }
 
@@ -236,7 +240,11 @@ where
 
     if ifttt_event_enabled(open_sprinkler, event) {
         //ifttt_webhook(event.ifttt_payload(), open_sprinkler.sopts.ifkey.as_str());
-        ifttt_webhook(event, open_sprinkler.controller_config.sopts.ifkey.as_str());
+        if let Some(ifttt_api_key) = &open_sprinkler.controller_config.ifkey {
+            ifttt_webhook(event, ifttt_api_key);
+        } else {
+            tracing::error!("IFTTT Web Hook API key unset");
+        }
     }
 }
 

@@ -44,7 +44,7 @@ mod result {
 
     #[derive(Debug)]
     pub enum Error {
-        UrlParse(url::ParseError)
+        UrlParse(url::ParseError),
     }
 
     impl fmt::Display for Error {
@@ -58,7 +58,7 @@ mod result {
     impl error::Error for Error {}
 
     impl From<url::ParseError> for Error {
-        fn from(err: url::ParseError) -> Error {
+        fn from(err: url::ParseError) -> Self {
             Error::UrlParse(err)
         }
     }
@@ -107,7 +107,7 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprin
 
     //let mut url = reqwest::Url::parse(open_sprinkler.sopts.wsp.as_str()).unwrap();
     //url.path_segments_mut().unwrap().push(&open_sprinkler.iopts.uwt.to_string());
-    let mut url = open_sprinkler.get_weather_service_url()?;
+    let url = open_sprinkler.get_weather_service_url()?;
 
     tracing::debug!("Retrieving weather from {}", url.host_str().unwrap_or(""));
 
@@ -118,7 +118,11 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprin
         .header(USER_AGENT, ua.unwrap())
         // Prefer JSON over the original implementation that returned a form-urlencoded string
         .header(ACCEPT, HeaderValue::from_str("application/json,text/plain;q=0.9,text/html;q=0.8").unwrap())
-        .query(&[("loc", open_sprinkler.controller_config.sopts.loc.clone()), ("wto", open_sprinkler.controller_config.sopts.wto.clone()), ("fwv", open_sprinkler.controller_config.fwv.to_string())])
+        .query(&[
+            ("loc", &open_sprinkler.controller_config.loc.to_string()),
+            ("wto", open_sprinkler.controller_config.wto.as_ref().unwrap_or(&String::from(""))),
+            ("fwv", &open_sprinkler.controller_config.fwv.to_string()),
+        ])
         .send()
         .expect("Error making HTTP weather request");
 

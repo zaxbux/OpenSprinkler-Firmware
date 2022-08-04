@@ -8,6 +8,13 @@ default = ["demo"]
 demo = []
 mqtt = ["paho-mqtt"]
 
+#[env]
+#JAVASCRIPT_URL = ""
+#WEATHER_SERVICE_URL = ""
+
+[target]
+rustc-env = {key = "value"}
+
 [build-dependencies]
 cmake = "0.1.48"
 
