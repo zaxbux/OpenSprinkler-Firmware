@@ -72,7 +72,7 @@ pub fn check_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&Ope
     }
 
     // Skip checking weather if program is active
-    if open_sprinkler.status.program_busy {
+    if open_sprinkler.status_current.program_busy {
         return Ok(());
     }
 

@@ -14,7 +14,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::opensprinkler::{sensor::SensorOption, FIRMWARE_VERSION, FIRMWARE_VERSION_REVISION, HARDWARE_VERSION};
+use crate::opensprinkler::{sensor::NormalState, FIRMWARE_VERSION, FIRMWARE_VERSION_REVISION, HARDWARE_VERSION};
 use std::net::IpAddr;
 
 #[cfg(feature = "mqtt")]
@@ -172,11 +172,11 @@ pub struct ControllerConfiguration {
     /// sensor 1 type (see SENSOR_TYPE macro defines)
     pub sn1t: u8,
     /// sensor 1 option. 0: normally closed; 1: normally open.	default 1.
-    pub sn1o: SensorOption,
+    pub sn1o: NormalState,
     /// sensor 2 type
     pub sn2t: u8,
     /// sensor 2 option. 0: normally closed; 1: normally open. default 1.
-    pub sn2o: SensorOption,
+    pub sn2o: NormalState,
     /// sensor 1 on delay
     pub sn1on: u8,
     /// sensor 1 off delay
@@ -252,9 +252,9 @@ impl Default for ControllerConfiguration {
             //ife: 0,
             ifttt_events: EventsEnabled::default(),
             sn1t: 0,
-            sn1o: SensorOption::NormallyOpen,
+            sn1o: NormalState::Open,
             sn2t: 0,
-            sn2o: SensorOption::NormallyOpen,
+            sn2o: NormalState::Open,
             sn1on: 0,
             sn1of: 0,
             sn2on: 0,

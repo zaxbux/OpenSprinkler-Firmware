@@ -1,4 +1,4 @@
-use std::cmp::{max, min};
+use std::{cmp::{max, min}, collections};
 
 use chrono::{Datelike, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
@@ -244,7 +244,7 @@ impl Program {
 }
 
 #[derive(Clone)]
-pub struct ProgramQueueElement {
+pub struct QueueElement {
     /// Start time
     pub start_time: i64,
     /// Water time
@@ -255,8 +255,10 @@ pub struct ProgramQueueElement {
     pub pid: usize,
 }
 
+pub type QueueElements = collections::VecDeque<QueueElement>;
+
 pub struct ProgramQueue {
-    pub queue: std::collections::VecDeque<ProgramQueueElement>,
+    pub queue: QueueElements,
 
     /// this array stores the queue element index for each scheduled station
     pub station_qid: [usize; station::MAX_NUM_STATIONS],
@@ -267,19 +269,14 @@ pub struct ProgramQueue {
     pub last_seq_stop_time: Option<i64>,
 }
 impl ProgramQueue {
-    pub fn new() -> ProgramQueue {
-        let mut r = ProgramQueue {
-            queue: std::collections::VecDeque::new(),
+    pub fn new() -> Self {
+        ProgramQueue {
+            queue: collections::VecDeque::new(),
             station_qid: [0xFFusize; station::MAX_NUM_STATIONS],
             //nprograms: 0,
             last_run: None,
             last_seq_stop_time: None,
-        };
-
-        //r.reset_runtime(); <- This is unnecessary since the struct is initialized with these values by default
-        //r.load_count();
-
-        r
+        }
     }
 
     pub fn reset_runtime(&mut self) {
@@ -288,7 +285,7 @@ impl ProgramQueue {
     }
 
     // this returns a pointer to the next available slot in the queue
-    pub fn enqueue(&mut self, value: ProgramQueueElement) -> result::Result<&mut ProgramQueueElement> {
+    pub fn enqueue(&mut self, value: QueueElement) -> result::Result<&mut QueueElement> {
         if self.queue.len() < RUNTIME_QUEUE_SIZE {
             self.queue.push_back(value);
             return Ok(self.queue.back_mut().unwrap());
@@ -304,6 +301,17 @@ impl ProgramQueue {
         }
         if qid < self.queue.len() - 1 {
             let _ = self.queue.remove(qid);
+        }
+    }
+    
+    /// Reset all stations
+    ///
+    /// This function sets the duration of every station to 0, which causes all stations to turn off in the next processing cycle.
+    /// Stations will be logged
+    pub fn reset_all_stations(&mut self) {
+        // go through runtime queue and assign water time to 0
+        for q in self.queue.iter_mut() {
+            q.water_time = 0;
         }
     }
 

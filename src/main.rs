@@ -2,20 +2,28 @@
 
 mod opensprinkler;
 mod utils;
+pub mod timer;
 
 use clap::Parser;
 use core::time;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::thread;
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread,
+};
 use tracing_subscriber::FmtSubscriber;
 
-use opensprinkler::events::{push_message, RebootEvent, WeatherUpdateEvent};
-use opensprinkler::program::ProgramQueue;
-use opensprinkler::sensor::SensorType;
-use opensprinkler::weather::{check_weather, WeatherUpdateFlag};
-use opensprinkler::OpenSprinkler;
-use opensprinkler::{loop_fns, RebootCause};
+use opensprinkler::{
+    events::{push_message, RebootEvent, WeatherUpdateEvent},
+    program::ProgramQueue,
+    sensor::SensorType,
+    weather::{check_weather, WeatherUpdateFlag},
+    OpenSprinkler,
+};
+
+use crate::opensprinkler::scheduler;
 
 #[cfg(unix)]
 const CONFIG_FILE_PATH: &'static str = "/etc/opt/config.dat";
@@ -105,14 +113,9 @@ fn main() {
             if now_millis > last_millis {
                 last_millis = now_millis;
                 //loop_fns::flow_poll(&open_sprinkler, &mut flow_state);
-                loop_fns::flow_poll(&mut open_sprinkler);
+                open_sprinkler.flow_poll();
             }
         }
-
-        //open_sprinkler.status.mas = open_sprinkler.iopts.mas;
-        //open_sprinkler.status.mas = open_sprinkler.controller_config.mas; // Not needed anymore, getting masters directly from config
-        //open_sprinkler.status.mas2 = open_sprinkler.iopts.mas2;
-        //open_sprinkler.status.mas2 = open_sprinkler.controller_config.mas2; // Not needed anymore, getting masters directly from config
 
         now_seconds = chrono::Utc::now().timestamp();
 
@@ -122,39 +125,30 @@ fn main() {
             now_minute = now_seconds / 60;
 
             // Start MQTT when there is a network connection
-            //if open_sprinkler.status.req_mqtt_restart && open_sprinkler.network_connected() {
             // @todo use [paho_mqtt::async_client::AsyncClient#is_connected()] instead of start_mqtt
             if start_mqtt && open_sprinkler.is_mqtt_enabled() && open_sprinkler.network_connected() {
                 tracing::debug!("Network is OK, starting MQTT");
                 //open_sprinkler.mqtt.begin(); @todo
-                //open_sprinkler.status.req_mqtt_restart = false;
                 start_mqtt = false
             }
 
-            // Check rain delay status
-            loop_fns::check_rain_delay(&mut open_sprinkler, now_seconds);
+            
+            open_sprinkler.check_rain_delay_status(now_seconds);
+            open_sprinkler.check_binary_sensor_status(now_seconds);
+            open_sprinkler.check_program_switch_status(&mut program_data);
 
-            // Check binary sensor status (e.g. rain, soil)
-            loop_fns::check_binary_sensor_status(&mut open_sprinkler, now_seconds);
-
-            // Check program switch status
-            //loop_fns::check_program_switch_status(&mut open_sprinkler, &mut flow_state, &mut program_data);
-            loop_fns::check_program_switch_status(&mut open_sprinkler, &mut program_data);
-
-            // Schedule program data
-
-            // since the granularity of start time is minute
-            // we only need to check once every minute
+            // since the granularity of start time is minute, we only need to check once every minute
             if now_minute > last_minute {
                 last_minute = now_minute;
 
-                loop_fns::check_program_schedule(&mut open_sprinkler, &mut program_data, now_seconds);
+                // Schedule program data
+                scheduler::check_program_schedule(&mut open_sprinkler, &mut program_data, now_seconds);
             }
 
             // ====== Run program data ======
             // Check if a program is running currently
             // If so, do station run-time keeping
-            if open_sprinkler.status.program_busy {
+            if open_sprinkler.status_current.program_busy {
                 opensprinkler::scheduler::do_time_keeping(&mut open_sprinkler, &mut program_data, now_seconds);
             }
 
@@ -163,7 +157,7 @@ fn main() {
 
             // Process dynamic events
             //loop_fns::process_dynamic_events(&mut open_sprinkler, &mut program_data, &mut flow_state, now_seconds);
-            loop_fns::process_dynamic_events(&mut open_sprinkler, &mut program_data, now_seconds);
+            open_sprinkler.process_dynamic_events(&mut program_data, now_seconds);
 
             // Actuate valves
             open_sprinkler.apply_all_station_bits();

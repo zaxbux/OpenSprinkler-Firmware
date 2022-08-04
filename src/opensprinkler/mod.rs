@@ -1,41 +1,39 @@
 pub mod config;
 pub mod events;
 pub mod gpio;
+mod http;
 pub mod log;
-pub mod loop_fns;
 pub mod program;
 mod rf;
-mod http;
 pub mod sensor;
 pub mod station;
 pub mod weather;
 
+pub mod controller;
 #[cfg(feature = "demo")]
 mod demo;
 #[cfg(feature = "mqtt")]
 mod mqtt;
+pub mod scheduler;
 #[cfg(target_os = "linux")]
 pub mod system;
-pub mod scheduler;
-pub mod controller;
 
 use serde::{Deserialize, Serialize};
 use std::cmp::max;
 use std::path::PathBuf;
 
-use crate::opensprinkler::sensor::SensorOption;
-
 use self::config::ControllerConfiguration;
 use self::sensor::{SensorType, MAX_SENSORS};
 use self::station::{StationType, MAX_NUM_BOARDS, SHIFT_REGISTER_LINES};
-
-pub use rppal::gpio::Level as GpioLevel;
 
 /// Default reboot timer (seconds)
 pub const REBOOT_DELAY: i64 = 65;
 
 pub const MINIMUM_ON_DELAY: u8 = 5;
 pub const MINIMUM_OFF_DELAY: u8 = 5;
+
+const SPECIAL_CMD_REBOOT: &'static str = ":>reboot";
+const SPECIAL_CMD_REBOOT_NOW: &'static str = ":>reboot_now";
 
 pub type StationIndex = usize;
 
@@ -78,7 +76,6 @@ pub struct ControllerStatus {
     //pub sensor2_active: bool,
     // request mqtt restart
     //pub req_mqtt_restart: bool,
-
     sensors: [ControllerSensorStatus; 2],
 
     /// Reboot timer
@@ -148,13 +145,13 @@ pub struct OpenSprinkler {
     pub flow_state: sensor::flow::State,
 
     #[cfg(not(feature = "demo"))]
-    gpio: rppal::gpio::Gpio,
+    gpio: gpio::Gpio,
 
     #[cfg(feature = "mqtt")]
     pub mqtt: mqtt::OSMqtt,
 
-    pub status: ControllerStatus,
-    pub old_status: ControllerStatus,
+    pub status_current: ControllerStatus,
+    pub status_last: ControllerStatus,
 
     // Number of controller boards (including "master")
     //pub nboards: usize,
@@ -188,12 +185,15 @@ pub struct OpenSprinkler {
     pub weather_status: weather::WeatherStatus,
 
     /// time when controller is powered up most recently (seconds)
-    /// 
+    ///
     /// When the program was started
     boot_time: chrono::DateTime<chrono::Utc>,
 
     /// Last reboot cause
     last_reboot_cause: RebootCause,
+
+    sar__next_sid_to_refresh: usize,
+    sar__last_now: i64,
 }
 
 impl OpenSprinkler {
@@ -203,7 +203,7 @@ impl OpenSprinkler {
         //let stations = station::default();
         //let programs = Vec::new();
 
-        let gpio = rppal::gpio::Gpio::new();
+        let gpio = gpio::Gpio::new();
         if let Err(ref error) = gpio {
             tracing::error!("Failed to obtain GPIO chip: {:?}", error);
         } else if gpio.is_ok() {
@@ -222,8 +222,8 @@ impl OpenSprinkler {
             #[cfg(feature = "mqtt")]
             mqtt: mqtt::OSMqtt::new(),
 
-            status: ControllerStatus::default(),
-            old_status: ControllerStatus::default(),
+            status_current: ControllerStatus::default(),
+            status_last: ControllerStatus::default(),
             sensor_status: sensor::init_vec(),
             //nboards,
             //nstations: nboards * SHIFT_REGISTER_LINES,
@@ -243,31 +243,36 @@ impl OpenSprinkler {
             //stations,
             //programs,
             last_reboot_cause: RebootCause::None,
+
+
+            // special station auto-refresh
+            sar__next_sid_to_refresh: station::MAX_NUM_STATIONS >> 1,
+            sar__last_now: 0,
         }
     }
 
-    fn setup_gpio_pins(gpio: &rppal::gpio::Gpio) {
-        if let Err(ref error) = gpio.get(gpio::pin::SHIFT_REGISTER_OE).and_then(|pin| Ok(pin.into_output().set_high())) {
+    fn setup_gpio_pins(gpio: &gpio::Gpio) {
+        if let Err(ref error) = gpio.get(gpio::SHIFT_REGISTER_OE).and_then(|pin| Ok(pin.into_output().set_high())) {
             tracing::error!("Failed to obtain output pin SHIFT_REGISTER_OE: {:?}", error);
         }
-        if let Err(ref error) = gpio.get(gpio::pin::SHIFT_REGISTER_LATCH).and_then(|pin| Ok(pin.into_output().set_high())) {
+        if let Err(ref error) = gpio.get(gpio::SHIFT_REGISTER_LATCH).and_then(|pin| Ok(pin.into_output().set_high())) {
             tracing::error!("Failed to obtain output pin SHIFT_REGISTER_LATCH: {:?}", error);
         }
-        if let Err(ref error) = gpio.get(gpio::pin::SHIFT_REGISTER_CLOCK).and_then(|pin| Ok(pin.into_output().set_high())) {
+        if let Err(ref error) = gpio.get(gpio::SHIFT_REGISTER_CLOCK).and_then(|pin| Ok(pin.into_output().set_high())) {
             tracing::error!("Failed to obtain output pin SHIFT_REGISTER_CLOCK: {:?}", error);
         }
-        if let Err(ref error) = gpio.get(gpio::pin::SHIFT_REGISTER_DATA).and_then(|pin| Ok(pin.into_output().set_high())) {
+        if let Err(ref error) = gpio.get(gpio::SHIFT_REGISTER_DATA).and_then(|pin| Ok(pin.into_output().set_high())) {
             tracing::error!("Failed to obtain output pin SHIFT_REGISTER_DATA: {:?}", error);
         }
-        if let Err(ref error) = gpio.get(gpio::pin::SENSOR_1).and_then(|pin| Ok(pin.into_input_pullup().set_reset_on_drop(false))) {
+        if let Err(ref error) = gpio.get(gpio::SENSOR_1).and_then(|pin| Ok(pin.into_input_pullup().set_reset_on_drop(false))) {
             // @todo Catch abnormal process terminations and reset pullup
             tracing::error!("Failed to obtain input pin SENSOR_1: {:?}", error);
         }
-        if let Err(ref error) = gpio.get(gpio::pin::SENSOR_2).and_then(|pin| Ok(pin.into_input_pullup().set_reset_on_drop(false))) {
+        if let Err(ref error) = gpio.get(gpio::SENSOR_2).and_then(|pin| Ok(pin.into_input_pullup().set_reset_on_drop(false))) {
             // @todo Catch abnormal process terminations and reset pullup
             tracing::error!("Failed to obtain input pin SENSOR_2: {:?}", error);
         }
-        if let Err(ref error) = gpio.get(gpio::pin::RF_TX).and_then(|pin| Ok(pin.into_output().set_low())) {
+        if let Err(ref error) = gpio.get(gpio::RF_TX).and_then(|pin| Ok(pin.into_output().set_low())) {
             tracing::error!("Failed to obtain output pin RF_TX: {:?}", error);
         }
     }
@@ -275,7 +280,7 @@ impl OpenSprinkler {
     // region: GETTERS
 
     /// Get the uptime of the system
-    /// 
+    ///
     /// Will return [None] if the uptime could not be obtained.
     pub fn get_system_uptime() -> Option<std::time::Duration> {
         #[cfg(unix)]
@@ -367,7 +372,7 @@ impl OpenSprinkler {
         }
     }
 
-    pub fn get_sensor_option(&self, i: usize) -> SensorOption {
+    pub fn get_sensor_normal_state(&self, i: usize) -> sensor::NormalState {
         // sensor_option: 0 if normally closed; 1 if normally open
         match i {
             //0 => self.iopts.sn1o,
@@ -446,14 +451,14 @@ impl OpenSprinkler {
     }
 
     pub fn check_reboot_request(&mut self, now_seconds: i64) {
-        if self.status.safe_reboot && (now_seconds > self.status.reboot_timer) {
+        if self.status_current.safe_reboot && (now_seconds > self.status_current.reboot_timer) {
             // if no program is running at the moment and if no program is scheduled to run in the next minute
             //if !open_sprinkler.status.program_busy && !program_pending_soon(&open_sprinkler, &program_data, now_seconds + 60) {
-            if !self.status.program_busy && !self.program_pending_soon(now_seconds + 60) {
+            if !self.status_current.program_busy && !self.program_pending_soon(now_seconds + 60) {
                 //open_sprinkler.reboot_dev(open_sprinkler.nvdata.reboot_cause);
                 self.reboot_dev(self.controller_config.reboot_cause);
             }
-        } else if self.status.reboot_timer != 0 && (now_seconds > self.status.reboot_timer) {
+        } else if self.status_current.reboot_timer != 0 && (now_seconds > self.status_current.reboot_timer) {
             self.reboot_dev(RebootCause::Timer);
         }
     }
@@ -516,73 +521,130 @@ impl OpenSprinkler {
     // @todo Implement crate *self_update* for updates
     //pub fn update_dev() {}
 
+    pub fn flow_poll(&mut self) {
+        #[cfg(not(feature = "demo"))]
+        let sensor1_pin = self.gpio.get(gpio::SENSOR_1).and_then(|pin| Ok(pin.into_input()));
+        #[cfg(feature = "demo")]
+        let sensor1_pin = demo::get_gpio_pin(gpio::SENSOR_1);
+
+        if let Err(ref error) = sensor1_pin {
+            tracing::error!("Failed to obtain sensor input pin (flow): {:?}", error);
+        } else if let Ok(pin) = sensor1_pin {
+            // Perform calculations using the current state of the sensor
+            self.flow_state.poll(pin.read());
+        }
+    }
+
     /// Apply all station bits
     ///
     /// **This will actuate valves**
     pub fn apply_all_station_bits(&mut self) {
         #[cfg(not(feature = "demo"))]
-        let mut shift_register_latch = self.gpio.get(gpio::pin::SHIFT_REGISTER_LATCH).and_then(|pin| Ok(pin.into_output()));
+        let shift_register_latch = self.gpio.get(gpio::SHIFT_REGISTER_LATCH).and_then(|pin| Ok(pin.into_output()));
         #[cfg(feature = "demo")]
-        let mut shift_register_latch = demo::get_gpio_pin(gpio::pin::SHIFT_REGISTER_LATCH);
+        let shift_register_latch = demo::get_gpio_pin(gpio::SHIFT_REGISTER_LATCH);
         if let Err(ref error) = shift_register_latch {
             tracing::error!("Failed to obtain output pin shift_register_latch: {:?}", error);
         }
 
         #[cfg(not(feature = "demo"))]
-        let mut shift_register_clock = self.gpio.get(gpio::pin::SHIFT_REGISTER_CLOCK).and_then(|pin| Ok(pin.into_output()));
+        let shift_register_clock = self.gpio.get(gpio::SHIFT_REGISTER_CLOCK).and_then(|pin| Ok(pin.into_output()));
         #[cfg(feature = "demo")]
-        let mut shift_register_clock = demo::get_gpio_pin(gpio::pin::SHIFT_REGISTER_CLOCK);
+        let shift_register_clock = demo::get_gpio_pin(gpio::SHIFT_REGISTER_CLOCK);
         if let Err(ref error) = shift_register_clock {
             tracing::error!("Failed to obtain output pin shift_register_clock: {:?}", error);
         }
 
         #[cfg(not(feature = "demo"))]
-        let mut shift_register_data = self.gpio.get(gpio::pin::SHIFT_REGISTER_DATA).and_then(|pin| Ok(pin.into_output()));
+        let shift_register_data = self.gpio.get(gpio::SHIFT_REGISTER_DATA).and_then(|pin| Ok(pin.into_output()));
         #[cfg(feature = "demo")]
-        let mut shift_register_data = demo::get_gpio_pin(gpio::pin::SHIFT_REGISTER_DATA);
+        let shift_register_data = demo::get_gpio_pin(gpio::SHIFT_REGISTER_DATA);
         if let Err(ref error) = shift_register_data {
             tracing::error!("Failed to obtain output pin shift_register_data: {:?}", error);
         }
 
         if shift_register_latch.is_ok() && shift_register_clock.is_ok() && shift_register_data.is_ok() {
-            shift_register_latch.as_mut().and_then(|pin| Ok(pin.set_low()));
+            let mut shift_register_latch = shift_register_latch.unwrap();
+            let mut shift_register_clock = shift_register_clock.unwrap();
+            let mut shift_register_data = shift_register_data.unwrap();
+
+            shift_register_latch.set_low();
 
             // Shift out all station bit values from the highest bit to the lowest
             for board_index in 0..station::MAX_EXT_BOARDS {
-                let sbits = if self.status.enabled { self.station_bits[station::MAX_EXT_BOARDS - board_index] } else { 0 };
+                let sbits = if self.status_current.enabled { self.station_bits[station::MAX_EXT_BOARDS - board_index] } else { 0 };
 
                 for s in 0..SHIFT_REGISTER_LINES {
-                    shift_register_clock.as_mut().and_then(|pin| Ok(pin.set_low()));
+                    shift_register_clock.set_low();
 
                     if sbits & (1 << (7 - s)) != 0 {
-                        shift_register_data.as_mut().and_then(|pin| Ok(pin.set_high()));
-                        shift_register_data.as_mut().and_then(|pin| Ok(pin.set_low()));
+                        shift_register_data.set_high();
+                        shift_register_data.set_low();
                     }
 
-                    shift_register_clock.as_mut().and_then(|pin| Ok(pin.set_high()));
+                    shift_register_clock.set_high();
                 }
             }
 
-            shift_register_latch.as_mut().and_then(|pin| Ok(pin.set_high()));
+            shift_register_latch.set_high();
         }
 
-        //if self.iopts.sar == 1 {
+        
         if self.controller_config.sar {
-            // Handle refresh of special stations. We refresh station that is next in line
+            self.do_sar();
+        }
+    }
 
-            let mut next_sid_to_refresh = station::MAX_NUM_STATIONS >> 1;
-            let mut last_now = 0;
-            let now = chrono::Utc::now().timestamp();
+    /// Handle refresh of special stations
+    /// 
+    /// Original implementation details: [OpenSprinkler/OpenSprinkler-Firmware@d8c1bc0](https://github.com/OpenSprinkler/OpenSprinkler-Firmware/commit/d8c1bc0)
+    /// 
+    /// Refresh station that is next in line. This deliberately starts with station `101` to avoid startup delays.
+    /// 
+    /// @todo Async
+    fn do_sar(&mut self) {
+        let now = chrono::Utc::now().timestamp();
 
-            if now > last_now {
-                // Perform this no more than once per second
-                // @fixme variable lifetime
-                last_now = now;
-                next_sid_to_refresh = (next_sid_to_refresh + 1) % station::MAX_NUM_STATIONS;
-                let board_index = next_sid_to_refresh >> 3;
-                let s = next_sid_to_refresh & 0x07;
-                self.switch_special_station(next_sid_to_refresh, (self.station_bits[board_index] >> s) & 0x01 != 0);
+        if now > self.sar__last_now {
+            // Perform this no more than once per second
+            // @fixme variable lifetime
+            self.sar__last_now = now;
+            self.sar__next_sid_to_refresh = (self.sar__next_sid_to_refresh + 1) % station::MAX_NUM_STATIONS;
+            let board_index = self.sar__next_sid_to_refresh >> 3;
+            let s = self.sar__next_sid_to_refresh & 0x07;
+            self.switch_special_station(self.sar__next_sid_to_refresh, (self.station_bits[board_index] >> s) & 0x01 != 0);
+        }
+    }
+
+    /// Check rain delay status
+    pub fn check_rain_delay_status(&mut self, now_seconds: i64) {
+        if self.status_current.rain_delayed {
+            //if now_seconds >= open_sprinkler.nvdata.rd_stop_time.unwrap_or(0) {
+            if now_seconds >= self.controller_config.rd_stop_time.unwrap_or(0) {
+                // rain delay is over
+                self.rain_delay_stop();
             }
+        } else {
+            //if open_sprinkler.nvdata.rd_stop_time.unwrap_or(0) > now_seconds {
+            if self.controller_config.rd_stop_time.unwrap_or(0) > now_seconds {
+                // rain delay starts now
+                self.rain_delay_start();
+            }
+        }
+
+        // Check controller status changes and write log
+        if self.status_last.rain_delayed != self.status_current.rain_delayed {
+            if self.status_current.rain_delayed {
+                // rain delay started, record time
+                self.raindelay_on_last_time = now_seconds.try_into().unwrap();
+                /* push_message(&open_sprinkler, NotifyEvent::RainDelay, RainDelay::new(true)); */
+            } else {
+                // rain delay stopped, write log
+                let _ = log::write_log_message(&self, &log::message::SensorMessage::new(log::LogDataType::RainDelay, now_seconds), now_seconds);
+                /* push_message(&open_sprinkler, NotifyEvent::RainDelay, RainDelay::new(false)); */
+            }
+            events::push_message(&self, &events::RainDelayEvent::new(true));
+            self.status_last.rain_delayed = self.status_current.rain_delayed;
         }
     }
 
@@ -590,16 +652,16 @@ impl OpenSprinkler {
         let sensor_type = self.get_sensor_type(i);
 
         if sensor_type == SensorType::Rain || sensor_type == SensorType::Soil {
-            self.status.sensors[i].detected = self.get_sensor_detected(i);
+            self.status_current.sensors[i].detected = self.get_sensor_detected(i);
 
-            if self.status.sensors[i].detected {
+            if self.status_current.sensors[i].detected {
                 if self.sensor_status[i].on_timer.is_none() {
                     // add minimum of 5 seconds on-delay
                     self.sensor_status[i].on_timer = Some(max(self.get_sensor_on_delay(i) * 60, MINIMUM_ON_DELAY).into());
                     self.sensor_status[i].off_timer = Some(0);
                 } else {
                     if now_seconds > self.sensor_status[i].on_timer.unwrap_or(0) {
-                        self.status.sensors[i].active = true;
+                        self.status_current.sensors[i].active = true;
                     }
                 }
             } else {
@@ -609,7 +671,7 @@ impl OpenSprinkler {
                     self.sensor_status[i].on_timer = Some(0);
                 } else {
                     if now_seconds > self.sensor_status[i].off_timer.unwrap_or(0) {
-                        self.status.sensors[i].active = false;
+                        self.status_current.sensors[i].active = false;
                     }
                 }
             }
@@ -617,7 +679,7 @@ impl OpenSprinkler {
     }
 
     /// Read sensor status
-    pub fn detect_binary_sensor_status(&mut self, now_seconds: i64) {
+    fn detect_binary_sensor_status(&mut self, now_seconds: i64) {
         if cfg!(use_sensor_1) {
             self.detect_sensor_status(0, now_seconds);
         }
@@ -627,19 +689,85 @@ impl OpenSprinkler {
         }
     }
 
-    /// Get sensor detected
+    /// Check binary sensor status (e.g. rain, soil)
+    pub fn check_binary_sensor_status(&mut self, now_seconds: i64) {
+        self.detect_binary_sensor_status(now_seconds);
+
+        if self.status_last.sensors[0].active != self.status_current.sensors[0].active {
+            // send notification when sensor becomes active
+            if self.status_current.sensors[0].active {
+                self.sensor_status[0].active_last_time = Some(now_seconds);
+            } else {
+                let _ = log::write_log_message(&self, &log::message::SensorMessage::new(log::LogDataType::Sensor1, now_seconds), now_seconds);
+            }
+            events::push_message(&self, &events::BinarySensorEvent::new(0, self.status_current.sensors[0].active));
+        }
+        self.status_last.sensors[0].active = self.status_current.sensors[0].active;
+    }
+
+    /// Check program switch status
+    pub fn check_program_switch_status(&mut self, program_data: &mut program::ProgramQueue) {
+        let program_switch = self.detect_program_switch_status();
+        if program_switch[0] == true || program_switch[1] == true {
+            self.reset_all_stations_immediate(program_data); // immediately stop all stations
+        }
+
+        for i in 0..MAX_SENSORS {
+            //if program_data.nprograms > i {
+            if self.controller_config.programs.len() > i {
+                //manual_start_program(open_sprinkler, flow_state, program_data, i + 1, false);
+                scheduler::manual_start_program(self, program_data, i + 1, false);
+            }
+        }
+    }
+
+    /// Immediately reset all stations
     ///
-    /// If sensor is "normally open" -
+    /// No log records will be written
+    pub fn reset_all_stations_immediate(&mut self, program_data: &mut program::ProgramQueue) {
+        self.clear_all_station_bits();
+        self.apply_all_station_bits();
+        program_data.reset_runtime();
+    }
+
+    /// Check and process special program command
+    pub fn process_special_program_command(&mut self, now_seconds: i64, program_name: &String) -> bool {
+        if !program_name.starts_with(':') {
+            return false;
+        }
+
+        if program_name == SPECIAL_CMD_REBOOT_NOW || program_name == SPECIAL_CMD_REBOOT {
+            // reboot regardless of program status
+            self.status_current.safe_reboot = match program_name.as_str() {
+                SPECIAL_CMD_REBOOT_NOW => false,
+                SPECIAL_CMD_REBOOT => true,
+                _ => true,
+            };
+            // set a timer to reboot in 65 seconds
+            self.status_current.reboot_timer = now_seconds + REBOOT_DELAY;
+            // this is to avoid the same command being executed again right after reboot
+            return true;
+        }
+
+        false
+    }
+
+    /// Gets the current state of the sensor (evaluates the normal state)
+    ///
+    /// |                               | [gpio::Level::Low] | [gpio::Level::High] |
+    /// | ----------------------------- | ------------------ | ------------------- |
+    /// | [sensor::NormalState::Closed] | [false]            | [true]              |
+    /// | [sensor::NormalState::Open]   | [true]             | [false]             |
     fn get_sensor_detected(&self, i: usize) -> bool {
-        let sensor_option = self.get_sensor_option(i);
+        let normal_state = self.get_sensor_normal_state(i);
 
         let pin = match i {
-            0 => gpio::pin::SENSOR_1,
-            1 => gpio::pin::SENSOR_2,
+            0 => gpio::SENSOR_1,
+            1 => gpio::SENSOR_2,
             _ => unreachable!(),
         };
 
-        tracing::trace!("Reading sensor {}@bcm_pin_{} ({})", i, pin, if sensor_option == SensorOption::NormallyClosed { "NC" } else { "NO" });
+        tracing::trace!("Reading sensor {}@bcm_pin_{} ({})", i, pin, normal_state);
 
         #[cfg(not(feature = "demo"))]
         let sensor_pin = self.gpio.get(pin).and_then(|pin| Ok(pin.into_input()));
@@ -652,28 +780,14 @@ impl OpenSprinkler {
             return false;
         } else {
             return match sensor_pin.unwrap().read() {
-                rppal::gpio::Level::Low => {
-                    /* if sensor_option == SensorOption::NormallyOpen {
-                        false
-                    } else {
-                        true
-                    } */
-                    match sensor_option {
-                        SensorOption::NormallyClosed => true,
-                        SensorOption::NormallyOpen => false,
-                    }
-                }
-                rppal::gpio::Level::High => {
-                    /* if sensor_option == SensorOption::NormallyClosed {
-                        false
-                    } else {
-                        true
-                    } */
-                    match sensor_option {
-                        SensorOption::NormallyClosed => false,
-                        SensorOption::NormallyOpen => true,
-                    }
-                }
+                gpio::Level::Low => match normal_state {
+                    sensor::NormalState::Closed => false,
+                    sensor::NormalState::Open => true,
+                },
+                gpio::Level::High => match normal_state {
+                    sensor::NormalState::Closed => true,
+                    sensor::NormalState::Open => false,
+                },
             };
         }
     }
@@ -684,9 +798,9 @@ impl OpenSprinkler {
 
         for i in 0..MAX_SENSORS {
             if self.get_sensor_type(i) == SensorType::ProgramSwitch {
-                self.status.sensors[i].detected = self.get_sensor_detected(i);
+                self.status_current.sensors[i].detected = self.get_sensor_detected(i);
 
-                self.sensor_status[i].history = (self.sensor_status[i].history << 1) | if self.status.sensors[i].detected { 1 } else { 0 };
+                self.sensor_status[i].history = (self.sensor_status[i].history << 1) | if self.status_current.sensors[i].detected { 1 } else { 0 };
 
                 // basic noise filtering: only trigger if sensor matches pattern:
                 // i.e. two consecutive lows followed by two consecutive highs
@@ -709,10 +823,10 @@ impl OpenSprinkler {
 
         self.sensor_status = sensor::init_vec();
 
-        self.old_status.sensors[0].active = false;
-        self.status.sensors[0].active = false;
-        self.old_status.sensors[1].active = false;
-        self.status.sensors[1].active = false;
+        self.status_last.sensors[0].active = false;
+        self.status_current.sensors[0].active = false;
+        self.status_last.sensors[1].active = false;
+        self.status_current.sensors[1].active = false;
     }
 
     /// Switch Radio Frequency (RF) station
@@ -779,12 +893,10 @@ impl OpenSprinkler {
         }; */
 
         // @todo log request failures
-        let response = reqwest::blocking::Client::new().get(host).query(&http::request::RemoteStationRequestParametersV219::new(
-            &self.controller_config.dkey,
-            data.sid,
-            value,
-            timer,
-        )).send();
+        let response = reqwest::blocking::Client::new()
+            .get(host)
+            .query(&http::request::RemoteStationRequestParametersV219::new(&self.controller_config.dkey, data.sid, value, timer))
+            .send();
 
         if let Err(error) = response {
             tracing::error!("[Remote Station] HTTP request error: {:?}", error);
@@ -916,7 +1028,7 @@ impl OpenSprinkler {
         //self.nboards = self.iopts.ext + 1;
         //self.nstations = self.nboards * SHIFT_REGISTER_LINES;
         //self.status.enabled = match self.iopts.den {
-        self.status.enabled = self.controller_config.den;
+        self.status_current.enabled = self.controller_config.den;
     }
 
     /*     /// Load a string option from file into a buffer.
@@ -950,7 +1062,7 @@ impl OpenSprinkler {
 
     /// Enable controller operation
     pub fn enable(&mut self) {
-        self.status.enabled = true;
+        self.status_current.enabled = true;
         //self.iopts.den = 1;
         self.controller_config.den = true;
         self.iopts_save();
@@ -958,7 +1070,7 @@ impl OpenSprinkler {
 
     /// Disable controller operation
     pub fn disable(&mut self) {
-        self.status.enabled = false;
+        self.status_current.enabled = false;
         //self.iopts.den = 0;
         self.controller_config.den = false;
         self.iopts_save();
@@ -966,13 +1078,13 @@ impl OpenSprinkler {
 
     /// Start rain delay
     pub fn rain_delay_start(&mut self) {
-        self.status.rain_delayed = true;
+        self.status_current.rain_delayed = true;
         self.nvdata_save();
     }
 
     /// Stop rain delay
     pub fn rain_delay_stop(&mut self) {
-        self.status.rain_delayed = false;
+        self.status_current.rain_delayed = false;
         //self.nvdata.rd_stop_time = None;
         self.controller_config.rd_stop_time = None;
         self.nvdata_save();
@@ -1014,6 +1126,61 @@ impl OpenSprinkler {
     pub fn clear_all_station_bits(&mut self) {
         for i in 0..station::MAX_NUM_STATIONS {
             self.set_station_bit(i, false);
+        }
+    }
+
+    /// Process dynamic events
+    ///
+    /// Processes events such as: Rain delay, rain sensing, station state changes, etc.
+    pub fn process_dynamic_events(&mut self, program_data: &mut program::ProgramQueue, now_seconds: i64) {
+        let sn1 = (self.get_sensor_type(0) == SensorType::Rain || self.get_sensor_type(0) == SensorType::Soil) && self.status_current.sensors[0].active;
+        let sn2 = (self.get_sensor_type(1) == SensorType::Rain || self.get_sensor_type(1) == SensorType::Soil) && self.status_current.sensors[1].active;
+
+        for board_index in 0..self.get_board_count() {
+            for line in 0..SHIFT_REGISTER_LINES {
+                let station_index = board_index * SHIFT_REGISTER_LINES + line;
+
+                // Ignore master stations because they are handled separately
+                if self.is_master_station(station_index) {
+                    continue;
+                }
+
+                // If this is a normal program (not a run-once or test program)
+                // and either the controller is disabled, or
+                // if raining and ignore rain bit is cleared
+                // @FIXME
+                let qid = program_data.station_qid[station_index];
+                if qid == 255 {
+                    continue;
+                }
+
+                let q = program_data.queue.get(qid).unwrap();
+
+                if q.pid >= program::TEST_PROGRAM_ID {
+                    // This is a manually started program, skip
+                    continue;
+                }
+
+                // If system is disabled, turn off zone
+                if !self.status_current.enabled {
+                    controller::turn_off_station(self, program_data, now_seconds, station_index);
+                }
+
+                // if rain delay is on and zone does not ignore rain delay, turn it off
+                if self.status_current.rain_delayed && !self.controller_config.stations[station_index].attrib.igrd {
+                    controller::turn_off_station(self, program_data, now_seconds, station_index);
+                }
+
+                // if sensor1 is on and zone does not ignore sensor1, turn it off
+                if sn1 && !self.controller_config.stations[station_index].attrib.igs {
+                    controller::turn_off_station(self, program_data, now_seconds, station_index);
+                }
+
+                // if sensor2 is on and zone does not ignore sensor2, turn it off
+                if sn2 && !self.controller_config.stations[station_index].attrib.igs2 {
+                    controller::turn_off_station(self, program_data, now_seconds, station_index);
+                }
+            }
         }
     }
 }

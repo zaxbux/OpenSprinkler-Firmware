@@ -1,5 +1,7 @@
 pub mod flow;
 
+use core::fmt;
+
 use serde::{Serialize, Deserialize};
 
 #[derive(PartialEq)]
@@ -21,9 +23,18 @@ pub enum SensorType {
 
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[repr(u8)]
-pub enum SensorOption {
-    NormallyClosed = 0,
-    NormallyOpen = 1,
+pub enum NormalState {
+    Closed = 0,
+    Open = 1,
+}
+
+impl fmt::Display for NormalState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            Self::Closed => write!(f, "NC"),
+            Self::Open => write!(f, "NO"),
+        }
+    }
 }
 
 #[derive(Default)]
