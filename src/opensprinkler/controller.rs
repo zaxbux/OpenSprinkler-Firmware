@@ -1,6 +1,6 @@
 use crate::utils;
 
-use super::{OpenSprinkler, StationBitChange, events, program::ProgramData, sensor::SensorType, log};
+use super::{OpenSprinkler, StationBitChange, events, program::ProgramQueue, sensor::SensorType, log};
 
 /// Turn on a station
 //pub fn turn_on_station(open_sprinkler: &mut OpenSprinkler, flow_state: &mut FlowSensor, station_id: usize) {
@@ -32,7 +32,7 @@ pub fn turn_on_station(open_sprinkler: &mut OpenSprinkler, station_id: usize) {
 ///
 /// @todo Make member of [OpenSprinkler]
 //pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, flow_state: &mut FlowSensor, program_data: &mut ProgramData, now_seconds: i64, station_id: usize) {
-pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, program_data: &mut ProgramData, now_seconds: i64, station_id: usize) {
+pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, program_data: &mut ProgramQueue, now_seconds: i64, station_id: usize) {
     open_sprinkler.set_station_bit(station_id, false);
 
     let qid = program_data.station_qid[station_id];
@@ -97,7 +97,7 @@ pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, program_data: &mut P
 /// Actuate master stations based on need
 ///
 /// This function iterates over all stations and activates the necessary "master" station.
-pub fn activate_master_station(master: usize, open_sprinkler: &mut OpenSprinkler, program_data: &ProgramData, now_seconds: i64) {
+pub fn activate_master_station(master: usize, open_sprinkler: &mut OpenSprinkler, program_data: &ProgramQueue, now_seconds: i64) {
     let mas = match master {
         0 => open_sprinkler.status.mas.unwrap_or(0),
         1 => open_sprinkler.status.mas2.unwrap_or(0),

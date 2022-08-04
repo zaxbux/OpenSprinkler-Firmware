@@ -11,7 +11,7 @@ use std::thread;
 use tracing_subscriber::FmtSubscriber;
 
 use opensprinkler::events::{push_message, RebootEvent, WeatherUpdateEvent};
-use opensprinkler::program::ProgramData;
+use opensprinkler::program::ProgramQueue;
 use opensprinkler::sensor::SensorType;
 use opensprinkler::weather::{check_weather, WeatherUpdateFlag};
 use opensprinkler::OpenSprinkler;
@@ -73,7 +73,7 @@ fn main() {
     open_sprinkler.options_setup();
 
     // ProgramData initialization
-    let mut program_data = ProgramData::new();
+    let mut program_data = ProgramQueue::new();
 
     //let mut flow_state = FlowSensor::default();
 
@@ -169,16 +169,7 @@ fn main() {
             open_sprinkler.apply_all_station_bits();
 
             // Handle reboot request
-            if open_sprinkler.status.safe_reboot && (now_seconds > open_sprinkler.status.reboot_timer) {
-                // if no program is running at the moment and if no program is scheduled to run in the next minute
-                //if !open_sprinkler.status.program_busy && !program_pending_soon(&open_sprinkler, &program_data, now_seconds + 60) {
-                if !open_sprinkler.status.program_busy && !program_pending_soon(&open_sprinkler, now_seconds + 60) {
-                    //open_sprinkler.reboot_dev(open_sprinkler.nvdata.reboot_cause);
-                    open_sprinkler.reboot_dev(open_sprinkler.controller_config.reboot_cause);
-                }
-            } else if open_sprinkler.status.reboot_timer != 0 && (now_seconds > open_sprinkler.status.reboot_timer) {
-                open_sprinkler.reboot_dev(RebootCause::Timer);
-            }
+            open_sprinkler.check_reboot_request(now_seconds);
 
             // Push reboot notification on startup
             // @todo move outside of loop?
@@ -209,21 +200,4 @@ fn main() {
     }
 
     tracing::info!("Got Ctrl-C, exiting...");
-}
-
-//fn program_pending_soon(open_sprinkler: &OpenSprinkler, program_data: &ProgramData, timestamp: i64) -> bool {
-fn program_pending_soon(open_sprinkler: &OpenSprinkler, timestamp: i64) -> bool {
-    //let mut program_pending_soon = false;
-    //for program_index in 0..program_data.nprograms {
-    for program in open_sprinkler.controller_config.programs.iter() {
-        //if program_data.read(program_index).unwrap().check_match(&open_sprinkler, timestamp) {
-        if program.check_match(&open_sprinkler, timestamp) {
-            //program_pending_soon = true;
-            //break;
-            return true;
-        }
-    }
-
-    //program_pending_soon
-    return false;
 }

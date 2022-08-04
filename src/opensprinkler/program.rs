@@ -244,7 +244,7 @@ impl Program {
 }
 
 #[derive(Clone)]
-pub struct RuntimeQueueStruct {
+pub struct ProgramQueueElement {
     /// Start time
     pub start_time: i64,
     /// Water time
@@ -255,8 +255,8 @@ pub struct RuntimeQueueStruct {
     pub pid: usize,
 }
 
-pub struct ProgramData {
-    pub queue: std::collections::VecDeque<RuntimeQueueStruct>,
+pub struct ProgramQueue {
+    pub queue: std::collections::VecDeque<ProgramQueueElement>,
 
     /// this array stores the queue element index for each scheduled station
     pub station_qid: [usize; station::MAX_NUM_STATIONS],
@@ -266,9 +266,9 @@ pub struct ProgramData {
     // the last stop time of a sequential station
     pub last_seq_stop_time: Option<i64>,
 }
-impl ProgramData {
-    pub fn new() -> ProgramData {
-        let mut r = ProgramData {
+impl ProgramQueue {
+    pub fn new() -> ProgramQueue {
+        let mut r = ProgramQueue {
             queue: std::collections::VecDeque::new(),
             station_qid: [0xFFusize; station::MAX_NUM_STATIONS],
             //nprograms: 0,
@@ -288,7 +288,7 @@ impl ProgramData {
     }
 
     // this returns a pointer to the next available slot in the queue
-    pub fn enqueue(&mut self, value: RuntimeQueueStruct) -> result::Result<&mut RuntimeQueueStruct> {
+    pub fn enqueue(&mut self, value: ProgramQueueElement) -> result::Result<&mut ProgramQueueElement> {
         if self.queue.len() < RUNTIME_QUEUE_SIZE {
             self.queue.push_back(value);
             return Ok(self.queue.back_mut().unwrap());

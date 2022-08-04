@@ -3,12 +3,12 @@ use crate::{utils::{water_time_decode_signed, water_time_resolve}, opensprinkler
 use super::{
     demo,
     log::{self, LogDataType},
-    program::{Program, RuntimeQueueStruct, MANUAL_PROGRAM_ID, TEST_PROGRAM_ID},
+    program::{Program, ProgramQueueElement, MANUAL_PROGRAM_ID, TEST_PROGRAM_ID},
     sensor::MAX_SENSORS,
     OpenSprinkler, SensorType, REBOOT_DELAY, SHIFT_REGISTER_LINES, controller,
 };
 
-use super::program::ProgramData;
+use super::program::ProgramQueue;
 
 //pub fn flow_poll(open_sprinkler: &OpenSprinkler, flow_state: &mut FlowSensor) {
 pub fn flow_poll(open_sprinkler: &mut OpenSprinkler) {
@@ -72,7 +72,7 @@ pub fn check_binary_sensor_status(open_sprinkler: &mut OpenSprinkler, now_second
 }
 
 //pub fn check_program_switch_status(open_sprinkler: &mut OpenSprinkler, flow_state: &mut FlowSensor, program_data: &mut ProgramData) {
-pub fn check_program_switch_status(open_sprinkler: &mut OpenSprinkler, program_data: &mut ProgramData) {
+pub fn check_program_switch_status(open_sprinkler: &mut OpenSprinkler, program_data: &mut ProgramQueue) {
     let program_switch = open_sprinkler.detect_program_switch_status();
     if program_switch[0] == true || program_switch[1] == true {
         reset_all_stations_immediate(open_sprinkler, program_data); // immediately stop all stations
@@ -91,7 +91,7 @@ pub fn check_program_switch_status(open_sprinkler: &mut OpenSprinkler, program_d
 ///
 /// Processes events such as: Rain delay, rain sensing, station state changes, etc.
 //pub fn process_dynamic_events(open_sprinkler: &mut OpenSprinkler, program_data: &mut ProgramData, flow_state: &mut FlowSensor, now_seconds: i64) {
-pub fn process_dynamic_events(open_sprinkler: &mut OpenSprinkler, program_data: &mut ProgramData, now_seconds: i64) {
+pub fn process_dynamic_events(open_sprinkler: &mut OpenSprinkler, program_data: &mut ProgramQueue, now_seconds: i64) {
     // Check if rain is detected
     /* let sn1 = if (open_sprinkler.iopts.sn1t == SensorType::Rain as u8 || open_sprinkler.iopts.sn1t == SensorType::Soil as u8) && open_sprinkler.status.sensors[0].active {
         true
@@ -201,7 +201,7 @@ fn process_special_program_command(open_sprinkler: &mut OpenSprinkler, now_secon
 ///
 /// This function loops through the queue and schedules the start time of each station
 //pub fn schedule_all_stations(open_sprinkler: &mut OpenSprinkler, flow_state: &mut FlowSensor, program_data: &mut ProgramData, now_seconds: i64) {
-fn schedule_all_stations(open_sprinkler: &mut OpenSprinkler, program_data: &mut ProgramData, now_seconds: i64) {
+fn schedule_all_stations(open_sprinkler: &mut OpenSprinkler, program_data: &mut ProgramQueue, now_seconds: i64) {
     tracing::trace!("Scheduling all stations");
     let mut con_start_time = now_seconds + 1; // concurrent start time
     let mut seq_start_time = con_start_time; // sequential start time
@@ -264,7 +264,7 @@ fn schedule_all_stations(open_sprinkler: &mut OpenSprinkler, program_data: &mut 
 /// Immediately reset all stations
 ///
 /// No log records will be written
-fn reset_all_stations_immediate(open_sprinkler: &mut OpenSprinkler, program_data: &mut ProgramData) {
+fn reset_all_stations_immediate(open_sprinkler: &mut OpenSprinkler, program_data: &mut ProgramQueue) {
     open_sprinkler.clear_all_station_bits();
     open_sprinkler.apply_all_station_bits();
     program_data.reset_runtime();
@@ -275,7 +275,7 @@ fn reset_all_stations_immediate(open_sprinkler: &mut OpenSprinkler, program_data
 /// This function sets the duration of every station to 0, which causes all stations to turn off in the next processing cycle.
 /// Stations will be logged
 /// @todo Move into [ProgramData]
-fn reset_all_stations(program_data: &mut ProgramData) {
+fn reset_all_stations(program_data: &mut ProgramQueue) {
     // go through runtime queue and assign water time to 0
     for q in program_data.queue.iter_mut() {
         q.water_time = 0;
@@ -288,7 +288,7 @@ fn reset_all_stations(program_data: &mut ProgramData) {
 /// - If `pid == 255`,	this is a short test program (2 second per station)
 /// - If `pid > 0`,		run program `pid - 1`
 //fn manual_start_program(open_sprinkler: &mut OpenSprinkler, flow_state: &mut FlowSensor, program_data: &mut ProgramData, pid: usize, uwt: bool) {
-fn manual_start_program(open_sprinkler: &mut OpenSprinkler, program_data: &mut ProgramData, pid: usize, uwt: bool) {
+fn manual_start_program(open_sprinkler: &mut OpenSprinkler, program_data: &mut ProgramQueue, pid: usize, uwt: bool) {
     let mut match_found = false;
     reset_all_stations_immediate(open_sprinkler, program_data);
     //let sid: u8;
@@ -328,7 +328,7 @@ fn manual_start_program(open_sprinkler: &mut OpenSprinkler, program_data: &mut P
         //if water_time > 0 && !open_sprinkler.stations[sid].attrib.dis {
         if water_time > 0 && !open_sprinkler.controller_config.stations.get(station_index).unwrap().attrib.dis {
             if program_data
-                .enqueue(RuntimeQueueStruct {
+                .enqueue(ProgramQueueElement {
                     start_time: 0,
                     water_time,
                     sid: station_index,
@@ -347,7 +347,7 @@ fn manual_start_program(open_sprinkler: &mut OpenSprinkler, program_data: &mut P
     }
 }
 
-pub fn check_program_schedule(open_sprinkler: &mut OpenSprinkler, program_data: &mut ProgramData, now_seconds: i64) {
+pub fn check_program_schedule(open_sprinkler: &mut OpenSprinkler, program_data: &mut ProgramQueue, now_seconds: i64) {
     tracing::trace!("Checking program schedule");
     let mut match_found = false;
 
@@ -396,7 +396,7 @@ pub fn check_program_schedule(open_sprinkler: &mut OpenSprinkler, program_data: 
                     if water_time > 0 {
                         // check if water time is still valid
                         // because it may end up being zero after scaling
-                        let q = program_data.enqueue(RuntimeQueueStruct {
+                        let q = program_data.enqueue(ProgramQueueElement {
                             start_time: 0,
                             water_time,
                             sid: station_index,

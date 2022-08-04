@@ -1,6 +1,6 @@
-use super::{OpenSprinkler, program::ProgramData, station::SHIFT_REGISTER_LINES, events, sensor::SensorType, log, controller, loop_fns};
+use super::{OpenSprinkler, program::ProgramQueue, station::SHIFT_REGISTER_LINES, events, sensor::SensorType, log, controller, loop_fns};
 
-pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, program_data: &mut ProgramData, now_seconds: i64) {
+pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, program_data: &mut ProgramQueue, now_seconds: i64) {
 	// first, go through run time queue to assign queue elements to stations
 	let mut qid = 0;
 	for q in program_data.queue.iter() {
@@ -123,7 +123,7 @@ pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, program_data: &mut Pr
 /// This removes queue elements if:
 /// - water_time is not greater than zero; or
 /// - if current time is greater than element duration
-fn clean_queue(program_data: &mut ProgramData, now_seconds: i64) {
+fn clean_queue(program_data: &mut ProgramQueue, now_seconds: i64) {
     /* let mut qi = program_data.queue.len() as i64 - 1;
     while qi >= 0 {
         let q = program_data.queue.get(qi).unwrap();

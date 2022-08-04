@@ -60,9 +60,9 @@ pub struct ControllerStatus {
     pub rain_delayed: bool,
     // sensor1 status bit (when set, sensor1 on is detected)
     //pub sensor1: bool,
-    /// HIGH means a program is being executed currently
+    /// [true] means a program is being executed currently
     pub program_busy: bool,
-    /// HIGH means a safe reboot has been marked
+    /// [true] means a safe reboot has been marked
     pub safe_reboot: bool,
     /// master station index
     pub mas: Option<usize>,
@@ -427,6 +427,36 @@ impl OpenSprinkler {
             self.flow_count_rt = max(0, self.flow_state.get_flow_count() - self.flow_count_rt_start); // @fixme subtraction overflow
             self.flow_count_rt_start = self.flow_state.get_flow_count();
         }
+    }
+
+    pub fn check_reboot_request(&mut self, now_seconds: i64) {
+        if self.status.safe_reboot && (now_seconds > self.status.reboot_timer) {
+            // if no program is running at the moment and if no program is scheduled to run in the next minute
+            //if !open_sprinkler.status.program_busy && !program_pending_soon(&open_sprinkler, &program_data, now_seconds + 60) {
+            if !self.status.program_busy && !self.program_pending_soon(now_seconds + 60) {
+                //open_sprinkler.reboot_dev(open_sprinkler.nvdata.reboot_cause);
+                self.reboot_dev(self.controller_config.reboot_cause);
+            }
+        } else if self.status.reboot_timer != 0 && (now_seconds > self.status.reboot_timer) {
+            self.reboot_dev(RebootCause::Timer);
+        }
+    }
+
+    //fn program_pending_soon(open_sprinkler: &OpenSprinkler, program_data: &ProgramData, timestamp: i64) -> bool {
+    fn program_pending_soon(&self, timestamp: i64) -> bool {
+        //let mut program_pending_soon = false;
+        //for program_index in 0..program_data.nprograms {
+        for program in self.controller_config.programs.iter() {
+            //if program_data.read(program_index).unwrap().check_match(&open_sprinkler, timestamp) {
+            if program.check_match(self, timestamp) {
+                //program_pending_soon = true;
+                //break;
+                return true;
+            }
+        }
+
+        //program_pending_soon
+        return false;
     }
 
     // Calculate local time (UTC time plus time zone offset)
