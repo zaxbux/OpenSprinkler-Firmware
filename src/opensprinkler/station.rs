@@ -2,21 +2,60 @@ use std::net::IpAddr;
 
 use serde::{Deserialize, Serialize};
 
-use super::StationIndex;
+use crate::utils;
 
-/// Stations/Zones per board
-pub const SHIFT_REGISTER_LINES: usize = 8;
+use super::{sensor, controller};
 
-/// allow more zones for linux-based firmwares
+pub type StationIndex = usize;
+
 pub const MAX_EXT_BOARDS: usize = 24;
 
 /// maximum number of 8-zone boards including expanders
 pub const MAX_NUM_BOARDS: usize = 1 + MAX_EXT_BOARDS;
 
 /// maximum number of stations
-pub const MAX_NUM_STATIONS: usize = MAX_NUM_BOARDS * SHIFT_REGISTER_LINES as usize;
+pub const MAX_NUM_STATIONS: usize = MAX_NUM_BOARDS * controller::SHIFT_REGISTER_LINES as usize;
+
+pub const MAX_MASTER_STATIONS: usize = 2;
 
 pub type Stations = Vec<Station>;
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct MasterStationConfig {
+    pub station: Option<StationIndex>,
+    /// Adjusted on duration (range: 0 – 600 seconds; step: 5 seconds)
+    adjusted_on: u8,
+    /// Adjusted off duration (range: -600 – 0 seconds; step: 5 seconds)
+    adjusted_off: u8,
+}
+
+impl MasterStationConfig {
+    pub fn get_adjusted_on_time(&self) -> i64 {
+        utils::water_time_decode_signed(self.adjusted_on).into()
+    }
+
+    pub fn get_adjusted_off_time(&self) -> i64 {
+        utils::water_time_decode_signed(self.adjusted_off).into()
+    }
+
+    pub fn set_adjusted_on_time_secs(&mut self, value: i16) {
+        self.adjusted_on = utils::water_time_encode_signed(value);
+    }
+
+    pub fn set_adjusted_off_time_secs(&mut self, value: i16) {
+        self.adjusted_off = utils::water_time_encode_signed(value);
+    }
+}
+
+impl Default for MasterStationConfig {
+    fn default() -> Self {
+        Self {
+            station: None,
+            adjusted_on: 120,
+            adjusted_off: 120,
+        }
+    }
+}
 
 #[repr(u8)]
 #[derive(PartialEq)]
@@ -47,7 +86,7 @@ pub struct Station {
     pub name: String,
     pub attrib: StationAttrib,
     /// Station type
-    pub r#type: StationType,
+    pub station_type: StationType,
     /// Special station data
     pub sped: Option<SpecialStationData>,
 }
@@ -57,15 +96,17 @@ impl Default for Station {
         Station {
             name: "".into(),
             attrib: StationAttrib {
-                mas: true,
-                igs: false,
-                mas2: false,
-                dis: false,
-                seq: true,
-                igs2: false,
-                igrd: false,
+                use_master: [false; MAX_MASTER_STATIONS],
+                ignore_sensor: [false; sensor::MAX_SENSORS],
+                //mas: true,
+                //igs: false,
+                //mas2: false,
+                is_disabled: false,
+                is_sequential: true,
+                //igs2: false,
+                ignore_rain_delay: false,
             },
-            r#type: StationType::Standard,
+            station_type: StationType::Standard,
             sped: None,
         }
     }
@@ -74,20 +115,22 @@ impl Default for Station {
 /// Station Attributes
 #[derive(Clone, Serialize, Deserialize)]
 pub struct StationAttrib {
+    pub use_master: [bool; MAX_MASTER_STATIONS],
+    pub ignore_sensor: [bool; sensor::MAX_SENSORS],
     /// Use Master #1
-    pub mas: bool,
+    //pub mas: bool,
     /// Ignore Sensor #1
-    pub igs: bool,
+    //pub igs: bool,
     /// Use Master #2
-    pub mas2: bool,
+    //pub mas2: bool,
     /// Disabled
-    pub dis: bool,
+    pub is_disabled: bool,
     /// Sequential
-    pub seq: bool,
+    pub is_sequential: bool,
     /// Ignore Sensor #2
-    pub igs2: bool,
+    //pub igs2: bool,
     /// Ignore Rain Delay
-    pub igrd: bool,
+    pub ignore_rain_delay: bool,
 }
 
 /// RF station data structures

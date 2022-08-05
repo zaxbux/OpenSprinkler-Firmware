@@ -901,7 +901,7 @@ checksum = "18a6dbe30758c9f83eb00cbea4ac95966305f5a7772f3f42ebfc7fc7eddbd8e1"
 
 [[package]]
 name = "opensprinkler-firmware"
-version = "3.0.0"
+version = "0.0.1-alpha"
 dependencies = [
  "bson",
  "byteorder",
@@ -1406,6 +1406,9 @@ name = "semver"
 version = "1.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2333e6df6d6598f2b1974829f853c2b4c5f4a6e503c10af918081aa6f8564e1"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "serde"

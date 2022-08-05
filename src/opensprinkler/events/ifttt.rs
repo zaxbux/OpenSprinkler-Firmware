@@ -1,5 +1,6 @@
 
 use crate::utils::duration_to_hms;
+use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use serde_json::Result;
 
@@ -12,10 +13,12 @@ pub struct WebHookPayload {
 }
 
 pub trait WebHookEvent {
+    fn ifttt_event(&self) -> String;
     fn ifttt_payload(&self) -> String;
 }
 
 pub trait WebHookEventPayload: WebHookEvent {
+    fn ifttt_url(&self, key: &str) -> Url;
     fn ifttt_payload_json(&self) -> Result<String>;
 }
 
@@ -23,7 +26,12 @@ impl<T> WebHookEventPayload for T
 where
     T: WebHookEvent,
 {
-    #[inline]
+    fn ifttt_url(&self, key: &str) -> reqwest::Url {
+        let url = reqwest::Url::parse(format!("{}/trigger/{}/with/key/{}", WEBHOOK_URL, self.ifttt_event(), key).as_str()).unwrap();
+
+        url
+    }
+
     fn ifttt_payload_json(&self) -> Result<String> {
         let payload = WebHookPayload { value1: self.ifttt_payload() };
         serde_json::to_string(&payload)
@@ -31,6 +39,10 @@ where
 }
 
 impl WebHookEvent for super::ProgramSchedEvent {
+    fn ifttt_event(&self) -> String {
+        String::from("program")
+    }
+
     fn ifttt_payload(&self) -> String {
         let mut payload = String::new();
 
@@ -49,26 +61,33 @@ impl WebHookEvent for super::ProgramSchedEvent {
 }
 
 impl WebHookEvent for super::BinarySensorEvent {
+    fn ifttt_event(&self) -> String {
+        format!("sensor{}", self.index)
+    }
+
     fn ifttt_payload(&self) -> String {
-        let mut payload = String::from(format!("Sensor {}", self.index));
-
-        if self.state {
-            payload.push_str(" activated.");
-        } else {
-            payload.push_str(" deactivated.");
+        match self.state {
+            false => format!("Sensor {} deactivated", self.index + 1),
+            true => format!("Sensor {} activated", self.index + 1),
         }
-
-        payload
     }
 }
 
 impl WebHookEvent for super::FlowSensorEvent {
+    fn ifttt_event(&self) -> String {
+        String::from("flow")
+    }
+
     fn ifttt_payload(&self) -> String {
         format!("Flow count: {:.0}, volume: {:.2}", self.count, self.volume)
     }
 }
 
 impl WebHookEvent for super::WeatherUpdateEvent {
+    fn ifttt_event(&self) -> String {
+        String::from("weather")
+    }
+
     fn ifttt_payload(&self) -> String {
         let mut payload = String::new();
 
@@ -86,21 +105,23 @@ impl WebHookEvent for super::WeatherUpdateEvent {
 }
 
 impl WebHookEvent for super::RebootEvent {
+    fn ifttt_event(&self) -> String {
+        String::from("reboot")
+    }
+
     fn ifttt_payload(&self) -> String {
-        let mut payload = String::new();
-        payload.push_str("Controller ");
-
-        if self.state {
-            payload.push_str("process started.");
-        } else {
-            payload.push_str("shutting down.");
+        match self.state {
+            false => String::from("Controller stopping."),
+            true => String::from("Controller started."),
         }
-
-        payload
     }
 }
 
 impl WebHookEvent for super::StationEvent {
+    fn ifttt_event(&self) -> String {
+        String::from("station")
+    }
+
     fn ifttt_payload(&self) -> String {
         let mut payload = String::new();
         payload.push_str(format!("Station {} ", self.station_name).as_str());
@@ -120,16 +141,14 @@ impl WebHookEvent for super::StationEvent {
 }
 
 impl WebHookEvent for super::RainDelayEvent {
+    fn ifttt_event(&self) -> String {
+        String::from("rain_delay")
+    }
+
     fn ifttt_payload(&self) -> String {
-        let mut payload = String::new();
-        payload.push_str("Rain delay ");
-
-        if self.state {
-            payload.push_str("activated.");
-        } else {
-            payload.push_str("deactivated.");
+        match self.state {
+            false => String::from("Rain delay deactivated."),
+            true => String::from("Rain delay activated."),
         }
-
-        payload
     }
 }

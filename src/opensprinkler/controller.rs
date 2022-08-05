@@ -1,10 +1,11 @@
-use crate::utils;
+use super::{OpenSprinkler, StationBitChange, events, program, sensor, log, station};
 
-use super::{OpenSprinkler, StationBitChange, events, program::ProgramQueue, sensor::SensorType, log, StationIndex};
+/// Stations/Zones per board
+pub const SHIFT_REGISTER_LINES: usize = 8;
 
 /// Turn on a station
 //pub fn turn_on_station(open_sprinkler: &mut OpenSprinkler, flow_state: &mut FlowSensor, station_id: usize) {
-pub fn turn_on_station(open_sprinkler: &mut OpenSprinkler, station_id: StationIndex) {
+pub fn turn_on_station(open_sprinkler: &mut OpenSprinkler, station_id: station::StationIndex) {
     // RAH implementation of flow sensor
     //flow_state.flow_start = 0;
     open_sprinkler.flow_state.reset();
@@ -32,7 +33,7 @@ pub fn turn_on_station(open_sprinkler: &mut OpenSprinkler, station_id: StationIn
 ///
 /// @todo Make member of [OpenSprinkler]
 //pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, flow_state: &mut FlowSensor, program_data: &mut ProgramData, now_seconds: i64, station_id: usize) {
-pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, program_data: &mut ProgramQueue, now_seconds: i64, station_index: StationIndex) {
+pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, program_data: &mut program::ProgramQueue, now_seconds: i64, station_index: station::StationIndex) {
     open_sprinkler.set_station_bit(station_index, false);
 
     let qid = program_data.station_qid[station_index];
@@ -67,7 +68,7 @@ pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, program_data: &mut P
             program_data.last_run = Some(message);
 
             //if open_sprinkler.iopts.sn1t == SensorType::Flow as u8 {
-            if open_sprinkler.get_sensor_type(0) == SensorType::Flow {
+            if open_sprinkler.get_sensor_type(0).unwrap_or(sensor::SensorType::None) == sensor::SensorType::Flow {
                 //message.with_flow(flow_state.flow_last_gpm);
                 message.with_flow(flow_volume);
             }
@@ -84,7 +85,7 @@ pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, program_data: &mut P
                     Some(duration.into()),
                     //if open_sprinkler.iopts.sn1t == SensorType::Flow as u8 { Some(flow_state.flow_last_gpm) } else { None },
                     //if open_sprinkler.get_sensor_type(0) == SensorType::Flow { Some(flow_state.flow_last_gpm) } else { None },
-                    if open_sprinkler.get_sensor_type(0) == SensorType::Flow { Some(flow_volume) } else { None },
+                    if open_sprinkler.get_sensor_type(0).unwrap_or(sensor::SensorType::None) == sensor::SensorType::Flow { Some(flow_volume) } else { None },
                 ),
             );
         }
@@ -98,61 +99,37 @@ pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, program_data: &mut P
 /// Actuate master stations based on need
 ///
 /// This function iterates over all stations and activates the necessary "master" station.
-pub fn activate_master_station(master: StationIndex, open_sprinkler: &mut OpenSprinkler, program_data: &ProgramQueue, now_seconds: i64) {
-    let mas = match master {
-        0 => open_sprinkler.get_master_station_index(0),
-        1 => open_sprinkler.get_master_station_index(1),
-		_ => todo!(),
-    };
+pub fn activate_master_station(i: usize, open_sprinkler: &mut OpenSprinkler, program_data: &program::ProgramQueue, now_seconds: i64) {
+    let master_station = open_sprinkler.get_master_station(i);
 
-    if mas.is_none() {
+    if master_station.station.is_none() {
         return;
     }
 
-    let mas_on_adj: i64 = utils::water_time_decode_signed(match master {
-        0 => open_sprinkler.controller_config.mton,
-        //0 => open_sprinkler.iopts.mton,
-        //1 => open_sprinkler.iopts.mton2,
-        1 => open_sprinkler.controller_config.mton2,
-		_ => todo!(),
-    })
-    .into();
-    let mas_off_adj: i64 = utils::water_time_decode_signed(match master {
-        0 => open_sprinkler.controller_config.mtof,
-        //0 => open_sprinkler.iopts.mtof,
-        //1 => open_sprinkler.iopts.mtof2,
-        1 => open_sprinkler.controller_config.mtof2,
-		_ => todo!(),
-    })
-    .into();
-
-    let mut value = false;
+    let master_station_index = master_station.station.unwrap();
+    let adjusted_on = master_station.get_adjusted_on_time();
+    let adjusted_off = master_station.get_adjusted_off_time();
+    /* let mut value = false; */
 
     for station_index in 0..open_sprinkler.get_station_count() {
         // skip if this is the master station
-        if mas == Some(station_index) {
+        if master_station_index == station_index {
             continue;
         }
 
-        let use_master = match master {
-            //0 => open_sprinkler.stations[station_index].attrib.mas,
-            0 => open_sprinkler.controller_config.stations[station_index].attrib.mas,
-            //1 => open_sprinkler.stations[station_index].attrib.mas2,
-            1 => open_sprinkler.controller_config.stations[station_index].attrib.mas2,
-			_ => todo!(),
-        };
-
         // if this station is running and is set to activate master
-        if open_sprinkler.is_station_running(station_index) && use_master {
+        if open_sprinkler.is_station_running(station_index) && open_sprinkler.controller_config.stations[station_index].attrib.use_master[i] {
             let q = program_data.queue.get(program_data.station_qid[station_index]).unwrap();
             // check if timing is within the acceptable range
-            let start_time = q.start_time + mas_on_adj;
-            let stop_time = q.start_time + q.water_time + mas_off_adj;
+            let start_time = q.start_time + adjusted_on;
+            let stop_time = q.start_time + q.water_time + adjusted_off;
             if now_seconds >= start_time && now_seconds <= stop_time {
-                value = true;
-                break;
+                /* value = true;
+                break; */
+                open_sprinkler.set_station_bit(master_station_index, true);
+                return;
             }
         }
     }
-    open_sprinkler.set_station_bit(mas.unwrap(), value);
+    open_sprinkler.set_station_bit(master_station_index, false);
 }

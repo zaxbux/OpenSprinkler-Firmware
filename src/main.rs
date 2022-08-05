@@ -23,7 +23,7 @@ use opensprinkler::{
     OpenSprinkler,
 };
 
-use crate::opensprinkler::scheduler;
+use crate::opensprinkler::{scheduler, sensor};
 
 #[cfg(unix)]
 const CONFIG_FILE_PATH: &'static str = "/etc/opt/config.dat";
@@ -107,7 +107,7 @@ fn main() {
     // Main loop
     while running.load(Ordering::SeqCst) {
         // handle flow sensor using polling every 1ms (maximum freq 1/(2*1ms)=500Hz)
-        if open_sprinkler.get_sensor_type(0) == SensorType::Flow {
+        if open_sprinkler.get_sensor_type(0).unwrap_or(sensor::SensorType::None) == sensor::SensorType::Flow {
             now_millis = chrono::Utc::now().timestamp_millis();
 
             if now_millis > last_millis {
@@ -181,7 +181,7 @@ fn main() {
                 // @fixme Should this be in the weather module?
                 match weather_update_flag {
                     //WeatherUpdateFlag::EIP => push_message(&open_sprinkler, WeatherUpdateEvent::new(Some(open_sprinkler.iopts.wl), None)),
-                    WeatherUpdateFlag::EIP => push_message(&open_sprinkler, &WeatherUpdateEvent::new(Some(open_sprinkler.controller_config.wl), None)),
+                    WeatherUpdateFlag::EIP => push_message(&open_sprinkler, &WeatherUpdateEvent::new(Some(open_sprinkler.controller_config.water_scale), None)),
                     //WeatherUpdateFlag::WL => push_message(&open_sprinkler, WeatherUpdateEvent::new(None, open_sprinkler.nvdata.external_ip)),
                     WeatherUpdateFlag::WL => push_message(&open_sprinkler, &WeatherUpdateEvent::new(None, open_sprinkler.controller_config.external_ip)),
                     _ => (),

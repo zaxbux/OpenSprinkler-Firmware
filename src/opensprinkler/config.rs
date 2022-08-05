@@ -1,7 +1,7 @@
 use super::{
-    program::Programs,
-    station::{self, Stations},
-    RebootCause, StationIndex,
+    program,
+    station,
+    RebootCause, sensor,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::str::FromStr;
@@ -14,40 +14,13 @@ use std::{
     sync::Arc,
 };
 
-use crate::opensprinkler::{sensor::NormalState, FIRMWARE_VERSION, FIRMWARE_VERSION_REVISION, HARDWARE_VERSION};
+use crate::opensprinkler::HARDWARE_VERSION;
 use std::net::IpAddr;
 
 #[cfg(feature = "mqtt")]
 use crate::opensprinkler::mqtt::MQTTConfig;
 
-#[derive(Clone, Copy, Serialize, Deserialize)]
-pub struct EventsEnabled {
-    pub program_sched: bool,
-    pub sensor1: bool,
-    pub flow_sensor: bool,
-    pub weather_update: bool,
-    pub reboot: bool,
-    pub station_off: bool,
-    pub sensor2: bool,
-    pub rain_delay: bool,
-    pub station_on: bool,
-}
-
-impl Default for EventsEnabled {
-    fn default() -> Self {
-        EventsEnabled {
-            program_sched: false,
-            sensor1: false,
-            flow_sensor: false,
-            weather_update: false,
-            reboot: false,
-            station_off: false,
-            sensor2: false,
-            rain_delay: false,
-            station_on: false,
-        }
-    }
-}
+use crate::opensprinkler::events::EventsEnabled;
 
 #[derive(Debug)]
 pub enum ParseLocationError {
@@ -100,174 +73,176 @@ impl fmt::Display for Location {
     }
 }
 
+#[repr(u8)]
+#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum WeatherAlgorithm {
+    Manual = 0,
+    Zimmerman = 1,
+    RainDelay = 2,
+    ETo = 3,
+}
+
+impl ToString for WeatherAlgorithm {
+    fn to_string(&self) -> String {
+        match *self {
+            WeatherAlgorithm::Manual => String::from("0"),
+            WeatherAlgorithm::Zimmerman => String::from("1"),
+            WeatherAlgorithm::RainDelay => String::from("2"),
+            WeatherAlgorithm::ETo => String::from("3"),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct ControllerConfiguration {
-    //pub nv: data_type::ControllerNonVolatile,
     /// Sunrise time (minutes)
     pub sunrise_time: u16,
     /// Sunset time (minutes)
     pub sunset_time: u16,
     /// Rain-delay stop time (seconds since unix epoch)
-    pub rd_stop_time: Option<i64>,
+    pub rain_delay_stop_time: Option<i64>,
     /// External IP @todo Add support for IPv6
     pub external_ip: Option<IpAddr>,
     /// Reboot Cause
     pub reboot_cause: RebootCause,
     //pub iopts: data_type::IntegerOptions,
     /// firmware version
-    pub fwv: u16,
-    /// Time Zone
-    ///
+    pub firmware_version: semver::Version,
     /// Default: UTC
-    pub tz: u8,
-    /// this and the next unsigned char define HTTP port
-    pub hp0: u8,
-    /// -
-    pub hp1: u8,
-    /// -
-    pub hwv: u8,
+    pub timezone: u8,
+    /// Hardware version
+    pub hardware_version: u8,
     /// number of 8-station extension board. 0: no extension boards
-    pub ext: usize,
+    pub extension_board_count: usize,
     /// station delay time (-10 minutes to 10 minutes).
-    pub sdt: u8,
-    /// index of master station. 0: no master station
-    pub mas: Option<StationIndex>,
-    /// master on time adjusted time (-10 minutes to 10 minutes)
-    pub mton: u8,
+    pub station_delay_time: u8,
+    /* /// index of master station.
+    pub master_station1_index: Option<StationIndex>,
+    /// master on time adjusted time (-10 minutes to 10 minutes; steps of 5 seconds)
+    pub master_station1_on: u8,
     /// master off adjusted time (-10 minutes to 10 minutes)
-    pub mtof: u8,
-    /// water level (default 100%),
-    pub wl: u8,
+    pub master_station1_off: u8,
+    /// index of master2. 0: no master2 station
+    pub master_station2_index: Option<StationIndex>,
+    /// master2 on adjusted time
+    pub master_station2_on: u8,
+    /// master2 off adjusted time
+    pub master_station2_off: u8, */
+
+    pub master_stations: [station::MasterStationConfig; station::MAX_MASTER_STATIONS],
+
+    /// water level (default 100%)
+    pub water_scale: u8,
     /// device enable
-    pub den: bool,
-    /// lcd contrast
+    pub enable_controller: bool,
+    /* /// lcd contrast
     pub con: u8,
     /// lcd backlight
     pub lit: u8,
     /// lcd dimming
-    pub dim: u8,
+    pub dim: u8, */
     /// weather algorithm (0 means not using weather algorithm)
-    pub uwt: u8,
+    pub weather_algorithm: Option<WeatherAlgorithm>,
     /// enable logging: 0: disable; 1: enable.
-    pub lg: bool,
-    /// index of master2. 0: no master2 station
-    pub mas2: Option<StationIndex>,
-    /// master2 on adjusted time
-    pub mton2: u8,
-    /// master2 off adjusted time
-    pub mtof2: u8,
-    /// firmware minor version
-    pub fwm: u8,
-    /// this and next unsigned char define flow pulse rate (100x)
-    pub fpr0: u8,
-    /// default is 1.00 (100)
-    pub fpr1: u8,
+    pub enable_log: bool,
+    /// flow pulse rate (100x)
+    pub flow_pulse_rate: u16,
     /// set as remote extension
-    pub re: bool,
+    pub enable_remote_ext_mode: bool,
     /// special station auto refresh
-    pub sar: bool,
-    //pub ife: u8,
+    pub enable_special_stn_refresh: bool,
     /// ifttt enabled events
     pub ifttt_events: EventsEnabled,
-    /// sensor 1 type (see SENSOR_TYPE macro defines)
-    pub sn1t: u8,
-    /// sensor 1 option. 0: normally closed; 1: normally open.	default 1.
-    pub sn1o: NormalState,
+    pub sensors: [sensor::SensorConfig; sensor::MAX_SENSORS],
+    /* /// sensor 1 type
+    pub sensor1_type: u8,
+    /// sensor 1 normal state; Default: [NormalState::Open]
+    pub sensor1_normal_state: NormalState,
     /// sensor 2 type
-    pub sn2t: u8,
-    /// sensor 2 option. 0: normally closed; 1: normally open. default 1.
-    pub sn2o: NormalState,
+    pub sensor2_type: u8,
+    /// sensor 2 option.
+    pub sensor2_normal_state: NormalState,
     /// sensor 1 on delay
-    pub sn1on: u8,
+    pub sensor1_delay_on: u8,
     /// sensor 1 off delay
-    pub sn1of: u8,
+    pub sensor1_delay_off: u8,
     /// sensor 2 on delay
-    pub sn2on: u8,
+    pub sensor2_delay_on: u8,
     /// sensor 2 off delay
-    pub sn2of: u8,
+    pub sensor2_delay_off: u8, */
     /// reset
     pub reset: u8,
 
     //pub sopts: data_type::StringOptions,
     /// Device key AKA password
-    pub dkey: String,
+    pub device_key: String,
     /// Device location (decimal coordinates)
-    /// @todo Represent as a vector using [f64] instead of a string. This means dropping support for using city name / postal code, but geocoder can find coordinates anyways.
-    pub loc: Location,
+    pub location: Location,
     /// Javascript URL for the web app
-    pub jsp: String,
+    pub js_url: String,
     /// Weather Service URL
-    pub wsp: String,
+    pub weather_service_url: String,
     /// Weather adjustment options
     /// This data is specific to the weather adjustment method.
-    pub wto: Option<String>,
+    pub weather_options: Option<String>,
     /// IFTTT Webhooks API key
-    pub ifkey: Option<String>,
+    pub ifttt_key: Option<String>,
     /// MQTT config
     #[cfg(feature = "mqtt")]
     pub mqtt: MQTTConfig,
 
-    pub stations: Stations,
-    pub programs: Programs,
+    pub stations: station::Stations,
+    pub programs: program::Programs,
 }
 
 impl Default for ControllerConfiguration {
     fn default() -> Self {
         ControllerConfiguration {
-            /* nv: data_type::ControllerNonVolatile {
-                reboot_cause: RebootCause::Reset,
-                ..Default::default()
-            }, */
             sunrise_time: 360, // 0600 default sunrise
             sunset_time: 1080, // 1800 default sunrise
-            rd_stop_time: None,
+            rain_delay_stop_time: None,
             external_ip: None,
             reboot_cause: RebootCause::Reset,
-            //iopts: data_type::IntegerOptions::default(),
-            fwv: FIRMWARE_VERSION,
-            tz: 48, // UTC
-            hp0: 80,
-            hp1: 0,
-            hwv: HARDWARE_VERSION,
-            ext: 0,
-            sdt: 120,
-            mas: None,
-            mton: 120,
-            mtof: 120,
-            wl: 100,
-            den: true,
-            con: 150,
-            lit: 100,
-            dim: 50,
-            uwt: 0,
-            lg: true,
-            mas2: None,
-            mton2: 120,
-            mtof2: 120,
-            fwm: FIRMWARE_VERSION_REVISION,
-            fpr0: 100,
-            fpr1: 0,
-            re: false,
-            sar: false,
-            //ife: 0,
-            ifttt_events: EventsEnabled::default(),
-            sn1t: 0,
-            sn1o: NormalState::Open,
-            sn2t: 0,
-            sn2o: NormalState::Open,
-            sn1on: 0,
-            sn1of: 0,
-            sn2on: 0,
-            sn2of: 0,
-            reset: 0,
+            firmware_version: semver::Version::parse(core::env!("CARGO_PKG_VERSION")).unwrap(),
+            timezone: 48, // UTC
+            hardware_version: HARDWARE_VERSION,
+            extension_board_count: 0,
+            station_delay_time: 120,
 
-            //sopts: data_type::StringOptions::default(),
-            dkey: format!("{:x}", md5::compute(b"opendoor")).into(), // @todo Use modern hash like Argon2
-            loc: Location::default(),
-            jsp: core::option_env!("JAVASCRIPT_URL").unwrap_or("https://ui.opensprinkler.com").into(),
-            wsp: core::option_env!("WEATHER_SERVICE_URL").unwrap_or("https://weather.opensprinkler.com").into(),
-            wto: None,
-            ifkey: None,
+            master_stations: [station::MasterStationConfig::default(); station::MAX_MASTER_STATIONS],
+
+            /* master_station1_index: None,
+            master_station1_on: 120,
+            master_station1_off: 120, */
+            water_scale: 100,
+            enable_controller: true,
+            weather_algorithm: None,
+            enable_log: true,
+            /* master_station2_index: None,
+            master_station2_on: 120,
+            master_station2_off: 120, */
+            flow_pulse_rate: 100,
+            enable_remote_ext_mode: false,
+            enable_special_stn_refresh: false,
+            ifttt_events: EventsEnabled::default(),
+            /* sensor1_type: 0,
+            sensor1_normal_state: NormalState::Open,
+            sensor2_type: 0,
+            sensor2_normal_state: NormalState::Open,
+            sensor1_delay_on: 0,
+            sensor1_delay_off: 0,
+            sensor2_delay_on: 0,
+            sensor2_delay_off: 0, */
+
+            sensors: [sensor::SensorConfig::default(); sensor::MAX_SENSORS],
+
+            reset: 0,
+            device_key: format!("{:x}", md5::compute(b"opendoor")).into(), // @todo Use modern hash like Argon2
+            location: Location::default(),
+            js_url: core::option_env!("JAVASCRIPT_URL").unwrap_or("https://ui.opensprinkler.com").into(),
+            weather_service_url: core::option_env!("WEATHER_SERVICE_URL").unwrap_or("https://weather.opensprinkler.com").into(),
+            weather_options: None,
+            ifttt_key: None,
             #[cfg(feature = "mqtt")]
             mqtt: MQTTConfig::default(),
 

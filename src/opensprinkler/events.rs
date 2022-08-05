@@ -1,12 +1,42 @@
 use std::net::IpAddr;
 use reqwest::header;
+use serde::{Serialize, Deserialize};
 
-use super::{OpenSprinkler, StationIndex};
+use super::{OpenSprinkler, http::request, station};
 
 pub mod ifttt;
 
 #[cfg(feature = "mqtt")]
 pub mod mqtt;
+
+#[derive(Clone, Copy, Serialize, Deserialize)]
+pub struct EventsEnabled {
+    pub program_sched: bool,
+    pub sensor1: bool,
+    pub flow_sensor: bool,
+    pub weather_update: bool,
+    pub reboot: bool,
+    pub station_off: bool,
+    pub sensor2: bool,
+    pub rain_delay: bool,
+    pub station_on: bool,
+}
+
+impl Default for EventsEnabled {
+    fn default() -> Self {
+        EventsEnabled {
+            program_sched: false,
+            sensor1: false,
+            flow_sensor: false,
+            weather_update: false,
+            reboot: false,
+            station_off: false,
+            sensor2: false,
+            rain_delay: false,
+            station_on: false,
+        }
+    }
+}
 
 #[repr(u16)]
 #[derive(Copy, Clone)]
@@ -132,7 +162,7 @@ impl EventType for RebootEvent {
 
 // region: Station
 pub struct StationEvent {
-    pub station_id: StationIndex,
+    pub station_id: station::StationIndex,
     pub station_name: String,
     pub state: bool,
     pub duration: Option<i64>,
@@ -140,7 +170,7 @@ pub struct StationEvent {
 }
 
 impl StationEvent {
-    pub fn new(station_id: StationIndex, station_name: &str, state: bool, duration: Option<i64>, flow: Option<f64>) -> StationEvent {
+    pub fn new(station_id: station::StationIndex, station_name: &str, state: bool, duration: Option<i64>, flow: Option<f64>) -> StationEvent {
         StationEvent {
             station_id,
             station_name: station_name.to_string(),
@@ -221,7 +251,7 @@ where
 
     if ifttt_event_enabled(open_sprinkler, event) {
         //ifttt_webhook(event.ifttt_payload(), open_sprinkler.sopts.ifkey.as_str());
-        if let Some(ifttt_api_key) = &open_sprinkler.controller_config.ifkey {
+        if let Some(ifttt_api_key) = &open_sprinkler.controller_config.ifttt_key {
             ifttt_webhook(event, ifttt_api_key);
         } else {
             tracing::error!("IFTTT Web Hook API key unset");
@@ -267,20 +297,18 @@ fn ifttt_event_enabled(open_sprinkler: &OpenSprinkler, event: &dyn EventType) ->
 fn ifttt_webhook(event: &dyn ifttt::WebHookEventPayload, key: &str)
 {
     // @todo log request failures
-    let mut url = reqwest::Url::parse(ifttt::WEBHOOK_URL).expect("");
-    let _ = url.path_segments_mut().and_then(|mut path| {
-        path.push("/trigger/sprinkler/with/key/").push(key);
-        Ok(())
-    });
+    let body = event.ifttt_payload_json();
 
-    let client = reqwest::blocking::Client::new();
-    let response = client
-        .post(url)
-        .header(header::CONTENT_TYPE, header::HeaderValue::from_static("application/json"))
-        .body(event.ifttt_payload_json().expect("Error getting IFTTT payload"))
-        .send();
+    if let Ok(body) = body {
+        let client = request::build_client().unwrap();
+        let response = client
+            .post(event.ifttt_url(key))
+            .header(header::CONTENT_TYPE, header::HeaderValue::from_static("application/json"))
+            .body(body)
+            .send();
 
-    if let Err(error) = response {
-        tracing::error!("Error making IFTTT Web Hook request: {:?}", error);
+        if let Err(error) = response {
+            tracing::error!("Error making IFTTT Web Hook request: {:?}", error);
+        }
     }
 }
