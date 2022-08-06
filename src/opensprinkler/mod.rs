@@ -20,12 +20,13 @@ pub mod system;
 
 use serde::{Deserialize, Serialize};
 use std::cmp::max;
-use std::path::PathBuf;
+use std::path::{PathBuf, self};
 
 use self::config::ControllerConfiguration;
 use self::http::request;
 use self::sensor::{SensorType, MAX_SENSORS};
 use self::station::{StationType, MAX_NUM_BOARDS};
+use self::weather::algorithm;
 
 /// Default reboot timer (seconds)
 pub const REBOOT_DELAY: i64 = 65;
@@ -36,9 +37,10 @@ pub const MINIMUM_OFF_DELAY: u8 = 5;
 const SPECIAL_CMD_REBOOT: &'static str = ":>reboot";
 const SPECIAL_CMD_REBOOT_NOW: &'static str = ":>reboot_now";
 
+#[derive(Clone, Serialize, Deserialize)]
 #[repr(u8)]
-enum HardwareVersionBase {
-    #[deprecated(since = "3.0.0", note = "Rust port of firmware is not compatible with Arduino/ESP platforms")]
+pub enum HardwareVersionBase {
+    #[deprecated(note = "Rust port of firmware is not compatible with Arduino/ESP platforms")]
     OpenSprinkler = 0x00,
     OpenSprinklerPi = 0x40,
     Simulated = 0xC0,
@@ -130,8 +132,6 @@ pub enum RebootCause {
 ///
 /// For computing real-time flow rate.
 const FLOW_COUNT_REALTIME_WINDOW: i64 = 30;
-
-const HARDWARE_VERSION: u8 = HardwareVersionBase::OpenSprinklerPi as u8;
 
 pub struct OpenSprinkler {
     config: config::Config,
@@ -284,13 +284,15 @@ impl OpenSprinkler {
         None
     }
     pub fn is_logging_enabled(&self) -> bool {
-        //self.iopts.lg == 1
         self.controller_config.enable_log
     }
 
     pub fn is_mqtt_enabled(&self) -> bool {
-        self.controller_config.mqtt.enabled
-        //self.sopts.mqtt
+        #[cfg(feature = "mqtt")]
+        return self.controller_config.mqtt.enabled;
+
+        #[cfg(not(feature = "mqtt"))]
+        return false;
     }
 
     pub fn is_remote_extension(&self) -> bool {
@@ -299,13 +301,16 @@ impl OpenSprinkler {
     }
 
     /// Gets the weather service URL (with adjustment method)
-    pub fn get_weather_service_url(&self) -> Result<reqwest::Url, url::ParseError> {
-        let mut url = url::Url::parse(&self.controller_config.weather_service_url)?;
-        let _ = url.path_segments_mut().and_then(|mut p| {
-            p.push(&self.controller_config.weather_algorithm.unwrap_or(config::WeatherAlgorithm::Manual).to_string());
-            Ok(())
-        });
-        Ok(url)
+    pub fn get_weather_service_url(&self) -> Result<Option<reqwest::Url>, url::ParseError> {
+        if let Some(algorithm) = &self.controller_config.weather.algorithm {
+
+            let mut url = url::Url::parse(&self.controller_config.weather.service_url)?;
+            if let Ok(mut path_seg) = url.path_segments_mut() {
+                path_seg.push(&algorithm.get_id().to_string());
+            }
+            return Ok(Some(url));
+        }
+        return Ok(None);
     }
 
     pub fn get_water_scale(&self) -> u8 {
@@ -384,7 +389,7 @@ impl OpenSprinkler {
     }
 
     /// Update the weather service request success timestamp
-    pub fn set_check_weather_success_timestamp(&mut self) {
+    pub fn update_check_weather_success_timestamp(&mut self) {
         self.weather_status.checkwt_success_lasttime = Some(chrono::Utc::now().timestamp());
     }
     // endregion SETTERS
@@ -493,7 +498,8 @@ impl OpenSprinkler {
         #[cfg(feature = "demo")]
         let shift_register_latch = demo::get_gpio_pin(gpio::SHIFT_REGISTER_LATCH);
         if let Err(ref error) = shift_register_latch {
-            tracing::error!("Failed to obtain output pin shift_register_latch: {:?}", error);
+            #[cfg(not(feature = "demo"))]
+            tracing::error!("Failed to obtain output pin SHIFT_REGISTER_LATCH: {:?}", error);
         }
 
         #[cfg(not(feature = "demo"))]
@@ -501,7 +507,8 @@ impl OpenSprinkler {
         #[cfg(feature = "demo")]
         let shift_register_clock = demo::get_gpio_pin(gpio::SHIFT_REGISTER_CLOCK);
         if let Err(ref error) = shift_register_clock {
-            tracing::error!("Failed to obtain output pin shift_register_clock: {:?}", error);
+            #[cfg(not(feature = "demo"))]
+            tracing::error!("Failed to obtain output pin SHIFT_REGISTER_CLOCK: {:?}", error);
         }
 
         #[cfg(not(feature = "demo"))]
@@ -509,7 +516,8 @@ impl OpenSprinkler {
         #[cfg(feature = "demo")]
         let shift_register_data = demo::get_gpio_pin(gpio::SHIFT_REGISTER_DATA);
         if let Err(ref error) = shift_register_data {
-            tracing::error!("Failed to obtain output pin shift_register_data: {:?}", error);
+            #[cfg(not(feature = "demo"))]
+            tracing::error!("Failed to obtain output pin SHIFT_REGISTER_DATA: {:?}", error);
         }
 
         if shift_register_latch.is_ok() && shift_register_clock.is_ok() && shift_register_data.is_ok() {
@@ -572,13 +580,13 @@ impl OpenSprinkler {
             //if now_seconds >= open_sprinkler.nvdata.rd_stop_time.unwrap_or(0) {
             if now_seconds >= self.controller_config.rain_delay_stop_time.unwrap_or(0) {
                 // rain delay is over
-                self.rain_delay_stop();
+                self.rain_delay_stop().unwrap();
             }
         } else {
             //if open_sprinkler.nvdata.rd_stop_time.unwrap_or(0) > now_seconds {
             if self.controller_config.rain_delay_stop_time.unwrap_or(0) > now_seconds {
                 // rain delay starts now
-                self.rain_delay_start();
+                self.rain_delay_start().unwrap();
             }
         }
 
@@ -878,13 +886,13 @@ impl OpenSprinkler {
     }
 
     // Setup function for options
-    pub fn options_setup(&mut self) {
+    pub fn options_setup(&mut self) -> Result<(), config::Error> {
         // Check reset conditions
         let config = self.config.get::<ControllerConfiguration>();
         if let Err(error) = config {
             tracing::error!("Error reading config: {:?}", error);
-            self.reset_to_defaults();
-            return;
+            self.reset_to_defaults()?;
+            return Ok(());
         }
 
         // Check reset conditions
@@ -895,8 +903,8 @@ impl OpenSprinkler {
             if config.firmware_version < self.controller_config.firmware_version {
                 // @todo Migrate config based on existing version
                 tracing::debug!("Invalid firmware version: {:?}", config.firmware_version);
-                self.reset_to_defaults();
-                return;
+                self.reset_to_defaults()?;
+                return Ok(());
             }
 
             self.controller_config = config;
@@ -911,13 +919,13 @@ impl OpenSprinkler {
     }
 
     /// Save controller config
-    pub fn commit_config(&self) {
-        self.config.commit(&self.controller_config);
+    pub fn commit_config(&self) -> Result<(), config::Error> {
+        self.config.commit(&self.controller_config)
         //let _ = config::commit_controller_nv(&self.nvdata);
     }
 
     /// Enable controller operation
-    pub fn enable(&mut self) {
+    pub fn enable(&mut self) -> Result<(), config::Error> {
         //self.status_current.enabled = true;
         //self.iopts.den = 1;
         self.controller_config.enable_controller = true;
@@ -926,7 +934,7 @@ impl OpenSprinkler {
     }
 
     /// Disable controller operation
-    pub fn disable(&mut self) {
+    pub fn disable(&mut self) -> Result<(), config::Error> {
         //self.status_current.enabled = false;
         //self.iopts.den = 0;
         self.controller_config.enable_controller = false;
@@ -935,14 +943,14 @@ impl OpenSprinkler {
     }
 
     /// Start rain delay
-    pub fn rain_delay_start(&mut self) {
+    pub fn rain_delay_start(&mut self) -> Result<(), config::Error> {
         self.status_current.rain_delayed = true;
         //self.nvdata_save();
         self.commit_config()
     }
 
     /// Stop rain delay
-    pub fn rain_delay_stop(&mut self) {
+    pub fn rain_delay_stop(&mut self) -> Result<(), config::Error> {
         self.status_current.rain_delayed = false;
         //self.nvdata.rd_stop_time = None;
         self.controller_config.rain_delay_stop_time = None;

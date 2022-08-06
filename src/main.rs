@@ -16,10 +16,9 @@ use std::{
 use tracing_subscriber::FmtSubscriber;
 
 use opensprinkler::{
-    events::{push_message, RebootEvent, WeatherUpdateEvent},
-    program::ProgramQueue,
-    sensor::SensorType,
-    weather::{check_weather, WeatherUpdateFlag},
+    events,
+    program,
+    weather,
     OpenSprinkler,
 };
 
@@ -81,7 +80,7 @@ fn main() {
     open_sprinkler.options_setup();
 
     // ProgramData initialization
-    let mut program_data = ProgramQueue::new();
+    let mut program_data = program::ProgramQueue::new();
 
     //let mut flow_state = FlowSensor::default();
 
@@ -169,21 +168,21 @@ fn main() {
             // @todo move outside of loop?
             if reboot_notification {
                 reboot_notification = false;
-                push_message(&open_sprinkler, &RebootEvent::new(true));
+                events::push_message(&open_sprinkler, &events::RebootEvent::new(true));
             }
 
             open_sprinkler.update_realtime_flow_count(now_seconds);
 
             // Check weather
-            let _ = check_weather(&mut open_sprinkler, &|open_sprinkler, weather_update_flag| {
+            let _ = weather::check_weather(&mut open_sprinkler, &|open_sprinkler, weather_update_flag| {
                 // at the moment, we only send notification if water level or external IP changed
                 // the other changes, such as sunrise, sunset changes are ignored for notification
                 // @fixme Should this be in the weather module?
                 match weather_update_flag {
                     //WeatherUpdateFlag::EIP => push_message(&open_sprinkler, WeatherUpdateEvent::new(Some(open_sprinkler.iopts.wl), None)),
-                    WeatherUpdateFlag::EIP => push_message(&open_sprinkler, &WeatherUpdateEvent::new(Some(open_sprinkler.controller_config.water_scale), None)),
+                    weather::WeatherUpdateFlag::EIP => events::push_message(&open_sprinkler, &events::WeatherUpdateEvent::new(Some(open_sprinkler.controller_config.water_scale), None)),
                     //WeatherUpdateFlag::WL => push_message(&open_sprinkler, WeatherUpdateEvent::new(None, open_sprinkler.nvdata.external_ip)),
-                    WeatherUpdateFlag::WL => push_message(&open_sprinkler, &WeatherUpdateEvent::new(None, open_sprinkler.controller_config.external_ip)),
+                    weather::WeatherUpdateFlag::WL => events::push_message(&open_sprinkler, &events::WeatherUpdateEvent::new(None, open_sprinkler.controller_config.external_ip)),
                     _ => (),
                 }
             });

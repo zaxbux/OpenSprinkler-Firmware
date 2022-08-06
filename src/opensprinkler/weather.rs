@@ -1,11 +1,134 @@
+pub mod algorithm;
+
 use crate::opensprinkler::http::request;
 
-use super::{log, OpenSprinkler, config::WeatherAlgorithm};
+use super::{log, OpenSprinkler};
+use core::fmt;
 use reqwest::header::{HeaderValue, ACCEPT, CONTENT_TYPE};
+use serde::{de, ser, Deserialize, Deserializer, Serialize};
 use std::{
     collections::HashMap,
+    error::Error,
     net::{IpAddr, Ipv4Addr},
 };
+
+pub type WeatherServiceRawData = Option<serde_json::Value>;
+
+#[derive(Serialize, Deserialize)]
+pub struct WeatherConfig {
+    /// Weather Service URL
+    pub service_url: String,
+    /// Weather algorithm
+    pub algorithm: Option<WeatherAlgorithm>,
+    /// Weather adjustment options
+    ///
+    /// This data is specific to the weather adjustment method.
+    pub options: Option<String>,
+}
+
+impl Default for WeatherConfig {
+    fn default() -> Self {
+        Self {
+            service_url: core::option_env!("WEATHER_SERVICE_URL").unwrap_or("https://weather.opensprinkler.com").into(),
+            algorithm: None,
+            options: None,
+        }
+    }
+}
+
+#[repr(u8)]
+#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum WeatherAlgorithmID {
+    Manual = 0,
+    Zimmerman = 1,
+    RainDelay = 2,
+    ETo = 3,
+}
+
+impl ToString for WeatherAlgorithmID {
+    fn to_string(&self) -> String {
+        match *self {
+            WeatherAlgorithmID::Manual => String::from("0"),
+            WeatherAlgorithmID::Zimmerman => String::from("1"),
+            WeatherAlgorithmID::RainDelay => String::from("2"),
+            WeatherAlgorithmID::ETo => String::from("3"),
+        }
+    }
+}
+
+#[derive(PartialEq)]
+pub enum WeatherAlgorithm {
+    Manual(algorithm::Manual),
+    Zimmerman(algorithm::Zimmerman),
+    RainDelay(algorithm::RainDelay),
+    ETo(algorithm::Evapotranspiration),
+}
+
+impl WeatherAlgorithm {
+    pub fn get_id(&self) -> WeatherAlgorithmID {
+        match self {
+            WeatherAlgorithm::Manual(_) => WeatherAlgorithmID::Manual,
+            WeatherAlgorithm::Zimmerman(_) => WeatherAlgorithmID::Zimmerman,
+            WeatherAlgorithm::RainDelay(_) => WeatherAlgorithmID::RainDelay,
+            WeatherAlgorithm::ETo(_) => WeatherAlgorithmID::ETo,
+        }
+    }
+
+    pub fn use_manual_scale(&self) -> bool {
+        match self {
+            WeatherAlgorithm::Manual(a) => algorithm::WeatherAlgorithm::use_manual_scale(a),
+            WeatherAlgorithm::Zimmerman(a) => algorithm::WeatherAlgorithm::use_manual_scale(a),
+            WeatherAlgorithm::RainDelay(a) => algorithm::WeatherAlgorithm::use_manual_scale(a),
+            WeatherAlgorithm::ETo(a) => algorithm::WeatherAlgorithm::use_manual_scale(a),
+        }
+    }
+}
+
+impl ser::Serialize for WeatherAlgorithm {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match *self {
+            WeatherAlgorithm::Manual(_) => serializer.serialize_str(&WeatherAlgorithmID::Manual.to_string()),
+            WeatherAlgorithm::Zimmerman(_) => serializer.serialize_str(&WeatherAlgorithmID::Zimmerman.to_string()),
+            WeatherAlgorithm::RainDelay(_) => serializer.serialize_str(&WeatherAlgorithmID::RainDelay.to_string()),
+            WeatherAlgorithm::ETo(_) => serializer.serialize_str(&WeatherAlgorithmID::ETo.to_string()),
+        }
+    }
+}
+
+struct WeatherAlgorithmVisitor;
+
+impl<'de> de::Visitor<'de> for WeatherAlgorithmVisitor {
+    type Value = i8;
+
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("an integer between -2^7 and 2^7")
+    }
+
+    fn visit_i8<E>(self, v: i8) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(v)
+    }
+}
+
+impl<'de> de::Deserialize<'de> for WeatherAlgorithm {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserializer.deserialize_i8(WeatherAlgorithmVisitor)? {
+            0 => Ok(WeatherAlgorithm::Manual(algorithm::Manual)),
+            1 => Ok(WeatherAlgorithm::Zimmerman(algorithm::Zimmerman)),
+            2 => Ok(WeatherAlgorithm::RainDelay(algorithm::RainDelay)),
+            3 => Ok(WeatherAlgorithm::ETo(algorithm::Evapotranspiration)),
+            _ => unimplemented!(),
+        }
+    }
+}
 
 #[derive(Default)]
 pub struct WeatherStatus {
@@ -16,10 +139,16 @@ pub struct WeatherStatus {
     pub checkwt_success_lasttime: Option<i64>,
 
     /// Result of the most recent request to the weather service
-    pub last_response_code: Option<i8>,
+    pub last_response_code: Option<ErrorCode>,
 
     /// Data returned by the weather service (used by web server)
-    pub raw_data: Option<String>,
+    pub raw_data: WeatherServiceRawData,
+}
+
+impl WeatherStatus {
+    pub fn last_response_was_successful(&self) -> bool {
+        self.last_response_code == Some(ErrorCode::Success)
+    }
 }
 
 #[repr(u8)]
@@ -30,6 +159,57 @@ pub enum WeatherUpdateFlag {
     WL = 0x08,
     TZ = 0x10,
     RD = 0x20,
+}
+
+#[derive(Serialize, Deserialize, PartialEq)]
+pub enum ErrorCode {
+    Success,
+    // @todo unify error codes between Firmware, Weather, and GUI.
+    Unknown(i8),
+}
+
+impl fmt::Display for ErrorCode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            Self::Success => write!(f, "Success"),
+            ErrorCode::Unknown(ref code) => write!(f, "Unknown weather service error: {}", code),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct WeatherServiceResponse {
+    #[serde(rename(deserialize = "errCode"), deserialize_with = "weather_service_error_code")]
+    error_code: ErrorCode,
+
+    scale: Option<u8>,
+
+    sunrise: Option<u16>,
+
+    sunset: Option<u16>,
+
+    #[serde(rename(deserialize = "externalIP"))]
+    external_ip: Option<IpAddr>,
+
+    timezone: Option<u8>,
+
+    #[serde(rename(deserialize = "rainDelay"))]
+    rain_delay: Option<u8>,
+
+    #[serde(rename(deserialize = "rawData"))]
+    raw_data: WeatherServiceRawData,
+}
+
+/// Temporary decoder until error codes are unified.
+fn weather_service_error_code<'de, D>(deserializer: D) -> Result<ErrorCode, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let code = i8::deserialize(deserializer)?;
+    Ok(match code {
+        0 => ErrorCode::Success,
+        _ => ErrorCode::Unknown(code),
+    })
 }
 
 /// Weather check interval (seconds)
@@ -88,11 +268,13 @@ pub fn check_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&Ope
         // use manual watering percentage (namely methods 0 and 2), this is not ideal
         open_sprinkler.weather_status.checkwt_success_lasttime = None;
 
-        //if !(open_sprinkler.iopts.uwt == 0 || open_sprinkler.iopts.uwt == 2) {
-        if !(open_sprinkler.controller_config.weather_algorithm.is_none() || open_sprinkler.controller_config.weather_algorithm.unwrap_or(WeatherAlgorithm::Manual) == WeatherAlgorithm::RainDelay) {
-            open_sprinkler.set_water_scale(100); // reset watering percentage to 100%
-            open_sprinkler.weather_status.raw_data = None; // reset wt_rawData and errCode
-            open_sprinkler.weather_status.last_response_code = None;
+        //if open_sprinkler.controller_config.weather.algorithm.is_some() && open_sprinkler.controller_config.weather.algorithm != Some(WeatherAlgorithmID::RainDelay) {
+        if let Some(algorithm) = &open_sprinkler.controller_config.weather.algorithm {
+            if !algorithm.use_manual_scale() {
+                open_sprinkler.set_water_scale(100); // reset watering percentage to 100%
+                open_sprinkler.weather_status.raw_data = None; // reset wt_rawData and errCode
+                open_sprinkler.weather_status.last_response_code = None;
+            }
         }
     } else if open_sprinkler.weather_status.checkwt_lasttime.is_none() || now > open_sprinkler.weather_status.checkwt_lasttime.unwrap() + CHECK_WEATHER_TIMEOUT {
         open_sprinkler.weather_status.checkwt_lasttime = Some(now);
@@ -105,7 +287,14 @@ pub fn check_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&Ope
 fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprinkler, WeatherUpdateFlag)) -> result::Result<()> {
     let url = open_sprinkler.get_weather_service_url()?;
 
-    tracing::debug!("Retrieving weather from {}", url.host_str().unwrap_or(""));
+    if url.is_none() {
+        // Weather requests are disabled.
+        return Ok(());
+    }
+
+    let url = url.unwrap();
+
+    tracing::debug!("Retrieving weather from {:?}", url.host_str());
 
     let client = request::build_client().unwrap();
     // @todo log request failures, handle request failures
@@ -115,7 +304,7 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprin
         .header(ACCEPT, HeaderValue::from_str("application/json,text/plain;q=0.9,text/html;q=0.8").unwrap())
         .query(&[
             ("loc", &open_sprinkler.controller_config.location.to_string()),
-            ("wto", open_sprinkler.controller_config.weather_options.as_ref().unwrap_or(&String::from(""))),
+            ("wto", open_sprinkler.controller_config.weather.options.as_ref().unwrap_or(&String::from(""))),
             ("fwv", &open_sprinkler.controller_config.firmware_version.to_string()), // @todo Is this still necessary if it is included in the User-Agent header?
         ])
         .send()
@@ -126,8 +315,90 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprin
     let content_type = String::from(response.headers().get(CONTENT_TYPE).unwrap_or(&HeaderValue::from_str("text/plain").unwrap()).to_str().unwrap_or(""));
 
     if content_type.starts_with("application/json") {
-        // Parsing JSON is easier!
-        todo!()
+        let json = response.json::<WeatherServiceResponse>();
+
+        if let Err(error) = json {
+            tracing::warn!("Could not parse JSON response: {:?}", error);
+            return Ok(());
+        }
+
+        let data = json.unwrap();
+
+        open_sprinkler.weather_status.last_response_code = Some(data.error_code);
+
+        tracing::debug!("Weather service returned response code: {}", open_sprinkler.weather_status.last_response_code.as_ref().unwrap());
+
+        if open_sprinkler.weather_status.last_response_was_successful() {
+            open_sprinkler.update_check_weather_success_timestamp();
+        }
+
+        if open_sprinkler.weather_status.last_response_was_successful() {
+            if let Some(scale) = data.scale {
+                if scale <= WATER_SCALE_MAX as u8 && scale != open_sprinkler.get_water_scale() {
+                    open_sprinkler.controller_config.water_scale = scale;
+
+                    // @todo Push message that watering scale has changed.
+
+                    tracing::trace!("Watering scale: {}", open_sprinkler.get_water_scale());
+                }
+            }
+        }
+
+        if let Some(sunrise) = data.sunrise {
+            if sunrise <= 1440 && sunrise != open_sprinkler.get_sunrise_time() {
+                open_sprinkler.controller_config.sunrise_time = sunrise;
+                tracing::trace!("Sunrise: {}", open_sprinkler.get_sunrise_time());
+            }
+        }
+
+        if let Some(sunset) = data.sunset {
+            if sunset <= 1440 && sunset != open_sprinkler.get_sunset_time() {
+                open_sprinkler.controller_config.sunset_time = sunset;
+                tracing::trace!("Sunset: {}", open_sprinkler.get_sunset_time());
+            }
+        }
+
+        if let Some(external_ip) = data.external_ip {
+            if Some(external_ip) != open_sprinkler.controller_config.external_ip {
+                open_sprinkler.controller_config.external_ip = Some(external_ip);
+
+                // @todo push message that external IP was updated.
+
+                tracing::trace!("External IP: {}", open_sprinkler.controller_config.external_ip.unwrap());
+            }
+        }
+
+        if let Some(timezone) = data.timezone {
+            if timezone <= 108 && timezone != open_sprinkler.controller_config.timezone {
+                open_sprinkler.controller_config.timezone = timezone;
+                tracing::trace!("Timezone: {}", open_sprinkler.controller_config.timezone);
+            }
+        }
+
+        if let Some(rain_delay) = data.rain_delay {
+            if rain_delay > 0 {
+                open_sprinkler.controller_config.rain_delay_stop_time = Some((chrono::Utc::now() + chrono::Duration::hours(i64::from(rain_delay))).timestamp());
+                open_sprinkler.rain_delay_start();
+                tracing::trace!("Starting rain delay for: {}h", rain_delay);
+            } else if rain_delay == 0 {
+                open_sprinkler.rain_delay_stop();
+                tracing::trace!("Ending rain delay");
+            }
+        }
+
+        if let Some(raw_data) = data.raw_data {
+            open_sprinkler.weather_status.raw_data = Some(raw_data);
+        }
+
+        open_sprinkler.commit_config();
+
+        let _ = log::write_log_message(
+            &open_sprinkler,
+            &log::message::WaterLevelMessage::new(open_sprinkler.get_water_scale(), open_sprinkler.weather_status.checkwt_success_lasttime.unwrap()),
+            open_sprinkler.weather_status.checkwt_success_lasttime.unwrap(),
+        );
+
+        return Ok(());
     } else if content_type.starts_with("text/plain") || content_type.starts_with("text/html") {
         // Original weather service response format
         let params: HashMap<String, String> = form_urlencoded::parse(response.text().unwrap_or("".to_string()).as_str().as_bytes()).into_owned().collect();
@@ -140,18 +411,22 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprin
             let err_code = params.get("errCode").unwrap_or(&String::from("")).parse::<i8>();
 
             if err_code.is_ok() {
-                open_sprinkler.weather_status.last_response_code = Some(err_code.unwrap());
+                let err_code = err_code.unwrap();
+                open_sprinkler.weather_status.last_response_code = Some(match err_code {
+                    0 => ErrorCode::Success,
+                    _ => ErrorCode::Unknown(err_code),
+                });
 
-                tracing::debug!("Weather service returned response code: {}", open_sprinkler.weather_status.last_response_code.unwrap());
+                tracing::debug!("Weather service returned response code: {}", err_code);
 
-                if open_sprinkler.weather_status.last_response_code.unwrap() == 0 {
-                    open_sprinkler.set_check_weather_success_timestamp();
+                if open_sprinkler.weather_status.last_response_was_successful() {
+                    open_sprinkler.update_check_weather_success_timestamp();
                 }
             }
         }
 
         // Watering Level (scale)
-        if open_sprinkler.weather_status.last_response_code.is_some() && open_sprinkler.weather_status.last_response_code.unwrap() == 0 && params.contains_key("scale") {
+        if open_sprinkler.weather_status.last_response_was_successful() && params.contains_key("scale") {
             let scale = params.get("scale").unwrap().parse::<i32>().unwrap_or(-1);
             //if scale >= 0 && scale <= WATER_SCALE_MAX && scale != open_sprinkler.iopts.wl as i32 {
             if scale >= 0 && scale <= WATER_SCALE_MAX && scale != open_sprinkler.get_water_scale() as i32 {

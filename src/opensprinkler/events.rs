@@ -1,6 +1,5 @@
 use std::net::IpAddr;
 use reqwest::header;
-use serde::{Serialize, Deserialize};
 
 use super::{OpenSprinkler, http::request, station};
 
@@ -9,39 +8,10 @@ pub mod ifttt;
 #[cfg(feature = "mqtt")]
 pub mod mqtt;
 
-#[derive(Clone, Copy, Serialize, Deserialize)]
-pub struct EventsEnabled {
-    pub program_sched: bool,
-    pub sensor1: bool,
-    pub flow_sensor: bool,
-    pub weather_update: bool,
-    pub reboot: bool,
-    pub station_off: bool,
-    pub sensor2: bool,
-    pub rain_delay: bool,
-    pub station_on: bool,
-}
-
-impl Default for EventsEnabled {
-    fn default() -> Self {
-        EventsEnabled {
-            program_sched: false,
-            sensor1: false,
-            flow_sensor: false,
-            weather_update: false,
-            reboot: false,
-            station_off: false,
-            sensor2: false,
-            rain_delay: false,
-            station_on: false,
-        }
-    }
-}
-
 #[repr(u16)]
 #[derive(Copy, Clone)]
 pub enum NotifyEvent {
-    ProgramSched = 0x0001,
+    ProgramStart = 0x0001,
     Sensor1 = 0x0002,
     FlowSensor = 0x0004,
     WeatherUpdate = 0x0008,
@@ -53,16 +23,16 @@ pub enum NotifyEvent {
 }
 
 // region: Program Scheduled Run
-pub struct ProgramSchedEvent {
+pub struct ProgramStartEvent {
     pub program_id: usize,
     pub program_name: String,
     pub manual: bool,
     pub water_level: u8,
 }
 
-impl ProgramSchedEvent {
-    pub fn new(program_id: usize, program_name: &str, manual: bool, water_level: u8) -> ProgramSchedEvent {
-        ProgramSchedEvent {
+impl ProgramStartEvent {
+    pub fn new(program_id: usize, program_name: &str, manual: bool, water_level: u8) -> ProgramStartEvent {
+        ProgramStartEvent {
             program_id,
             program_name: program_name.to_string(),
             manual,
@@ -71,9 +41,9 @@ impl ProgramSchedEvent {
     }
 }
 
-impl EventType for ProgramSchedEvent {
+impl EventType for ProgramStartEvent {
     fn event_type(&self) -> NotifyEvent {
-        NotifyEvent::ProgramSched
+        NotifyEvent::ProgramStart
     }
 }
 // endregion
@@ -250,8 +220,7 @@ where
     }
 
     if ifttt_event_enabled(open_sprinkler, event) {
-        //ifttt_webhook(event.ifttt_payload(), open_sprinkler.sopts.ifkey.as_str());
-        if let Some(ifttt_api_key) = &open_sprinkler.controller_config.ifttt_key {
+        if let Some(ifttt_api_key) = &open_sprinkler.controller_config.ifttt.web_hooks_key {
             ifttt_webhook(event, ifttt_api_key);
         } else {
             tracing::error!("IFTTT Web Hook API key unset");
@@ -269,8 +238,7 @@ where
     }
 
     if ifttt_event_enabled(open_sprinkler, event) {
-        //ifttt_webhook(event.ifttt_payload(), open_sprinkler.sopts.ifkey.as_str());
-        if let Some(ifttt_api_key) = &open_sprinkler.controller_config.ifkey {
+        if let Some(ifttt_api_key) = &open_sprinkler.controller_config.ifttt.web_hooks_key {
             ifttt_webhook(event, ifttt_api_key);
         } else {
             tracing::error!("IFTTT Web Hook API key unset");
@@ -279,18 +247,17 @@ where
 }
 
 fn ifttt_event_enabled(open_sprinkler: &OpenSprinkler, event: &dyn EventType) -> bool {
-    //let ifttt_enabled: bool = (open_sprinkler.iopts.ife & (event.event_type() as u8)) == 1;
     // @todo This can be more efficient:
     match event.event_type() {
-        NotifyEvent::ProgramSched => open_sprinkler.controller_config.ifttt_events.program_sched,
-        NotifyEvent::Sensor1 => open_sprinkler.controller_config.ifttt_events.sensor1,
-        NotifyEvent::FlowSensor => open_sprinkler.controller_config.ifttt_events.flow_sensor,
-        NotifyEvent::WeatherUpdate => open_sprinkler.controller_config.ifttt_events.weather_update,
-        NotifyEvent::Reboot => open_sprinkler.controller_config.ifttt_events.reboot,
-        NotifyEvent::StationOff => open_sprinkler.controller_config.ifttt_events.station_off,
-        NotifyEvent::Sensor2 => open_sprinkler.controller_config.ifttt_events.sensor2,
-        NotifyEvent::RainDelay => open_sprinkler.controller_config.ifttt_events.rain_delay,
-        NotifyEvent::StationOn => open_sprinkler.controller_config.ifttt_events.station_on,
+        NotifyEvent::ProgramStart => open_sprinkler.controller_config.ifttt.program_start,
+        NotifyEvent::Sensor1 => open_sprinkler.controller_config.ifttt.sensor1,
+        NotifyEvent::FlowSensor => open_sprinkler.controller_config.ifttt.flow_sensor,
+        NotifyEvent::WeatherUpdate => open_sprinkler.controller_config.ifttt.weather_update,
+        NotifyEvent::Reboot => open_sprinkler.controller_config.ifttt.reboot,
+        NotifyEvent::StationOff => open_sprinkler.controller_config.ifttt.station_off,
+        NotifyEvent::Sensor2 => open_sprinkler.controller_config.ifttt.sensor2,
+        NotifyEvent::RainDelay => open_sprinkler.controller_config.ifttt.rain_delay,
+        NotifyEvent::StationOn => open_sprinkler.controller_config.ifttt.station_on,
     }
 }
 

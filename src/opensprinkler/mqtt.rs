@@ -1,61 +1,6 @@
-use core::fmt;
-
-use serde::{Serialize, Deserialize};
-
 use super::events;
 
 extern crate paho_mqtt as mqtt;
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct MQTTConfig {
-    pub enabled: bool,
-    pub version: u32,
-    /// Broker
-    pub host: String,
-    pub port: u16,
-    pub username: String,
-    pub password: String,
-    /// Use TLS
-    pub tls: bool,
-}
-
-impl MQTTConfig {
-    const PROTOCOL_TCP: &'static str = "tcp";
-    const PROTOCOL_SSL: &'static str = "tcp";
-    const PROTOCOL_WS: &'static str = "ws";
-    const PROTOCOL_WSS: &'static str = "wss";
-
-    pub fn protocol(&self) -> &'static str {
-        match self.tls {
-            false => Self::PROTOCOL_TCP,
-            true => Self::PROTOCOL_SSL,
-        }
-    }
-
-    pub fn uri(&self) -> String {
-        format!("{}://{}:{}", self.protocol(), self.host, self.port)
-    }
-}
-
-impl Default for MQTTConfig {
-    fn default() -> Self {
-        MQTTConfig {
-            enabled: false,
-            version: mqtt::MQTT_VERSION_3_1_1,
-            host: String::from(""),
-            port: 1883,
-            username: String::from(""),
-            password: String::from(""),
-            tls: false,
-        }
-    }
-}
-
-impl fmt::Display for MQTTConfig {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}://{}:{}", self.protocol(), self.host, self.port)
-    }
-}
 
 #[derive(Clone)]
 pub struct OSMqtt {
@@ -82,7 +27,7 @@ impl OSMqtt {
             tracing::trace!("MQTT Disconnnection Callback: {}", reason_code);
         });
     }
-    pub fn begin(&self, config: MQTTConfig) {
+    pub fn begin(&self, config: events::mqtt::MQTTConfig) {
         tracing::trace!("MQTT Broker: {}", config);
 
         if self.client.as_ref().unwrap().is_connected() {

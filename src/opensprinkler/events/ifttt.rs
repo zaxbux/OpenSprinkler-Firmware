@@ -7,6 +7,39 @@ use serde_json::Result;
 /// @todo Make configurable
 pub const WEBHOOK_URL: &'static str = "https://maker.ifttt.com";
 
+#[derive(Clone, Serialize, Deserialize)]
+pub struct EventConfig {
+    /// IFTTT Webhooks API key
+    pub web_hooks_key: Option<String>,
+
+    pub program_start: bool,
+    pub sensor1: bool,
+    pub flow_sensor: bool,
+    pub weather_update: bool,
+    pub reboot: bool,
+    pub station_off: bool,
+    pub sensor2: bool,
+    pub rain_delay: bool,
+    pub station_on: bool,
+}
+
+impl Default for EventConfig {
+    fn default() -> Self {
+        EventConfig {
+            web_hooks_key: None,
+            program_start: false,
+            sensor1: false,
+            flow_sensor: false,
+            weather_update: false,
+            reboot: false,
+            station_off: false,
+            sensor2: false,
+            rain_delay: false,
+            station_on: false,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct WebHookPayload {
     value1: String,
@@ -38,7 +71,7 @@ where
     }
 }
 
-impl WebHookEvent for super::ProgramSchedEvent {
+impl WebHookEvent for super::ProgramStartEvent {
     fn ifttt_event(&self) -> String {
         String::from("program")
     }

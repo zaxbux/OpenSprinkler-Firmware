@@ -212,7 +212,7 @@ pub fn check_program_schedule(open_sprinkler: &mut OpenSprinkler, program_data: 
                 tracing::trace!("Program {{id = {}, name = {}}} scheduled", program_index, program.name);
                 events::push_message(
                     &open_sprinkler,
-                    &events::ProgramSchedEvent::new(program_index, &program.name, program.use_weather == 0, if program.use_weather != 0 { open_sprinkler.controller_config.water_scale } else { 100 }),
+                    &events::ProgramStartEvent::new(program_index, &program.name, program.use_weather == 0, if program.use_weather != 0 { open_sprinkler.controller_config.water_scale } else { 100 }),
                 );
             }
         }
@@ -311,7 +311,7 @@ pub fn manual_start_program(open_sprinkler: &mut OpenSprinkler, program_data: &m
 
     if pid > 0 && pid < 255 {
         //events::push_message(open_sprinkler, &events::ProgramSchedEvent::new(pid - 1, prog.name, !uwt, if uwt { open_sprinkler.iopts.wl } else { 100 }));
-        events::push_message(open_sprinkler, &events::ProgramSchedEvent::new(pid - 1, &program.name, !uwt, if uwt { open_sprinkler.controller_config.water_scale } else { 100 }));
+        events::push_message(open_sprinkler, &events::ProgramStartEvent::new(pid - 1, &program.name, !uwt, if uwt { open_sprinkler.controller_config.water_scale } else { 100 }));
     }
 
     for station_index in 0..open_sprinkler.get_station_count() {
