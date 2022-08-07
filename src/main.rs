@@ -137,12 +137,12 @@ fn main() {
     // Main loop
     while running.load(Ordering::SeqCst) {
         // handle flow sensor using polling every 1ms (maximum freq 1/(2*1ms)=500Hz)
+        #[cfg(not(feature = "demo"))]
         if open_sprinkler.get_sensor_type(0).unwrap_or(sensor::SensorType::None) == sensor::SensorType::Flow {
             now_millis = chrono::Utc::now().timestamp_millis();
 
             if now_millis > last_millis {
                 last_millis = now_millis;
-                //loop_fns::flow_poll(&open_sprinkler, &mut flow_state);
                 open_sprinkler.flow_poll();
             }
         }

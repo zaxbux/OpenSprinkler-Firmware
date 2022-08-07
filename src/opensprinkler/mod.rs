@@ -10,8 +10,6 @@ pub mod station;
 pub mod weather;
 
 pub mod controller;
-#[cfg(feature = "demo")]
-mod demo;
 #[cfg(feature = "mqtt")]
 mod mqtt;
 pub mod scheduler;
@@ -100,8 +98,8 @@ pub struct OpenSprinkler {
 
     pub flow_state: sensor::flow::State,
 
-    #[cfg(not(feature = "demo"))]
-    gpio: gpio::Gpio,
+    /* #[cfg(not(feature = "demo"))] */
+    gpio: Option<gpio::Gpio>,
 
     #[cfg(feature = "mqtt")]
     pub mqtt: mqtt::OSMqtt,
@@ -161,29 +159,80 @@ impl OpenSprinkler {
         }
     }
 
-    fn setup_gpio_pins(gpio: &gpio::Gpio) {
-        if let Err(ref error) = gpio.get(gpio::SHIFT_REGISTER_OE).and_then(|pin| Ok(pin.into_output().set_high())) {
-            tracing::error!("Failed to obtain output pin SHIFT_REGISTER_OE: {:?}", error);
+    /// Setup controller
+    pub fn setup(&mut self) -> config::result::Result<()> {
+        // Check reset conditions
+        let config = self.config.read();
+        if let Err(error) = config {
+            tracing::error!("Error reading config: {:?}", error);
+            self.reset_to_defaults()?;
+            return Ok(());
         }
-        if let Err(ref error) = gpio.get(gpio::SHIFT_REGISTER_LATCH).and_then(|pin| Ok(pin.into_output().set_high())) {
-            tracing::error!("Failed to obtain output pin SHIFT_REGISTER_LATCH: {:?}", error);
+
+        // Check reset conditions
+        if config.is_ok() {
+            let config = config.unwrap();
+
+            // @todo What about higher version numbers?
+            if config.firmware_version < self.config.firmware_version {
+                // @todo Migrate config based on existing version
+                tracing::debug!("Invalid firmware version: {:?}", config.firmware_version);
+                self.reset_to_defaults()?;
+                return Ok(());
+            }
+
+            self.config = config;
         }
-        if let Err(ref error) = gpio.get(gpio::SHIFT_REGISTER_CLOCK).and_then(|pin| Ok(pin.into_output().set_high())) {
-            tracing::error!("Failed to obtain output pin SHIFT_REGISTER_CLOCK: {:?}", error);
+
+        /* self.config.firmware_version = FIRMWARE_VERSION; */
+ // This is no longer required, it is initialized with the crate version when compiled.
+ //self.config.fwm = FIRMWARE_VERSION_REVISION;
+        self.config.last_reboot_cause = self.config.reboot_cause;
+        self.config.reboot_cause = config::RebootCause::PowerOn;
+        //self.nvdata_save();
+
+        #[cfg(not(feature = "demo"))]
+        self.setup_gpio();
+
+        self.config.write()
+    }
+
+    /// Setup GPIO peripheral and pins
+    ///
+    /// @todo: Check hardware version and determine which GPIO peripheral to use.
+    #[cfg(not(feature = "demo"))]
+    fn setup_gpio(&mut self) {
+        // Setup GPIO peripheral
+        let gpio = gpio::Gpio::new();
+        if let Err(ref error) = gpio {
+            tracing::error!("Cannot access GPIO peripheral: {:?}", error);
+        } else if let Ok(gpio) = gpio {
+            self.gpio = Some(gpio);
         }
-        if let Err(ref error) = gpio.get(gpio::SHIFT_REGISTER_DATA).and_then(|pin| Ok(pin.into_output().set_high())) {
-            tracing::error!("Failed to obtain output pin SHIFT_REGISTER_DATA: {:?}", error);
-        }
-        if let Err(ref error) = gpio.get(gpio::SENSOR_1).and_then(|pin| Ok(pin.into_input_pullup().set_reset_on_drop(false))) {
-            // @todo Catch abnormal process terminations and reset pullup
-            tracing::error!("Failed to obtain input pin SENSOR_1: {:?}", error);
-        }
-        if let Err(ref error) = gpio.get(gpio::SENSOR_2).and_then(|pin| Ok(pin.into_input_pullup().set_reset_on_drop(false))) {
-            // @todo Catch abnormal process terminations and reset pullup
-            tracing::error!("Failed to obtain input pin SENSOR_2: {:?}", error);
-        }
-        if let Err(ref error) = gpio.get(gpio::RF_TX).and_then(|pin| Ok(pin.into_output().set_low())) {
-            tracing::error!("Failed to obtain output pin RF_TX: {:?}", error);
+
+        // Setup GPIO pins
+        if let Some(ref gpio) = self.gpio {
+            if let Err(ref error) = gpio.get(gpio::SHIFT_REGISTER_OE).and_then(|pin| Ok(pin.into_output().set_high())) {
+                tracing::error!("GPIO Error (SHIFT_REGISTER_OE): {:?}", error);
+            }
+            if let Err(ref error) = gpio.get(gpio::SHIFT_REGISTER_LATCH).and_then(|pin| Ok(pin.into_output().set_high())) {
+                tracing::error!("GPIO Error (SHIFT_REGISTER_LATCH): {:?}", error);
+            }
+            if let Err(ref error) = gpio.get(gpio::SHIFT_REGISTER_CLOCK).and_then(|pin| Ok(pin.into_output().set_high())) {
+                tracing::error!("GPIO Error (SHIFT_REGISTER_CLOCK): {:?}", error);
+            }
+            if let Err(ref error) = gpio.get(gpio::SHIFT_REGISTER_DATA).and_then(|pin| Ok(pin.into_output().set_high())) {
+                tracing::error!("GPIO Error (SHIFT_REGISTER_DATA): {:?}", error);
+            }
+            for i in 0..sensor::MAX_SENSORS {
+                if let Err(ref error) = gpio.get(gpio::SENSOR[i]).and_then(|pin| Ok(pin.into_input_pullup().set_reset_on_drop(false))) {
+                    // @todo Catch abnormal process terminations and reset pullup
+                    tracing::error!("GPIO Error (SENSOR[{}]): {:?}", i, error);
+                }
+            }
+            if let Err(ref error) = gpio.get(gpio::RF_TX).and_then(|pin| Ok(pin.into_output().set_low())) {
+                tracing::error!("GPIO Error (RF_TX): {:?}", error);
+            }
         }
     }
 
@@ -218,7 +267,6 @@ impl OpenSprinkler {
     /// Gets the weather service URL (with adjustment method)
     pub fn get_weather_service_url(&self) -> Result<Option<reqwest::Url>, url::ParseError> {
         if let Some(algorithm) = &self.config.weather.algorithm {
-
             let mut url = url::Url::parse(&self.config.weather.service_url)?;
             if let Ok(mut path_seg) = url.path_segments_mut() {
                 path_seg.push(&algorithm.get_id().to_string());
@@ -371,6 +419,8 @@ impl OpenSprinkler {
 
         #[cfg(target_os = "linux")]
         return system::is_interface_online("eth0");
+
+        return true;
     }
 
     /// @todo Use primary interface and get mac from it.
@@ -392,17 +442,17 @@ impl OpenSprinkler {
     // @todo Implement crate *self_update* for updates
     //pub fn update_dev() {}
 
+    #[cfg(not(feature = "demo"))]
     pub fn flow_poll(&mut self) {
-        #[cfg(not(feature = "demo"))]
-        let sensor1_pin = self.gpio.get(gpio::SENSOR_1).and_then(|pin| Ok(pin.into_input()));
-        #[cfg(feature = "demo")]
-        let sensor1_pin = demo::get_gpio_pin(gpio::SENSOR_1);
+        if let Some(ref gpio) = self.gpio {
+            let sensor1_pin = gpio.get(gpio::SENSOR[0]).and_then(|pin| Ok(pin.into_input()));
 
-        if let Err(ref error) = sensor1_pin {
-            tracing::error!("Failed to obtain sensor input pin (flow): {:?}", error);
-        } else if let Ok(pin) = sensor1_pin {
-            // Perform calculations using the current state of the sensor
-            self.flow_state.poll(pin.read());
+            if let Err(ref error) = sensor1_pin {
+                tracing::error!("GPIO Error (SENSOR[0]): {:?}", error);
+            } else if let Ok(pin) = sensor1_pin {
+                // Perform calculations using the current state of the sensor
+                self.flow_state.poll(pin.read());
+            }
         }
     }
 
@@ -411,71 +461,61 @@ impl OpenSprinkler {
     /// **This will actuate valves**
     pub fn apply_all_station_bits(&mut self) {
         #[cfg(not(feature = "demo"))]
-        let shift_register_latch = self.gpio.get(gpio::SHIFT_REGISTER_LATCH).and_then(|pin| Ok(pin.into_output()));
-        #[cfg(feature = "demo")]
-        let shift_register_latch = demo::get_gpio_pin(gpio::SHIFT_REGISTER_LATCH);
-        if let Err(ref error) = shift_register_latch {
-            #[cfg(not(feature = "demo"))]
-            tracing::error!("Failed to obtain output pin SHIFT_REGISTER_LATCH: {:?}", error);
-        }
-
-        #[cfg(not(feature = "demo"))]
-        let shift_register_clock = self.gpio.get(gpio::SHIFT_REGISTER_CLOCK).and_then(|pin| Ok(pin.into_output()));
-        #[cfg(feature = "demo")]
-        let shift_register_clock = demo::get_gpio_pin(gpio::SHIFT_REGISTER_CLOCK);
-        if let Err(ref error) = shift_register_clock {
-            #[cfg(not(feature = "demo"))]
-            tracing::error!("Failed to obtain output pin SHIFT_REGISTER_CLOCK: {:?}", error);
-        }
-
-        #[cfg(not(feature = "demo"))]
-        let shift_register_data = self.gpio.get(gpio::SHIFT_REGISTER_DATA).and_then(|pin| Ok(pin.into_output()));
-        #[cfg(feature = "demo")]
-        let shift_register_data = demo::get_gpio_pin(gpio::SHIFT_REGISTER_DATA);
-        if let Err(ref error) = shift_register_data {
-            #[cfg(not(feature = "demo"))]
-            tracing::error!("Failed to obtain output pin SHIFT_REGISTER_DATA: {:?}", error);
-        }
-
-        if shift_register_latch.is_ok() && shift_register_clock.is_ok() && shift_register_data.is_ok() {
-            let mut shift_register_latch = shift_register_latch.unwrap();
-            let mut shift_register_clock = shift_register_clock.unwrap();
-            let mut shift_register_data = shift_register_data.unwrap();
-
-            shift_register_latch.set_low();
-
-            // Shift out all station bit values from the highest bit to the lowest
-            for board_index in 0..station::MAX_EXT_BOARDS {
-                //let sbits = if self.status_current.enabled { self.station_bits[station::MAX_EXT_BOARDS - board_index] } else { 0 };
-                let sbits = if self.config.enable_controller { self.station_bits[station::MAX_EXT_BOARDS - board_index] } else { 0 };
-
-                for s in 0..controller::SHIFT_REGISTER_LINES {
-                    shift_register_clock.set_low();
-
-                    if sbits & (1 << (7 - s)) != 0 {
-                        shift_register_data.set_high();
-                        shift_register_data.set_low();
-                    }
-
-                    shift_register_clock.set_high();
-                }
+        if let Some(ref gpio) = self.gpio {
+            let shift_register_latch = gpio.get(gpio::SHIFT_REGISTER_LATCH).and_then(|pin| Ok(pin.into_output()));
+            if let Err(ref error) = shift_register_latch {
+                tracing::error!("GPIO Error (SHIFT_REGISTER_LATCH): {:?}", error);
             }
 
-            shift_register_latch.set_high();
+            let shift_register_clock = gpio.get(gpio::SHIFT_REGISTER_CLOCK).and_then(|pin| Ok(pin.into_output()));
+            if let Err(ref error) = shift_register_clock {
+                tracing::error!("GPIO Error (SHIFT_REGISTER_CLOCK): {:?}", error);
+            }
+
+            let shift_register_data = gpio.get(gpio::SHIFT_REGISTER_DATA).and_then(|pin| Ok(pin.into_output()));
+            if let Err(ref error) = shift_register_data {
+                tracing::error!("GPIO Error (SHIFT_REGISTER_DATA): {:?}", error);
+            }
+
+            if shift_register_latch.is_ok() && shift_register_clock.is_ok() && shift_register_data.is_ok() {
+                let mut shift_register_latch = shift_register_latch.unwrap();
+                let mut shift_register_clock = shift_register_clock.unwrap();
+                let mut shift_register_data = shift_register_data.unwrap();
+
+                shift_register_latch.set_low();
+
+                // Shift out all station bit values from the highest bit to the lowest
+                for board_index in 0..station::MAX_EXT_BOARDS {
+                    //let sbits = if self.status_current.enabled { self.station_bits[station::MAX_EXT_BOARDS - board_index] } else { 0 };
+                    let sbits = if self.config.enable_controller { self.station_bits[station::MAX_EXT_BOARDS - board_index] } else { 0 };
+
+                    for s in 0..controller::SHIFT_REGISTER_LINES {
+                        shift_register_clock.set_low();
+
+                        if sbits & (1 << (7 - s)) != 0 {
+                            shift_register_data.set_high();
+                            shift_register_data.set_low();
+                        }
+
+                        shift_register_clock.set_high();
+                    }
+                }
+
+                shift_register_latch.set_high();
+            }
         }
 
-        
         if self.config.enable_special_stn_refresh {
             self.do_sar();
         }
     }
 
     /// Handle refresh of special stations
-    /// 
+    ///
     /// Original implementation details: [OpenSprinkler/OpenSprinkler-Firmware@d8c1bc0](https://github.com/OpenSprinkler/OpenSprinkler-Firmware/commit/d8c1bc0)
-    /// 
+    ///
     /// Refresh station that is next in line. This deliberately starts with station `101` to avoid startup delays.
-    /// 
+    ///
     /// @todo Async
     fn do_sar(&mut self) {
         let now = chrono::Utc::now().timestamp();
@@ -637,35 +677,27 @@ impl OpenSprinkler {
     fn get_sensor_detected(&self, i: usize) -> bool {
         let normal_state = self.get_sensor_normal_state(i);
 
-        let pin = match i {
-            0 => gpio::SENSOR_1,
-            1 => gpio::SENSOR_2,
-            _ => unreachable!(),
-        };
-
-        tracing::trace!("Reading sensor {}@bcm_pin_{} ({})", i, pin, normal_state);
-
         #[cfg(not(feature = "demo"))]
-        let sensor_pin = self.gpio.get(pin).and_then(|pin| Ok(pin.into_input()));
+        if let Some(ref gpio) = self.gpio {
+            let sensor = gpio.get(gpio::SENSOR[i]).and_then(|pin| Ok(pin.into_input()));
 
-        #[cfg(feature = "demo")]
-        let sensor_pin = demo::get_gpio_pin(pin);
-
-        if let Err(ref error) = sensor_pin {
-            tracing::error!("Failed to obtain sensor input pin (flow): {:?}", error);
-            return false;
-        } else {
-            return match sensor_pin.unwrap().read() {
-                gpio::Level::Low => match normal_state {
-                    sensor::NormalState::Closed => false,
-                    sensor::NormalState::Open => true,
-                },
-                gpio::Level::High => match normal_state {
-                    sensor::NormalState::Closed => true,
-                    sensor::NormalState::Open => false,
-                },
-            };
+            if let Err(ref error) = sensor {
+                tracing::error!("GPIO Error (SENSOR[{}]): {:?}", i, error);
+            } else if let Ok(sensor) = sensor {
+                return match sensor.read() {
+                    gpio::Level::Low => match normal_state {
+                        sensor::NormalState::Closed => false,
+                        sensor::NormalState::Open => true,
+                    },
+                    gpio::Level::High => match normal_state {
+                        sensor::NormalState::Closed => true,
+                        sensor::NormalState::Open => false,
+                    },
+                };
+            }
         }
+
+        false
     }
 
     /// Return program switch status
@@ -705,7 +737,7 @@ impl OpenSprinkler {
         let code = if value { data.on } else { data.off };
 
         if let Err(ref error) = rf::send_rf_signal(self, code.into(), data.timing.into()) {
-            tracing::error!("Could not switch RF station: {:?}", error);
+            tracing::error!("[RF Station] Error: {:?}", error);
         }
     }
 
@@ -716,17 +748,17 @@ impl OpenSprinkler {
         tracing::trace!("[GPIO Station] pin: {} state: {}", data.pin, value);
 
         #[cfg(not(feature = "demo"))]
-        let pin = self.gpio.get(data.pin).and_then(|pin| Ok(pin.into_output()));
-        #[cfg(feature = "demo")]
-        let pin = demo::get_gpio_pin(data.pin);
+        if let Some(ref gpio) = self.gpio {
+            let pin = gpio.get(data.pin).and_then(|pin| Ok(pin.into_output()));
 
-        if let Err(ref error) = pin {
-            tracing::error!("[GPIO Station] pin {} Failed to obtain output pin: {:?}", data.pin, error);
-        } else if let Ok(mut pin) = pin {
-            pin.write(match value {
-                false => !data.active_level(),
-                true => data.active_level(),
-            });
+            if let Err(ref error) = pin {
+                tracing::error!("GPIO Error (GPIO Station Pin {}): {:?}", data.pin, error);
+            } else if let Ok(mut pin) = pin {
+                pin.write(match value {
+                    false => !data.active_level(),
+                    true => data.active_level(),
+                });
+            }
         }
     }
 
@@ -743,10 +775,7 @@ impl OpenSprinkler {
 
         // @todo log request failures
         let client = request::build_client().unwrap();
-        let response = client
-            .get(host)
-            .query(&http::request::RemoteStationRequestParametersV2_1_9::new(&self.config.device_key, data.sid, value, timer))
-            .send();
+        let response = client.get(host).query(&http::request::RemoteStationRequestParametersV2_1_9::new(&self.config.device_key, data.sid, value, timer)).send();
 
         if let Err(error) = response {
             tracing::error!("[Remote Station] HTTP request error: {:?}", error);
@@ -794,45 +823,16 @@ impl OpenSprinkler {
         }
     }
 
+    pub fn get_available_gpio_pins(&self) {
+        todo!();
+    }
+
     /// "Factory Reset
     ///
     /// This function should be called if the config does not exist.
     pub fn reset_to_defaults(&self) -> config::result::Result<()> {
         tracing::info!("Resetting controller to defaults.");
         Ok(self.config.write_default()?)
-    }
-
-    // Setup function for options
-    pub fn options_setup(&mut self) -> config::result::Result<()> {
-        // Check reset conditions
-        let config = self.config.read();
-        if let Err(error) = config {
-            tracing::error!("Error reading config: {:?}", error);
-            self.reset_to_defaults()?;
-            return Ok(());
-        }
-
-        // Check reset conditions
-        if config.is_ok() {
-            let config = config.unwrap();
-
-            // @todo What about higher version numbers?
-            if config.firmware_version < self.config.firmware_version {
-                // @todo Migrate config based on existing version
-                tracing::debug!("Invalid firmware version: {:?}", config.firmware_version);
-                self.reset_to_defaults()?;
-                return Ok(());
-            }
-
-            self.config = config;
-        }
-
-        /* self.config.firmware_version = FIRMWARE_VERSION; */ // This is no longer required, it is initialized with the crate version when compiled.
-        //self.config.fwm = FIRMWARE_VERSION_REVISION;
-        self.config.last_reboot_cause = self.config.reboot_cause;
-        self.config.reboot_cause = config::RebootCause::PowerOn;
-        //self.nvdata_save();
-        self.config.write()
     }
 
     /* /// Save controller config
@@ -983,20 +983,13 @@ impl OpenSprinkler {
 
 impl Default for OpenSprinkler {
     fn default() -> Self {
-        let gpio = gpio::Gpio::new();
-        if let Err(ref error) = gpio {
-            tracing::error!("Failed to obtain GPIO chip: {:?}", error);
-        } else if gpio.is_ok() {
-            OpenSprinkler::setup_gpio_pins(gpio.as_ref().unwrap());
-        }
-
         Self {
             config: config::Config::new(),
 
             flow_state: sensor::flow::State::default(),
 
-            #[cfg(not(feature = "demo"))]
-            gpio: gpio.unwrap(),
+            /* #[cfg(not(feature = "demo"))] */
+            gpio: None,
 
             #[cfg(feature = "mqtt")]
             mqtt: mqtt::OSMqtt::new(),
