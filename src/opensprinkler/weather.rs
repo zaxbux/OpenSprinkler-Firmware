@@ -8,13 +8,12 @@ use reqwest::header::{HeaderValue, ACCEPT, CONTENT_TYPE};
 use serde::{de, ser, Deserialize, Deserializer, Serialize};
 use std::{
     collections::HashMap,
-    error::Error,
     net::{IpAddr, Ipv4Addr},
 };
 
 pub type WeatherServiceRawData = Option<serde_json::Value>;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WeatherConfig {
     /// Weather Service URL
     pub service_url: String,
@@ -24,6 +23,19 @@ pub struct WeatherConfig {
     ///
     /// This data is specific to the weather adjustment method.
     pub options: Option<String>,
+}
+
+impl WeatherConfig {
+    pub fn set_algorithm(&mut self, id: Option<u8>) {
+        match id {
+            None => self.algorithm = None,
+            Some(0) => self.algorithm = Some(WeatherAlgorithm::Manual(algorithm::Manual)),
+            Some(1) => self.algorithm = Some(WeatherAlgorithm::Zimmerman(algorithm::Zimmerman)),
+            Some(2) => self.algorithm = Some(WeatherAlgorithm::RainDelay(algorithm::RainDelay)),
+            Some(3) => self.algorithm = Some(WeatherAlgorithm::ETo(algorithm::Evapotranspiration)),
+            _ => unimplemented!(),
+        }
+    }
 }
 
 impl Default for WeatherConfig {
@@ -48,15 +60,26 @@ pub enum WeatherAlgorithmID {
 impl ToString for WeatherAlgorithmID {
     fn to_string(&self) -> String {
         match *self {
-            WeatherAlgorithmID::Manual => String::from("0"),
-            WeatherAlgorithmID::Zimmerman => String::from("1"),
-            WeatherAlgorithmID::RainDelay => String::from("2"),
-            WeatherAlgorithmID::ETo => String::from("3"),
+            WeatherAlgorithmID::Manual => 0.to_string(),
+            WeatherAlgorithmID::Zimmerman => 1.to_string(),
+            WeatherAlgorithmID::RainDelay => 2.to_string(),
+            WeatherAlgorithmID::ETo => 3.to_string(),
         }
     }
 }
 
-#[derive(PartialEq)]
+impl Into<i8> for WeatherAlgorithmID {
+    fn into(self) -> i8 {
+        match self {
+            WeatherAlgorithmID::Manual => 0,
+            WeatherAlgorithmID::Zimmerman => 1,
+            WeatherAlgorithmID::RainDelay => 2,
+            WeatherAlgorithmID::ETo => 3,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum WeatherAlgorithm {
     Manual(algorithm::Manual),
     Zimmerman(algorithm::Zimmerman),
@@ -90,10 +113,10 @@ impl ser::Serialize for WeatherAlgorithm {
         S: serde::Serializer,
     {
         match *self {
-            WeatherAlgorithm::Manual(_) => serializer.serialize_str(&WeatherAlgorithmID::Manual.to_string()),
-            WeatherAlgorithm::Zimmerman(_) => serializer.serialize_str(&WeatherAlgorithmID::Zimmerman.to_string()),
-            WeatherAlgorithm::RainDelay(_) => serializer.serialize_str(&WeatherAlgorithmID::RainDelay.to_string()),
-            WeatherAlgorithm::ETo(_) => serializer.serialize_str(&WeatherAlgorithmID::ETo.to_string()),
+            WeatherAlgorithm::Manual(_) => serializer.serialize_i8(WeatherAlgorithmID::Manual.into()),
+            WeatherAlgorithm::Zimmerman(_) => serializer.serialize_i8(WeatherAlgorithmID::Zimmerman.into()),
+            WeatherAlgorithm::RainDelay(_) => serializer.serialize_i8(WeatherAlgorithmID::RainDelay.into()),
+            WeatherAlgorithm::ETo(_) => serializer.serialize_i8(WeatherAlgorithmID::ETo.into()),
         }
     }
 }
@@ -101,13 +124,13 @@ impl ser::Serialize for WeatherAlgorithm {
 struct WeatherAlgorithmVisitor;
 
 impl<'de> de::Visitor<'de> for WeatherAlgorithmVisitor {
-    type Value = i8;
+    type Value = i32;
 
     fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("an integer between -2^7 and 2^7")
     }
 
-    fn visit_i8<E>(self, v: i8) -> Result<Self::Value, E>
+    fn visit_i32<E>(self, v: i32) -> Result<Self::Value, E>
     where
         E: de::Error,
     {
@@ -120,7 +143,7 @@ impl<'de> de::Deserialize<'de> for WeatherAlgorithm {
     where
         D: Deserializer<'de>,
     {
-        match deserializer.deserialize_i8(WeatherAlgorithmVisitor)? {
+        match deserializer.deserialize_i32(WeatherAlgorithmVisitor)? {
             0 => Ok(WeatherAlgorithm::Manual(algorithm::Manual)),
             1 => Ok(WeatherAlgorithm::Zimmerman(algorithm::Zimmerman)),
             2 => Ok(WeatherAlgorithm::RainDelay(algorithm::RainDelay)),
