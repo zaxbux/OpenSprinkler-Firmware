@@ -10,12 +10,12 @@ pub mod station;
 pub mod weather;
 
 pub mod controller;
+pub mod errors;
 #[cfg(feature = "mqtt")]
 mod mqtt;
 pub mod scheduler;
 #[cfg(target_os = "linux")]
 pub mod system;
-pub mod errors;
 
 use std::cmp::max;
 use std::path::PathBuf;
@@ -40,30 +40,14 @@ struct ControllerSensorStatus {
 /// Volatile controller status bits
 #[derive(Copy, Clone)]
 pub struct ControllerStatus {
-    // operation enable (when set, controller operation is enabled)
-    //pub enabled: bool,
-    /// rain delay bit (when set, rain delay is applied)
+    /// rain delay bit (when [true], rain delay is applied)
     pub rain_delayed: bool,
-    // sensor1 status bit (when set, sensor1 on is detected)
-    //pub sensor1: bool,
     /// [true] means a program is being executed currently
     pub program_busy: bool,
     /// [true] means a safe reboot has been marked
     pub safe_reboot: bool,
-    // master station index
-    //pub mas: Option<usize>,
-    // master2 station index
-    //pub mas2: Option<usize>,
-    // sensor2 status bit (when set, sensor2 on is detected)
-    //pub sensor2: bool,
-    // sensor1 active bit (when set, sensor1 is activated)
-    //pub sensor1_active: bool,
-    // sensor2 active bit (when set, sensor2 is activated)
-    //pub sensor2_active: bool,
-    // request mqtt restart
-    //pub req_mqtt_restart: bool,
+    /// Sensor status
     sensors: [ControllerSensorStatus; 2],
-
     /// Reboot timer
     pub reboot_timer: i64,
 }
@@ -71,17 +55,9 @@ pub struct ControllerStatus {
 impl Default for ControllerStatus {
     fn default() -> Self {
         ControllerStatus {
-            //enabled: true,
             rain_delayed: false,
-            //sensor1: false,
             program_busy: false,
             safe_reboot: false,
-            //mas: None,
-            //mas2: None,
-            //sensor2: false,
-            //sensor1_active: false,
-            //sensor2_active: false,
-            //req_mqtt_restart: false,
             reboot_timer: 0,
 
             sensors: [ControllerSensorStatus { detected: false, active: false }, ControllerSensorStatus { detected: false, active: false }],
@@ -96,48 +72,32 @@ const FLOW_COUNT_REALTIME_WINDOW: i64 = 30;
 
 pub struct OpenSprinkler {
     pub config: config::Config,
-
-    pub flow_state: sensor::flow::State,
-
-    /* #[cfg(not(feature = "demo"))] */
-    gpio: Option<gpio::Gpio>,
-
-    #[cfg(feature = "mqtt")]
-    pub mqtt: mqtt::Mqtt,
-
     pub status_current: ControllerStatus,
     pub status_last: ControllerStatus,
 
-    // Number of controller boards (including "master")
-    //pub nboards: usize,
+    /// Weather service status
+    pub weather_status: weather::WeatherStatus,
 
-    // Total number of stations or zones
-    //pub nstations: usize,
+    /// time when the most recent rain delay started (seconds)
+    pub raindelay_on_last_time: Option<i64>,
+
+    /// Sensor Status
+    pub sensor_status: [sensor::SensorStatus; sensor::MAX_SENSORS], // @todo refactor
+
     /// station activation bits. each unsigned char corresponds to a board (8 stations)
     ///
     /// first byte-> master controller, second byte-> ext. board 1, and so on
     pub station_bits: [u8; station::MAX_NUM_BOARDS],
 
-    //pub nvdata: config::data_type::ControllerNonVolatile,
-    //pub iopts: config::data_type::IntegerOptions,
-    //pub sopts: config::data_type::StringOptions,
-    //pub stations: Stations,
-    //pub programs: Programs,
-    /// Sensor Status
-    pub sensor_status: [sensor::SensorStatus; sensor::MAX_SENSORS],
-
-    /// time when the most recent rain delay started (seconds)
-    pub raindelay_on_last_time: Option<i64>,
-
     /// Starting flow count (for logging)
     pub flow_count_log_start: u64,
 
-    // flow count (for computing real-time flow rate)
-    flow_count_rt: u64,
-    flow_count_rt_start: u64,
+    pub flow_state: sensor::flow::State,
 
-    /// Weather service status
-    pub weather_status: weather::WeatherStatus,
+    #[cfg(feature = "mqtt")]
+    pub mqtt: mqtt::Mqtt,
+
+    gpio: Option<gpio::Gpio>,
 
     /// time when controller is powered up most recently (seconds)
     ///
@@ -146,6 +106,10 @@ pub struct OpenSprinkler {
 
     sar__next_sid_to_refresh: usize,
     sar__last_now: i64,
+
+    // flow count (for computing real-time flow rate)
+    flow_count_rt: u64,
+    flow_count_rt_start: u64,
 }
 
 impl OpenSprinkler {
@@ -164,8 +128,7 @@ impl OpenSprinkler {
     pub fn setup(&mut self) -> errors::Result<()> {
         // Read configuration from file
         if !self.config.exists() {
-            tracing::debug!("Config does not exist, writing defaults");
-            /*self.config.write_default()?;*/ // The controller is initialized with defaults, these will be written at the end of this function.
+            tracing::debug!("Config file does not exist");
         }
 
         // Check reset conditions
@@ -265,7 +228,6 @@ impl OpenSprinkler {
     }
 
     pub fn is_remote_extension(&self) -> bool {
-        //self.iopts.re == 1
         self.config.enable_remote_ext_mode
     }
 
@@ -308,11 +270,6 @@ impl OpenSprinkler {
         self.station_bits[bid] & (1 << s) != 0
     }
 
-    /// Get sensor type
-    ///
-    /// - `0` = Sensor 1
-    /// - `1` = Sensor 2
-    /// - ...
     pub fn get_sensor_type(&self, i: usize) -> Option<sensor::SensorType> {
         self.config.sensors[i].sensor_type
     }
@@ -330,7 +287,6 @@ impl OpenSprinkler {
     }
 
     pub fn get_flow_pulse_rate(&self) -> u16 {
-        //(u16::from(self.config.fpr1) << 8) + u16::from(self.config.fpr0)
         self.config.flow_pulse_rate
     }
 
@@ -347,9 +303,6 @@ impl OpenSprinkler {
     pub fn is_master_station(&self, station_index: station::StationIndex) -> bool {
         self.get_master_station_index(0) == Some(station_index) || self.get_master_station_index(1) == Some(station_index)
     }
-    // endregion GETTERS
-
-    // region: SETTERS
 
     pub fn set_water_scale(&mut self, scale: u8) {
         //self.iopts.wl = scale;
@@ -360,7 +313,6 @@ impl OpenSprinkler {
     pub fn update_check_weather_success_timestamp(&mut self) {
         self.weather_status.checkwt_success_lasttime = Some(chrono::Utc::now().timestamp());
     }
-    // endregion SETTERS
 
     pub fn start_flow_log_count(&mut self) {
         self.flow_count_log_start = self.flow_state.get_flow_count();
@@ -373,9 +325,7 @@ impl OpenSprinkler {
 
     /// Realtime flow count
     pub fn update_realtime_flow_count(&mut self, now_seconds: i64) {
-        //if open_sprinkler.iopts.sn1t == SensorType::Flow as u8 && now_seconds % FLOW_COUNT_REALTIME_WINDOW == 0 {
         if self.get_sensor_type(0).unwrap_or(sensor::SensorType::None) == sensor::SensorType::Flow && now_seconds % FLOW_COUNT_REALTIME_WINDOW == 0 {
-            //open_sprinkler.flowcount_rt = if flow_state.flow_count > flow_count_rt_start { flow_state.flow_count - flow_count_rt_start } else { 0 };
             self.flow_count_rt = max(0, self.flow_state.get_flow_count() - self.flow_count_rt_start); // @fixme subtraction overflow
             self.flow_count_rt_start = self.flow_state.get_flow_count();
         }
@@ -384,9 +334,7 @@ impl OpenSprinkler {
     pub fn check_reboot_request(&mut self, now_seconds: i64) {
         if self.status_current.safe_reboot && (now_seconds > self.status_current.reboot_timer) {
             // if no program is running at the moment and if no program is scheduled to run in the next minute
-            //if !open_sprinkler.status.program_busy && !program_pending_soon(&open_sprinkler, &program_data, now_seconds + 60) {
             if !self.status_current.program_busy && !self.program_pending_soon(now_seconds + 60) {
-                //open_sprinkler.reboot_dev(open_sprinkler.nvdata.reboot_cause);
                 self.reboot_dev(self.config.reboot_cause).unwrap();
             }
         } else if self.status_current.reboot_timer != 0 && (now_seconds > self.status_current.reboot_timer) {
@@ -394,20 +342,12 @@ impl OpenSprinkler {
         }
     }
 
-    //fn program_pending_soon(open_sprinkler: &OpenSprinkler, program_data: &ProgramData, timestamp: i64) -> bool {
     fn program_pending_soon(&self, timestamp: i64) -> bool {
-        //let mut program_pending_soon = false;
-        //for program_index in 0..program_data.nprograms {
         for program in self.config.programs.iter() {
-            //if program_data.read(program_index).unwrap().check_match(&open_sprinkler, timestamp) {
             if program.check_match(self, timestamp) {
-                //program_pending_soon = true;
-                //break;
                 return true;
             }
         }
-
-        //program_pending_soon
         return false;
     }
 
@@ -419,33 +359,38 @@ impl OpenSprinkler {
 
     /// @todo Define primary interface e.g. `eth0` and check status (IFF_UP).
     pub fn network_connected(&self) -> bool {
-        #[cfg(feature = "demo")]
-        return true;
+        if cfg!(feature = "demo") {
+            return true;
+        }
 
         #[cfg(target_os = "linux")]
         return system::is_interface_online("eth0");
 
+        // @hack default case
         return true;
     }
 
-    /// @todo Use primary interface and get mac from it.
-    pub fn load_hardware_mac() {}
+    pub fn load_hardware_mac() {
+        // Use primary interface and get mac from it.
+        todo!();
+    }
 
     pub fn reboot_dev(&mut self, cause: config::RebootCause) -> config::result::Result<()> {
-        //self.nvdata.reboot_cause = cause;
         self.config.reboot_cause = cause;
-        //self.nvdata_save();
         self.config.write()?;
 
         if cfg!(not(feature = "demo")) {
-            // @todo reboot via commandline, dbus, libc::reboot, etc.
+            // reboot via commandline, dbus, libc::reboot, etc.
+            todo!();
         }
 
         Ok(())
     }
 
-    // @todo Implement crate *self_update* for updates
-    //pub fn update_dev() {}
+    /// Update software
+    pub fn update_dev() {
+        todo!();
+    }
 
     #[cfg(not(feature = "demo"))]
     pub fn flow_poll(&mut self) {
@@ -491,7 +436,6 @@ impl OpenSprinkler {
 
                 // Shift out all station bit values from the highest bit to the lowest
                 for board_index in 0..station::MAX_EXT_BOARDS {
-                    //let sbits = if self.status_current.enabled { self.station_bits[station::MAX_EXT_BOARDS - board_index] } else { 0 };
                     let sbits = if self.config.enable_controller { self.station_bits[station::MAX_EXT_BOARDS - board_index] } else { 0 };
 
                     for s in 0..controller::SHIFT_REGISTER_LINES {
@@ -527,7 +471,6 @@ impl OpenSprinkler {
 
         if now > self.sar__last_now {
             // Perform this no more than once per second
-            // @fixme variable lifetime
             self.sar__last_now = now;
             self.sar__next_sid_to_refresh = (self.sar__next_sid_to_refresh + 1) % station::MAX_NUM_STATIONS;
             let board_index = self.sar__next_sid_to_refresh >> 3;
@@ -539,13 +482,11 @@ impl OpenSprinkler {
     /// Check rain delay status
     pub fn check_rain_delay_status(&mut self, now_seconds: i64) {
         if self.status_current.rain_delayed {
-            //if now_seconds >= open_sprinkler.nvdata.rd_stop_time.unwrap_or(0) {
             if now_seconds >= self.config.rain_delay_stop_time.unwrap_or(0) {
                 // rain delay is over
                 self.rain_delay_stop();
             }
         } else {
-            //if open_sprinkler.nvdata.rd_stop_time.unwrap_or(0) > now_seconds {
             if self.config.rain_delay_stop_time.unwrap_or(0) > now_seconds {
                 // rain delay starts now
                 self.rain_delay_start();
@@ -557,11 +498,11 @@ impl OpenSprinkler {
             if self.status_current.rain_delayed {
                 // rain delay started, record time
                 self.raindelay_on_last_time = now_seconds.try_into().unwrap();
-                /* push_message(&open_sprinkler, NotifyEvent::RainDelay, RainDelay::new(true)); */
+                events::push_message(self, &events::RainDelayEvent::new(true));
             } else {
                 // rain delay stopped, write log
                 let _ = log::write_log_message(&self, &log::message::SensorMessage::new(log::LogDataType::RainDelay, now_seconds), now_seconds);
-                /* push_message(&open_sprinkler, NotifyEvent::RainDelay, RainDelay::new(false)); */
+                events::push_message(self, &events::RainDelayEvent::new(false));
             }
             events::push_message(&self, &events::RainDelayEvent::new(true));
             self.status_last.rain_delayed = self.status_current.rain_delayed;
@@ -623,7 +564,6 @@ impl OpenSprinkler {
     pub fn check_program_switch_status(&mut self, program_data: &mut program::ProgramQueue) {
         let program_switch = self.detect_program_switch_status();
 
-        //if program_switch[0] == true || program_switch[1] == true {
         if program_switch.into_iter().any(|d| d == true) {
             // immediately stop all stations
             self.reset_all_stations_immediate(program_data);
@@ -803,23 +743,14 @@ impl OpenSprinkler {
 
     /// Switch Special Station
     pub fn switch_special_station(&mut self, station_index: station::StationIndex, value: bool) {
-        //let station = self.stations.get(station_index).unwrap();
-        let station = self.config.stations.get(station_index).unwrap();
-        //let station_type = self.get_station_type(station);
-        // check if station is "special"
-        /* if station.r#type == StationType::Standard {
-            return ();
-        } */ // Not necessary, match block ignores standard
-
-        //let data: &StationData;
-        //let data = self.get_station_data(station);
-        match station.station_type {
-            station::StationType::RadioFrequency => self.switch_rf_station(station::RFStationData::try_from(station.sped.as_ref().unwrap()).unwrap(), value),
-            station::StationType::Remote => self.switch_remote_station(station::RemoteStationData::try_from(station.sped.as_ref().unwrap()).unwrap(), value),
-            station::StationType::GPIO => self.switch_gpio_station(station::GPIOStationData::try_from(station.sped.as_ref().unwrap()).unwrap(), value),
-            station::StationType::HTTP => self.switch_http_station(station::HTTPStationData::try_from(station.sped.as_ref().unwrap()).unwrap(), value),
-            // Nothing to do for [StationType::Standard] and [StationType::Other]
-            _ => (),
+        if let Some(station) = self.config.stations.get(station_index) {
+            match station.station_type {
+                station::StationType::RadioFrequency => self.switch_rf_station(station::RFStationData::try_from(station.sped.as_ref().unwrap()).unwrap(), value),
+                station::StationType::Remote => self.switch_remote_station(station::RemoteStationData::try_from(station.sped.as_ref().unwrap()).unwrap(), value),
+                station::StationType::GPIO => self.switch_gpio_station(station::GPIOStationData::try_from(station.sped.as_ref().unwrap()).unwrap(), value),
+                station::StationType::HTTP => self.switch_http_station(station::HTTPStationData::try_from(station.sped.as_ref().unwrap()).unwrap(), value),
+                _ => (), // Nothing to do for [StationType::Standard] and [StationType::Other]
+            }
         }
     }
 
@@ -835,43 +766,28 @@ impl OpenSprinkler {
         Ok(self.config.write_default()?)
     }
 
-    /* /// Save controller config
-    pub fn commit_config(&self) -> Result<(), config::Error> {
-        self.config.write()
-        //let _ = config::commit_controller_nv(&self.nvdata);
-    } */
-
     /// Enable controller operation
     pub fn enable(&mut self) {
-        //self.status_current.enabled = true;
-        //self.iopts.den = 1;
         self.config.enable_controller = true;
-        //self.iopts_save();
         self.config.write().unwrap();
     }
 
     /// Disable controller operation
     pub fn disable(&mut self) {
-        //self.status_current.enabled = false;
-        //self.iopts.den = 0;
         self.config.enable_controller = false;
-        //self.iopts_save();
         self.config.write().unwrap();
     }
 
     /// Start rain delay
     pub fn rain_delay_start(&mut self) {
         self.status_current.rain_delayed = true;
-        //self.nvdata_save();
         self.config.write().unwrap();
     }
 
     /// Stop rain delay
     pub fn rain_delay_stop(&mut self) {
         self.status_current.rain_delayed = false;
-        //self.nvdata.rd_stop_time = None;
         self.config.rain_delay_stop_time = None;
-        //self.nvdata_save();
         self.config.write().unwrap();
     }
 
@@ -951,7 +867,6 @@ impl OpenSprinkler {
                 }
 
                 // If system is disabled, turn off zone
-                //if !self.status_current.enabled {
                 if !self.config.enable_controller {
                     controller::turn_off_station(self, program_data, now_seconds, station_index);
                 }
@@ -960,16 +875,6 @@ impl OpenSprinkler {
                 if self.status_current.rain_delayed && !self.config.stations[station_index].attrib.ignore_rain_delay {
                     controller::turn_off_station(self, program_data, now_seconds, station_index);
                 }
-
-                /* // if sensor1 is on and zone does not ignore sensor1, turn it off
-                if sn1 && !self.config.stations[station_index].attrib.ignore_sensor[0] {
-                    controller::turn_off_station(self, program_data, now_seconds, station_index);
-                }
-
-                // if sensor2 is on and zone does not ignore sensor2, turn it off
-                if sn2 && !self.config.stations[station_index].attrib.ignore_sensor[1] {
-                    controller::turn_off_station(self, program_data, now_seconds, station_index);
-                } */
 
                 for i in 0..sensor::MAX_SENSORS {
                     if sn[i] && !self.config.stations[station_index].attrib.ignore_sensor[i] {
@@ -985,28 +890,22 @@ impl Default for OpenSprinkler {
     fn default() -> Self {
         Self {
             config: config::Config::default(),
-
-            flow_state: sensor::flow::State::default(),
-
-            /* #[cfg(not(feature = "demo"))] */
-            gpio: None,
-
-            #[cfg(feature = "mqtt")]
-            mqtt: mqtt::Mqtt::new(),
-
             status_current: ControllerStatus::default(),
             status_last: ControllerStatus::default(),
+            weather_status: weather::WeatherStatus::default(),
+            raindelay_on_last_time: None,
             sensor_status: [sensor::SensorStatus::default(); sensor::MAX_SENSORS],
             station_bits: [0u8; station::MAX_NUM_BOARDS],
-            boot_time: chrono::Utc::now(),
-            raindelay_on_last_time: None,
             flow_count_log_start: 0,
-            flow_count_rt: 0,
-            flow_count_rt_start: 0,
-            weather_status: weather::WeatherStatus::default(),
-            // special station auto-refresh
+            flow_state: sensor::flow::State::default(),
+            #[cfg(feature = "mqtt")]
+            mqtt: mqtt::Mqtt::new(),
+            gpio: None,
+            boot_time: chrono::Utc::now(),
             sar__next_sid_to_refresh: station::MAX_NUM_STATIONS >> 1,
             sar__last_now: 0,
+            flow_count_rt: 0,
+            flow_count_rt_start: 0,
         }
     }
 }

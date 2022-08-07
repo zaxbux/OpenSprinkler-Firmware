@@ -148,10 +148,6 @@ pub struct Config {
 }
 
 impl Config {
-    /* pub fn new() -> Self {
-        Self::default()
-    } */
-
     pub fn new(path: PathBuf) -> Self {
         Self {
             path,
@@ -173,7 +169,6 @@ impl Config {
         })
     }
 
-    //pub fn write<T: Serialize>(&self, document: &T) -> result::Result<()> {
     pub fn write(&self) -> result::Result<()> {
         tracing::debug!("Write: {:?}", self.path.canonicalize().unwrap_or(self.path.clone()));
         let buf = bson::to_vec(&self)?;
@@ -227,7 +222,7 @@ impl Default for Config {
 
 impl fmt::Display for Config {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:#?}", serde_json::to_string_pretty(&self))
+        write!(f, "{}", serde_json::to_string_pretty(&self).unwrap_or(String::from("{}")))
     }
 }
 

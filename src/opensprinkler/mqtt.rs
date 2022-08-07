@@ -58,8 +58,6 @@ impl Mqtt {
         Box::new(move |client: &mqtt::AsyncClient| -> () {
             tracing::trace!("Connection Callback");
             let _ = client.publish(online_message.clone());
-            //let tok = client.publish(online_message.clone());
-            //tok.wait();
         })
     }
 

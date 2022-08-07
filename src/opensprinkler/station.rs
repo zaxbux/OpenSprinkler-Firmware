@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::utils;
 
-use super::{sensor, controller};
+use super::{controller, sensor};
 
 pub type StationIndex = usize;
 
@@ -67,7 +67,7 @@ enum StationOption {
 #[repr(u8)]
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub enum StationType {
-    /// Stnadard station
+    /// Standard station
     Standard = 0x00,
     /// RF station
     RadioFrequency = 0x01,
@@ -98,12 +98,8 @@ impl Default for Station {
             attrib: StationAttrib {
                 use_master: [false; MAX_MASTER_STATIONS],
                 ignore_sensor: [false; sensor::MAX_SENSORS],
-                //mas: true,
-                //igs: false,
-                //mas2: false,
                 is_disabled: false,
                 is_sequential: true,
-                //igs2: false,
                 ignore_rain_delay: false,
             },
             station_type: StationType::Standard,
@@ -115,20 +111,14 @@ impl Default for Station {
 /// Station Attributes
 #[derive(Clone, Serialize, Deserialize)]
 pub struct StationAttrib {
+    /// Use master stations
     pub use_master: [bool; MAX_MASTER_STATIONS],
+    /// Ignore sensors
     pub ignore_sensor: [bool; sensor::MAX_SENSORS],
-    /// Use Master #1
-    //pub mas: bool,
-    /// Ignore Sensor #1
-    //pub igs: bool,
-    /// Use Master #2
-    //pub mas2: bool,
     /// Disabled
     pub is_disabled: bool,
     /// Sequential
     pub is_sequential: bool,
-    /// Ignore Sensor #2
-    //pub igs2: bool,
     /// Ignore Rain Delay
     pub ignore_rain_delay: bool,
 }

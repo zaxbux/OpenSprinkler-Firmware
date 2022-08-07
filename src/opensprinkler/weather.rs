@@ -1,6 +1,6 @@
 pub mod algorithm;
 
-use crate::opensprinkler::{http::request, events};
+use crate::opensprinkler::{events, http::request};
 
 use super::{log, OpenSprinkler};
 use core::fmt;
@@ -287,12 +287,9 @@ pub fn check_weather(open_sprinkler: &mut OpenSprinkler) -> result::Result<()> {
         // if last successful weather call timestamp is more than allowed threshold
         // and if the selected adjustment method is not manual
         // reset watering percentage to 100
-        // TODO: the firmware currently needs to be explicitly aware of which adjustment methods
-        // use manual watering percentage (namely methods 0 and 2), this is not ideal
         open_sprinkler.weather_status.checkwt_success_lasttime = None;
 
-        //if open_sprinkler.config.weather.algorithm.is_some() && open_sprinkler.config.weather.algorithm != Some(WeatherAlgorithmID::RainDelay) {
-        if let Some(algorithm) = &open_sprinkler.config.weather.algorithm {
+        if let Some(ref algorithm) = open_sprinkler.config.weather.algorithm {
             if !algorithm.use_manual_scale() {
                 open_sprinkler.set_water_scale(100); // reset watering percentage to 100%
                 open_sprinkler.weather_status.raw_data = None; // reset wt_rawData and errCode
@@ -451,10 +448,8 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler) -> result::Result<()> {
         // Watering Level (scale)
         if open_sprinkler.weather_status.last_response_was_successful() && params.contains_key("scale") {
             let scale = params.get("scale").unwrap().parse::<i32>().unwrap_or(-1);
-            //if scale >= 0 && scale <= WATER_SCALE_MAX && scale != open_sprinkler.iopts.wl as i32 {
             if scale >= 0 && scale <= WATER_SCALE_MAX && scale != open_sprinkler.get_water_scale() as i32 {
                 // Only save if the value has changed
-                //open_sprinkler.iopts.wl = u8::try_from(scale).unwrap();
                 open_sprinkler.config.water_scale = u8::try_from(scale).unwrap();
                 open_sprinkler.config.write().unwrap();
 
@@ -467,10 +462,8 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler) -> result::Result<()> {
         // Sunrise time
         if params.contains_key("sunrise") {
             let sunrise = params.get("sunrise").unwrap().parse::<i16>().unwrap();
-            //if sunrise >= 0 && sunrise <= 1440 && sunrise != open_sprinkler.nvdata.sunrise_time as i16 {
             if sunrise >= 0 && sunrise <= 1440 && sunrise != open_sprinkler.get_sunrise_time() as i16 {
                 // Only save if the value has changed
-                //open_sprinkler.nvdata.sunrise_time = u16::try_from(sunrise).unwrap();
                 open_sprinkler.config.sunrise_time = u16::try_from(sunrise).unwrap();
                 save_nvdata = true;
 
@@ -481,10 +474,8 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler) -> result::Result<()> {
         // Sunset time
         if params.contains_key("sunset") {
             let sunset = params.get("sunset").unwrap().parse::<i16>().unwrap();
-            //if sunset >= 0 && sunset <= 1440 && sunset != open_sprinkler.nvdata.sunset_time as i16 {
             if sunset >= 0 && sunset <= 1440 && sunset != open_sprinkler.get_sunset_time() as i16 {
                 // Only save if the value has changed
-                //open_sprinkler.nvdata.sunset_time = u16::try_from(sunset).unwrap();
                 open_sprinkler.config.sunset_time = u16::try_from(sunset).unwrap();
                 save_nvdata = true;
 
@@ -497,10 +488,8 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler) -> result::Result<()> {
             let ip_uint = params.get("eip").unwrap().parse::<u32>();
             if ip_uint.is_ok() {
                 let eip = Ipv4Addr::from(ip_uint.unwrap());
-                //if open_sprinkler.nvdata.external_ip.is_none() || (open_sprinkler.nvdata.external_ip.is_some() && eip != open_sprinkler.nvdata.external_ip.unwrap()) {
                 if eip != open_sprinkler.config.external_ip.unwrap_or_else(|| IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))) {
                     // Only save if the value has changed
-                    //open_sprinkler.nvdata.external_ip = Some(std::net::IpAddr::V4(eip));
                     open_sprinkler.config.external_ip = Some(std::net::IpAddr::V4(eip));
                     save_nvdata = true;
                     events::push_message(&open_sprinkler, &events::WeatherUpdateEvent::new(Some(open_sprinkler.config.water_scale), None));
@@ -513,9 +502,7 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler) -> result::Result<()> {
         // Timezone
         if params.contains_key("tz") {
             let tz = params.get("tz").unwrap().parse::<i8>().unwrap();
-            //if tz >= 0 && tz <= 108 && tz != open_sprinkler.iopts.tz as i8 {
             if tz >= 0 && tz <= 108 && tz != open_sprinkler.config.timezone as i8 {
-                //open_sprinkler.iopts.tz = u8::try_from(tz).unwrap();
                 open_sprinkler.config.timezone = u8::try_from(tz).unwrap();
                 open_sprinkler.config.write().unwrap();
 
@@ -530,7 +517,6 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler) -> result::Result<()> {
                 let rd = rd.unwrap();
 
                 if rd > 0 {
-                    //open_sprinkler.nvdata.rd_stop_time = Some((chrono::Utc::now() + chrono::Duration::hours(rd)).timestamp());
                     open_sprinkler.config.rain_delay_stop_time = Some((chrono::Utc::now() + chrono::Duration::hours(rd)).timestamp());
                     open_sprinkler.rain_delay_start();
                     tracing::trace!("Starting rain delay for: {}h", rd);

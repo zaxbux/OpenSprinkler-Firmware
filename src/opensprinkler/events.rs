@@ -22,7 +22,6 @@ pub enum NotifyEvent {
     StationOn = 0x0100,
 }
 
-// region: Program Scheduled Run
 pub struct ProgramStartEvent {
     pub program_id: usize,
     pub program_name: String,
@@ -46,9 +45,7 @@ impl EventType for ProgramStartEvent {
         NotifyEvent::ProgramStart
     }
 }
-// endregion
 
-// region: Sensor
 pub struct BinarySensorEvent {
     index: usize,
     pub state: bool,
@@ -69,9 +66,7 @@ impl EventType for BinarySensorEvent {
         }
     }
 }
-// endregion
 
-// region: Flow Sensor
 pub struct FlowSensorEvent {
     pub count: u64,
     pub volume: f64,
@@ -91,9 +86,7 @@ impl EventType for FlowSensorEvent {
         NotifyEvent::FlowSensor
     }
 }
-// endregion
 
-// region: Weather Update
 pub struct WeatherUpdateEvent {
     pub scale: Option<u8>,
     pub external_ip: Option<IpAddr>,
@@ -118,9 +111,7 @@ impl EventType for WeatherUpdateEvent {
         NotifyEvent::WeatherUpdate
     }
 }
-// endregion
 
-// region: Reboot
 pub struct RebootEvent {
     pub state: bool,
 }
@@ -136,9 +127,7 @@ impl EventType for RebootEvent {
         NotifyEvent::Reboot
     }
 }
-// endregion
 
-// region: Station
 pub struct StationEvent {
     pub station_id: station::StationIndex,
     pub station_name: String,
@@ -168,9 +157,7 @@ impl EventType for StationEvent {
         }
     }
 }
-// endregion
 
-// region: Rain Delay
 pub struct RainDelayEvent {
     pub state: bool,
 }
@@ -186,7 +173,6 @@ impl EventType for RainDelayEvent {
         NotifyEvent::RainDelay
     }
 }
-// endregion
 
 pub trait EventType {
     fn event_type(&self) -> NotifyEvent;

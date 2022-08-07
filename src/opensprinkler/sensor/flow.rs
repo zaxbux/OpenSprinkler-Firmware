@@ -11,8 +11,6 @@ pub struct State {
     time_measure_stop: i64,
     /// total # of gallons+1 from flow_start to flow_stop
     gallons: u64,
-    // last flow rate measured (averaged over flow_gallons) from last valve stopped (used to write to log file).
-    //flow_last_gpm: f64,
 
     /// current flow count
     flow_count: u64,
@@ -22,7 +20,6 @@ pub struct State {
 
 impl State {
 	pub fn poll(&mut self, logic_level: Level) {
-		//if !(self.previous_logic_level.unwrap_or(Level::Low) == Level::High && logic_level == Level::Low) {
 		if self.previous_logic_level.unwrap_or(Level::Low) == Level::Low && logic_level != Level::Low {
 			// only record on falling edge
 			self.previous_logic_level = Some(logic_level);
@@ -78,10 +75,6 @@ impl State {
 
 		return 0.0;
 	}
-
-	/* pub fn get_flow_last_gpm(&self) -> f64 {
-		self.flow_last_gpm
-	} */
 
 	pub fn get_flow_count(&self) -> u64 {
 		self.flow_count

@@ -154,11 +154,9 @@ impl Program {
 
         if (t >> START_TIME_SUNRISE_BIT) & 1 != 0 {
             // limit to 0
-            //return max(0, open_sprinkler.nvdata.sunrise_time as i16 + offset);
             return max(0, open_sprinkler.get_sunrise_time() as i16 + offset);
         } else if (t >> START_TIME_SUNSET_BIT) & 1 != 0 {
             // limit to 1440
-            //return min(1440, open_sprinkler.nvdata.sunset_time as i16 + offset);
             return min(1440, open_sprinkler.get_sunset_time() as i16 + offset);
         }
 
@@ -259,11 +257,9 @@ pub type QueueElements = collections::VecDeque<QueueElement>;
 
 pub struct ProgramQueue {
     pub queue: QueueElements,
-
     /// this array stores the queue element index for each scheduled station
     pub station_qid: [usize; station::MAX_NUM_STATIONS],
     /// Number of programs
-    //pub nprograms: usize,
     pub last_run: Option<log::message::StationMessage>,
     // the last stop time of a sequential station
     pub last_seq_stop_time: Option<i64>,
@@ -272,8 +268,7 @@ impl ProgramQueue {
     pub fn new() -> Self {
         ProgramQueue {
             queue: collections::VecDeque::new(),
-            station_qid: [0xFFusize; station::MAX_NUM_STATIONS],
-            //nprograms: 0,
+            station_qid: [0xFFusize; station::MAX_NUM_STATIONS], // @todo stop using placeholder value?
             last_run: None,
             last_seq_stop_time: None,
         }
@@ -315,101 +310,40 @@ impl ProgramQueue {
         }
     }
 
-    // Read a program from program file
-    /* pub fn read(&self, index: usize) -> result::Result<Program> {
-        if index >= self.nprograms {
-            return Err(result::ProgramError {
-                message: String::from("program index out of bounds"),
-            });
-        }
+    /// Add a program
+    /// 
+    /// @todo used by web server
+    pub fn add(&mut self, _program: Program) {
+        todo!();
+    }
 
-        let programs = config::get_programs().unwrap();
-        Ok(programs.get(index).unwrap().to_owned())
-    } */
+    /// Delete a program
+    /// 
+    /// @todo used by web server
+    pub fn remove(&mut self, _index: usize) {
+        todo!();
+    }
 
-    // Add a program
-    // @todo used by web server
-    /* pub fn add(&mut self, program: Program) -> result::Result<()> {
-        if self.nprograms > MAX_NUM_PROGRAMS {
-            return Err(result::ProgramError {
-                message: String::from("program limit exceeded"),
-            });
-        }
+    /// Modify a program
+    /// 
+    /// @todo used by web server
+    pub fn modify(&self, _index: usize, _value: Program) {
+        todo!();
+    }
 
-        let mut programs = config::get_programs().unwrap();
-        programs.push(program);
-        config::commit_programs(&programs);
+    /// Move a program up (i.e. swap a program with the one above it)
+    /// 
+    /// @todo used by web server
+    pub fn move_up(&self, _index: usize) {
+        todo!();
+    }
 
-        self.nprograms += 1;
-        Ok(())
-    } */
-
-    // Delete a program
-    // @todo used by web server
-    /* pub fn remove(&mut self, index: usize) -> result::Result<()> {
-        if index >= self.nprograms {
-            return Err(result::ProgramError {
-                message: String::from("program index out of bounds"),
-            });
-        }
-        if self.nprograms == 0 {
-            return Err(result::ProgramError {
-                message: String::from("program index out of bounds"),
-            });
-        }
-
-        let mut programs = config::get_programs().unwrap();
-        programs.remove(index);
-        config::commit_programs(&programs);
-
-        self.nprograms -= 1;
-        Ok(())
-    } */
-
-    // Modify a program
-    // @todo used by web server
-    /* pub fn modify(&self, index: usize, value: Program) -> result::Result<()> {
-        if index >= self.nprograms || index == 0 {
-            return Err(result::ProgramError {
-                message: String::from("program index out of bounds"),
-            });
-        }
-
-        let mut programs = config::get_programs().unwrap();
-        let _ = mem::replace(&mut programs[index], value);
-        config::commit_programs(&programs);
-
-        Ok(())
-    } */
-
-    // Move a program up (i.e. swap a program with the one above it)
-    // @todo used by web server
-    /* pub fn move_up(&self, index: usize) -> result::Result<()> {
-        if index >= self.nprograms || index == 0 {
-            return Err(result::ProgramError {
-                message: String::from("program index out of bounds"),
-            });
-        }
-
-        let mut programs = config::get_programs().unwrap();
-        programs.swap(index, index + 1);
-        config::commit_programs(&programs);
-
-        Ok(())
-    } */
-
-    // Load program count from program file
-    /*pub fn load_count(&mut self) {
-        self.nprograms = config::get_programs().unwrap().len();
-    }*/ // just use length of program vector
-
-    // Delete all programs
-    // @todo used by web server
-    /* pub fn erase_all(&mut self) {
-        self.nprograms = 0;
-
-        config::commit_programs(&vec![]);
-    } */
+    /// Delete all programs
+    /// 
+    /// @todo used by web server
+    pub fn erase_all(&mut self) {
+        todo!();
+    }
 }
 
 /// days remaining - absolute to relative reminder conversion
@@ -440,10 +374,9 @@ pub mod result {
         pub message: String,
     }
 
-    // Implement std::fmt::Display for AppError
     impl fmt::Display for ProgramError {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "ProgramError {{ message: {} }}", self.message) // user-facing output
+            write!(f, "ProgramError {{ message: {} }}", self.message)
         }
     }
 }

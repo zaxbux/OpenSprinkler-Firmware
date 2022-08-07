@@ -1,3 +1,6 @@
+/// @todo new logging format, configurable log directory, log crate?
+
+
 use std::{
     fs::{self, OpenOptions},
     io::{Write, self},
@@ -60,7 +63,6 @@ fn get_log_type_name(log_type: &LogDataType) -> &'static str {
         LogDataType::WaterLevel => "wl",
         LogDataType::FlowSense => "fl",
         LogDataType::Sensor2 => "s2",
-        //LogDataType::Current => "cu",
     }
 }
 
@@ -80,10 +82,8 @@ fn get_writer(timestamp: i64) -> Result<io::BufWriter<std::fs::File>, std::io::E
 
 pub mod message {
     use std::io::Write;
-
     use crate::opensprinkler::station;
 
-    //use serde::{Deserialize, Serialize};
     use super::{get_log_type_name, LogDataType, OpenSprinkler};
 
     pub trait Message {
