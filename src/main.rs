@@ -116,14 +116,8 @@ fn main() {
         return;
     }
 
-    //let mut flow_state = FlowSensor::default();
-
-    //let mut reboot_timer = 0; // use open_sprinkler.status.reboot_timer
-
-    // open_sprinkler.start_network() was here!
-
-    //open_sprinkler.mqtt.init();
-    //open_sprinkler.status.req_mqtt_restart = true;
+    // Push reboot notification on startup
+    events::push_message(&open_sprinkler, &events::RebootEvent::new(true));
 
     // Time-keeping
     let mut now_seconds: i64;
@@ -134,9 +128,6 @@ fn main() {
     let mut now_millis: i64;
     #[cfg(not(feature = "demo"))]
     let mut last_millis = 0;
-
-    // Do-once flags
-    let mut reboot_notification = true;
 
     // Main loop
     while running.load(Ordering::SeqCst) {
@@ -201,13 +192,7 @@ fn main() {
             // Handle reboot request
             open_sprinkler.check_reboot_request(now_seconds);
 
-            // Push reboot notification on startup
-            // @todo move outside of loop?
-            if reboot_notification {
-                reboot_notification = false;
-                events::push_message(&open_sprinkler, &events::RebootEvent::new(true));
-            }
-
+            // Flow count
             open_sprinkler.update_realtime_flow_count(now_seconds);
 
             // Check weather
