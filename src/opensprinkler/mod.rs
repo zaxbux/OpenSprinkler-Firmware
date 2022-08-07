@@ -15,6 +15,7 @@ mod mqtt;
 pub mod scheduler;
 #[cfg(target_os = "linux")]
 pub mod system;
+pub mod errors;
 
 use std::cmp::max;
 use std::path::PathBuf;
@@ -102,7 +103,7 @@ pub struct OpenSprinkler {
     gpio: Option<gpio::Gpio>,
 
     #[cfg(feature = "mqtt")]
-    pub mqtt: mqtt::OSMqtt,
+    pub mqtt: mqtt::Mqtt,
 
     pub status_current: ControllerStatus,
     pub status_last: ControllerStatus,
@@ -160,7 +161,7 @@ impl OpenSprinkler {
     }
 
     /// Setup controller
-    pub fn setup(&mut self) -> config::result::Result<()> {
+    pub fn setup(&mut self) -> errors::Result<()> {
         // Read configuration from file
         if !self.config.exists() {
             tracing::debug!("Config does not exist, writing defaults");
@@ -178,10 +179,15 @@ impl OpenSprinkler {
         #[cfg(not(feature = "demo"))]
         self.setup_gpio();
 
+        #[cfg(feature = "mqtt")]
+        self.mqtt.setup(&self.config.mqtt)?;
+
         // Store the last reboot cause in memory and set the new cause
         self.config.last_reboot_cause = self.config.reboot_cause;
         self.config.reboot_cause = config::RebootCause::PowerOn;
-        self.config.write()
+        self.config.write()?;
+
+        Ok(())
     }
 
     fn check_config(&self, config: &config::Config) -> config::result::Result<bool> {
@@ -986,7 +992,7 @@ impl Default for OpenSprinkler {
             gpio: None,
 
             #[cfg(feature = "mqtt")]
-            mqtt: mqtt::OSMqtt::new(),
+            mqtt: mqtt::Mqtt::new(),
 
             status_current: ControllerStatus::default(),
             status_last: ControllerStatus::default(),

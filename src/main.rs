@@ -137,7 +137,6 @@ fn main() {
 
     // Do-once flags
     let mut reboot_notification = true;
-    let mut start_mqtt = true;
 
     // Main loop
     while running.load(Ordering::SeqCst) {
@@ -160,19 +159,20 @@ fn main() {
             now_minute = now_seconds / 60;
 
             // Start MQTT when there is a network connection
-            // @todo use [paho_mqtt::async_client::AsyncClient#is_connected()] instead of start_mqtt
-            if start_mqtt && open_sprinkler.is_mqtt_enabled() && open_sprinkler.network_connected() {
-                tracing::debug!("Network is OK, starting MQTT");
-                //open_sprinkler.mqtt.begin(); @todo
-                start_mqtt = false
+            #[cfg(feature = "mqtt")]
+            if open_sprinkler.network_connected() && open_sprinkler.is_mqtt_enabled() && open_sprinkler.config.mqtt.uri().is_some() && !open_sprinkler.mqtt.is_connected() {
+                if let Some(token) = open_sprinkler.mqtt.connect() {
+                    tracing::debug!("MQTT connect response: {:?}", token.wait());
+                }
             }
 
             
             open_sprinkler.check_rain_delay_status(now_seconds);
             #[cfg(not(feature = "demo"))]
-            open_sprinkler.check_binary_sensor_status(now_seconds);
-            #[cfg(not(feature = "demo"))]
-            open_sprinkler.check_program_switch_status(&mut program_data);
+            {
+                open_sprinkler.check_binary_sensor_status(now_seconds);
+                open_sprinkler.check_program_switch_status(&mut program_data);
+            }
 
             // since the granularity of start time is minute, we only need to check once every minute
             if now_minute > last_minute {
@@ -193,7 +193,6 @@ fn main() {
             opensprinkler::controller::activate_master_station(1, &mut open_sprinkler, &program_data, now_seconds);
 
             // Process dynamic events
-            //loop_fns::process_dynamic_events(&mut open_sprinkler, &mut program_data, &mut flow_state, now_seconds);
             open_sprinkler.process_dynamic_events(&mut program_data, now_seconds);
 
             // Actuate valves
@@ -231,4 +230,7 @@ fn main() {
     }
 
     tracing::info!("Got Ctrl-C, exiting...");
+    if let Err(ref err) = open_sprinkler.mqtt.disconnect() {
+        tracing::error!("MQTT disconnect error: {:?}", err)
+    }
 }

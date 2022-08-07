@@ -10,12 +10,17 @@ pub struct MQTTConfig {
     pub enabled: bool,
     pub version: u32,
     /// Broker
-    pub host: String,
+    pub host: Option<String>,
     pub port: u16,
-    pub username: String,
-    pub password: String,
+    pub username: Option<String>,
+    pub password: Option<String>,
     /// Use TLS
     pub tls: bool,
+
+    pub root_topic: String,
+    pub availability_topic: String,
+    pub offline_payload: String,
+    pub online_payload: String,
 }
 
 impl MQTTConfig {
@@ -31,8 +36,12 @@ impl MQTTConfig {
         }
     }
 
-    pub fn uri(&self) -> String {
-        format!("{}://{}:{}", self.protocol(), self.host, self.port)
+    pub fn uri(&self) -> Option<String> {
+        if let Some(ref host) = self.host {
+            return Some(format!("{}://{}:{}", self.protocol(), host, self.port));
+        }
+
+        None
     }
 }
 
@@ -41,18 +50,23 @@ impl Default for MQTTConfig {
         MQTTConfig {
             enabled: false,
             version: paho_mqtt::MQTT_VERSION_3_1_1,
-            host: String::from(""),
+            host: None,
             port: 1883,
-            username: String::from(""),
-            password: String::from(""),
+            username: None,
+            password: None,
             tls: false,
+            root_topic: String::from("opensprinkler"),
+            availability_topic: String::from("availability"),
+            offline_payload: String::from("offline"),
+            online_payload: String::from("online"),
+
         }
     }
 }
 
 impl fmt::Display for MQTTConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}://{}:{}", self.protocol(), self.host, self.port)
+        write!(f, "{:?}", self.uri())
     }
 }
 
@@ -132,7 +146,7 @@ where
 
 impl Payload<ProgramSchedPayload> for super::ProgramStartEvent {
     fn mqtt_topic(&self) -> String {
-        String::from("opensprinkler/program")
+        String::from("program")
     }
 
     fn mqtt_payload(&self) -> ProgramSchedPayload {
@@ -147,7 +161,7 @@ impl Payload<ProgramSchedPayload> for super::ProgramStartEvent {
 
 impl Payload<BinarySensorPayload> for super::BinarySensorEvent {
     fn mqtt_topic(&self) -> String {
-        format!("opensprinkler/sensor{}", self.index)
+        format!("sensor{}", self.index)
     }
 
     fn mqtt_payload(&self) -> BinarySensorPayload {
@@ -157,7 +171,7 @@ impl Payload<BinarySensorPayload> for super::BinarySensorEvent {
 
 impl Payload<FlowSensorPayload> for super::FlowSensorEvent {
     fn mqtt_topic(&self) -> String {
-        String::from("opensprinkler/sensor/flow")
+        String::from("sensor/flow")
     }
 
     fn mqtt_payload(&self) -> FlowSensorPayload {
@@ -167,7 +181,7 @@ impl Payload<FlowSensorPayload> for super::FlowSensorEvent {
 
 impl Payload<WeatherUpdatePayload> for super::WeatherUpdateEvent {
     fn mqtt_topic(&self) -> String {
-        String::from("opensprinkler/weather")
+        String::from("weather")
     }
 
     fn mqtt_payload(&self) -> WeatherUpdatePayload {
@@ -180,7 +194,7 @@ impl Payload<WeatherUpdatePayload> for super::WeatherUpdateEvent {
 
 impl Payload<BinarySensorPayload> for super::RebootEvent {
     fn mqtt_topic(&self) -> String {
-        String::from("opensprinkler/system")
+        String::from("system")
     }
 
     fn mqtt_payload(&self) -> BinarySensorPayload {
@@ -190,7 +204,7 @@ impl Payload<BinarySensorPayload> for super::RebootEvent {
 
 impl Payload<StationPayload> for super::StationEvent {
     fn mqtt_topic(&self) -> String {
-        format!("opensprinkler/station/{}", self.station_id)
+        format!("station/{}", self.station_id)
     }
 
     fn mqtt_payload(&self) -> StationPayload {
@@ -204,7 +218,7 @@ impl Payload<StationPayload> for super::StationEvent {
 
 impl Payload<RainDelayPayload> for super::RainDelayEvent {
     fn mqtt_topic(&self) -> String {
-        String::from("opensprinkler/raindelay")
+        String::from("raindelay")
     }
 
     fn mqtt_payload(&self) -> RainDelayPayload {

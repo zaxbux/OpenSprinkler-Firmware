@@ -16,6 +16,15 @@ pub fn set(config_set: Vec<String>, open_sprinkler: &mut OpenSprinkler) -> Resul
 			println!("Set weather.algorithm: {:?}", open_sprinkler.config.weather.algorithm);
 			Ok(())
 		},
+		"mqtt.enabled" => {
+			open_sprinkler.config.mqtt.enabled = match value.parse::<i32>().unwrap_or(0) {
+				0 => false,
+				1 => true,
+				_ => false,
+			};
+			println!("Set mqtt.enabled: {:?}", open_sprinkler.config.mqtt.enabled);
+			Ok(())
+		},
 		&_ => Err("Unknown config key"),
 	}
 }

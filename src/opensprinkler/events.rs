@@ -216,7 +216,7 @@ where
     S: serde::Serialize,
 {
     if open_sprinkler.is_mqtt_enabled() {
-        open_sprinkler.mqtt.publish(event);
+        let _ = open_sprinkler.mqtt.publish(event);
     }
 
     if ifttt_event_enabled(open_sprinkler, event) {
