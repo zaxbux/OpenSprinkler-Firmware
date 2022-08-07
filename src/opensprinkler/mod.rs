@@ -766,7 +766,7 @@ impl OpenSprinkler {
     /// This function takes a remote station code, parses it into remote IP, port, station index, and makes a HTTP GET request.
     /// The remote controller is assumed to have the same password as the main controller.
     fn switch_remote_station(&self, data: station::RemoteStationData, value: bool) {
-        let mut host = String::from("http://"); // @todo HTTPS?
+        let mut host = String::from("http://");
         host.push_str(&data.ip.to_string());
         let timer = match self.config.enable_special_stn_refresh {
             true => (station::MAX_NUM_STATIONS * 4) as i64,

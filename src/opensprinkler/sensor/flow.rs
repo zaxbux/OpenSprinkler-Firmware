@@ -1,12 +1,6 @@
 use rppal::gpio::Level;
 
 /// Robert Hillman (RAH)'s implementation of flow sensor
-///
-/// @todo Move into [OpenSprinkler] to simplify main loop calls.
-/// - turn_on_station()
-/// - turn_off_station()
-/// - schedule_all_stations()
-/// -
 #[derive(Debug, Default)]
 pub struct State {
     /// time when valve turns on

@@ -4,16 +4,12 @@ use super::{OpenSprinkler, StationBitChange, events, program, sensor, log, stati
 pub const SHIFT_REGISTER_LINES: usize = 8;
 
 /// Turn on a station
-//pub fn turn_on_station(open_sprinkler: &mut OpenSprinkler, flow_state: &mut FlowSensor, station_id: usize) {
 pub fn turn_on_station(open_sprinkler: &mut OpenSprinkler, station_id: station::StationIndex) {
     // RAH implementation of flow sensor
-    //flow_state.flow_start = 0;
     open_sprinkler.flow_state.reset();
 
     if open_sprinkler.set_station_bit(station_id, true) == StationBitChange::On {
-        //let station_name = open_sprinkler.stations.get(station_id).unwrap().name.to_string();
         let station_name = open_sprinkler.config.stations.get(station_id).unwrap().name.to_string();
-        //let station_name = open_sprinkler.get_station_name(station_id).as_str();
         events::push_message(
             open_sprinkler,
             &events::StationEvent {
@@ -30,9 +26,6 @@ pub fn turn_on_station(open_sprinkler: &mut OpenSprinkler, station_id: station::
 /// Turn off a station
 ///
 /// Turns off a scheduled station, writes a log record, and pushes a notification event.
-///
-/// @todo Make member of [OpenSprinkler]
-//pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, flow_state: &mut FlowSensor, program_data: &mut ProgramData, now_seconds: i64, station_id: usize) {
 pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, program_data: &mut program::ProgramQueue, now_seconds: i64, station_index: station::StationIndex) {
     open_sprinkler.set_station_bit(station_index, false);
 
@@ -52,7 +45,6 @@ pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, program_data: &mut p
     // because we may be turning off a station that hasn't started yet
     if now_seconds > q.start_time {
         // record lastrun log (only for non-master stations)
-        //if (open_sprinkler.get_master_station_index(0) != Some(station_id)) && (open_sprinkler.get_master_station_index(1) != Some(station_id)) {
         if !open_sprinkler.is_master_station(station_index) {
             let duration = u16::try_from(now_seconds - q.start_time).unwrap();
 
@@ -67,9 +59,7 @@ pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, program_data: &mut p
             // Keep a copy for web
             program_data.last_run = Some(message);
 
-            //if open_sprinkler.iopts.sn1t == SensorType::Flow as u8 {
             if open_sprinkler.get_sensor_type(0).unwrap_or(sensor::SensorType::None) == sensor::SensorType::Flow {
-                //message.with_flow(flow_state.flow_last_gpm);
                 message.with_flow(flow_volume);
             }
             let _ = log::write_log_message(open_sprinkler, &message, now_seconds);
@@ -83,8 +73,6 @@ pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, program_data: &mut p
                     station_name,
                     false,
                     Some(duration.into()),
-                    //if open_sprinkler.iopts.sn1t == SensorType::Flow as u8 { Some(flow_state.flow_last_gpm) } else { None },
-                    //if open_sprinkler.get_sensor_type(0) == SensorType::Flow { Some(flow_state.flow_last_gpm) } else { None },
                     if open_sprinkler.get_sensor_type(0).unwrap_or(sensor::SensorType::None) == sensor::SensorType::Flow { Some(flow_volume) } else { None },
                 ),
             );
@@ -109,7 +97,6 @@ pub fn activate_master_station(i: usize, open_sprinkler: &mut OpenSprinkler, pro
     let master_station_index = master_station.station.unwrap();
     let adjusted_on = master_station.get_adjusted_on_time();
     let adjusted_off = master_station.get_adjusted_off_time();
-    /* let mut value = false; */
 
     for station_index in 0..open_sprinkler.get_station_count() {
         // skip if this is the master station
@@ -124,8 +111,6 @@ pub fn activate_master_station(i: usize, open_sprinkler: &mut OpenSprinkler, pro
             let start_time = q.start_time + adjusted_on;
             let stop_time = q.start_time + q.water_time + adjusted_off;
             if now_seconds >= start_time && now_seconds <= stop_time {
-                /* value = true;
-                break; */
                 open_sprinkler.set_station_bit(master_station_index, true);
                 return;
             }

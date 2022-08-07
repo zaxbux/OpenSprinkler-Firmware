@@ -85,7 +85,6 @@ fn main() {
     };
 
     // Setup options
-    // @todo move into ::new()
     if let Err(ref error) = open_sprinkler.setup() {
         tracing::error!("Controller setup error: {:?}", error);
         return;
