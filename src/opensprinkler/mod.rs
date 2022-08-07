@@ -154,47 +154,46 @@ impl OpenSprinkler {
 
     pub fn with_config_path(config_path: PathBuf) -> Self {
         Self {
-            config: config::Config::with_path(config_path),
+            config: config::Config::new(config_path),
             ..Self::default()
         }
     }
 
     /// Setup controller
     pub fn setup(&mut self) -> config::result::Result<()> {
-        // Check reset conditions
-        let config = self.config.read();
-        if let Err(error) = config {
-            tracing::error!("Error reading config: {:?}", error);
-            self.reset_to_defaults()?;
-            return Ok(());
+        // Read configuration from file
+        if !self.config.exists() {
+            tracing::debug!("Config does not exist, writing defaults");
+            /*self.config.write_default()?;*/ // The controller is initialized with defaults, these will be written at the end of this function.
         }
 
         // Check reset conditions
-        if config.is_ok() {
-            let config = config.unwrap();
-
-            // @todo What about higher version numbers?
-            if config.firmware_version < self.config.firmware_version {
-                // @todo Migrate config based on existing version
-                tracing::debug!("Invalid firmware version: {:?}", config.firmware_version);
-                self.reset_to_defaults()?;
-                return Ok(());
+        if let Ok(config) = self.config.read() {
+            if self.check_config(&config)? {
+                // Replace defaults with config from file.
+                self.config = config;
             }
-
-            self.config = config;
         }
-
-        /* self.config.firmware_version = FIRMWARE_VERSION; */
- // This is no longer required, it is initialized with the crate version when compiled.
- //self.config.fwm = FIRMWARE_VERSION_REVISION;
-        self.config.last_reboot_cause = self.config.reboot_cause;
-        self.config.reboot_cause = config::RebootCause::PowerOn;
-        //self.nvdata_save();
 
         #[cfg(not(feature = "demo"))]
         self.setup_gpio();
 
+        // Store the last reboot cause in memory and set the new cause
+        self.config.last_reboot_cause = self.config.reboot_cause;
+        self.config.reboot_cause = config::RebootCause::PowerOn;
         self.config.write()
+    }
+
+    fn check_config(&self, config: &config::Config) -> config::result::Result<bool> {
+        // @todo What about higher version numbers?
+        if config.firmware_version < self.config.firmware_version {
+            // @todo Migrate config based on existing version
+            tracing::debug!("Invalid firmware version: {:?}", config.firmware_version);
+            return Ok(false);
+        }
+
+        tracing::debug!("Config is OK");
+        Ok(true)
     }
 
     /// Setup GPIO peripheral and pins
@@ -984,7 +983,7 @@ impl OpenSprinkler {
 impl Default for OpenSprinkler {
     fn default() -> Self {
         Self {
-            config: config::Config::new(),
+            config: config::Config::default(),
 
             flow_state: sensor::flow::State::default(),
 

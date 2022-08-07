@@ -76,8 +76,6 @@ fn main() {
     tracing::info!("DEMO MODE");
     // endregion TRACING
 
-    // OpenSprinkler initialization
-    tracing::trace!("Initialize controller");
     let mut open_sprinkler = if let Some(config) = args.config {
         OpenSprinkler::with_config_path(config)
     } else {
@@ -86,7 +84,10 @@ fn main() {
 
     // Setup options
     // @todo move into ::new()
-    open_sprinkler.setup().unwrap();
+    if let Err(ref error) = open_sprinkler.setup() {
+        tracing::error!("Controller setup error: {:?}", error);
+        return;
+    }
 
     // ProgramData initialization
     let mut program_data = program::ProgramQueue::new();

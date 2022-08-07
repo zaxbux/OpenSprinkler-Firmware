@@ -4,7 +4,7 @@ pub fn list(open_sprinkler: &OpenSprinkler) {
 	let mut config = open_sprinkler.config.clone();
 	config.stations = Vec::new();
 	//let json = serde_json::to_string_pretty(&config);
-	println!("Config: {}", config);
+	println!("Config: {:#}", config);
 }
 
 pub fn set(config_set: Vec<String>, open_sprinkler: &mut OpenSprinkler) -> Result<(), &'static str>{

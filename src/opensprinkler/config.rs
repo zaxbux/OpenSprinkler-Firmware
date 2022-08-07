@@ -155,11 +155,11 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new() -> Self {
+    /* pub fn new() -> Self {
         Self::default()
-    }
+    } */
 
-    pub fn with_path(path: PathBuf) -> Self {
+    pub fn new(path: PathBuf) -> Self {
         Self {
             path,
             ..Self::default()
@@ -170,19 +170,25 @@ impl Config {
         self.path.exists()
     }
 
-    pub fn read(&self) -> result::Result<Self> {
-        tracing::debug!("Reading config: {:?}", self.path);
+    pub fn read(&self) -> result::Result<Config> {
+        tracing::debug!("Read: {:?}", self.path.canonicalize().unwrap_or(self.path.clone()));
         let reader = io::BufReader::new(OpenOptions::new().read(true).open(&self.path)?);
-        Ok(bson::from_reader(reader)?)
+        Ok(Config {
+            // Returning the config directly does not include it's path
+            path: self.path.clone(),
+            ..bson::from_reader(reader)?
+        })
     }
 
     //pub fn write<T: Serialize>(&self, document: &T) -> result::Result<()> {
     pub fn write(&self) -> result::Result<()> {
+        tracing::debug!("Write: {:?}", self.path.canonicalize().unwrap_or(self.path.clone()));
         let buf = bson::to_vec(&self)?;
         Ok(io::BufWriter::new(OpenOptions::new().write(true).create(true).open(&self.path)?).write_all(&buf)?)
     }
 
     pub fn write_default(&self) -> result::Result<()> {
+        tracing::debug!("Write default: {:?}", self.path.canonicalize().unwrap_or(self.path.clone()));
         let buf = bson::to_vec(&Self::default())?;
         Ok(io::BufWriter::new(OpenOptions::new().write(true).create(true).open(&self.path)?).write_all(&buf)?)
     }
