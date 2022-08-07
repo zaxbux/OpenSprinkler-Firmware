@@ -4,7 +4,7 @@ pub trait WeatherAlgorithm {
 	fn use_manual_scale(&self) -> bool;
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Manual;
 
 impl WeatherAlgorithm for Manual {
@@ -19,7 +19,7 @@ impl fmt::Display for Manual {
 	}
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RainDelay;
 
 impl WeatherAlgorithm for RainDelay {
@@ -34,7 +34,7 @@ impl fmt::Display for RainDelay {
 	}
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Zimmerman;
 
 impl WeatherAlgorithm for Zimmerman {
@@ -49,7 +49,7 @@ impl fmt::Display for Zimmerman {
 	}
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Evapotranspiration;
 
 impl WeatherAlgorithm for Evapotranspiration {
