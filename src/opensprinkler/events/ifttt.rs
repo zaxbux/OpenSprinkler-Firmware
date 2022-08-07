@@ -4,11 +4,11 @@ use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use serde_json::Result;
 
-/// @todo Make configurable
-pub const WEBHOOK_URL: &'static str = "https://maker.ifttt.com";
-
 #[derive(Clone, Serialize, Deserialize)]
 pub struct EventConfig {
+    /// IFTTT Webhooks URL
+    pub web_hooks_url: String,
+
     /// IFTTT Webhooks API key
     pub web_hooks_key: Option<String>,
 
@@ -26,6 +26,7 @@ pub struct EventConfig {
 impl Default for EventConfig {
     fn default() -> Self {
         EventConfig {
+            web_hooks_url: String::from("https://maker.ifttt.com"),
             web_hooks_key: None,
             program_start: false,
             sensor1: false,
@@ -51,7 +52,7 @@ pub trait WebHookEvent {
 }
 
 pub trait WebHookEventPayload: WebHookEvent {
-    fn ifttt_url(&self, key: &str) -> Url;
+    fn ifttt_url(&self, base: &str, key: &str) -> Url;
     fn ifttt_payload_json(&self) -> Result<String>;
 }
 
@@ -59,8 +60,8 @@ impl<T> WebHookEventPayload for T
 where
     T: WebHookEvent,
 {
-    fn ifttt_url(&self, key: &str) -> reqwest::Url {
-        let url = reqwest::Url::parse(format!("{}/trigger/{}/with/key/{}", WEBHOOK_URL, self.ifttt_event(), key).as_str()).unwrap();
+    fn ifttt_url(&self, base: &str, key: &str) -> reqwest::Url {
+        let url = reqwest::Url::parse(format!("{}/trigger/{}/with/key/{}", base, self.ifttt_event(), key).as_str()).unwrap();
 
         url
     }

@@ -220,8 +220,8 @@ where
     }
 
     if ifttt_event_enabled(open_sprinkler, event) {
-        if let Some(ifttt_api_key) = &open_sprinkler.config.ifttt.web_hooks_key {
-            ifttt_webhook(event, ifttt_api_key);
+        if let Some(ref ifttt_api_key) = open_sprinkler.config.ifttt.web_hooks_key {
+            ifttt_webhook(event, &open_sprinkler.config.ifttt.web_hooks_url, ifttt_api_key);
         } else {
             tracing::error!("IFTTT Web Hook API key unset");
         }
@@ -238,8 +238,8 @@ where
     }
 
     if ifttt_event_enabled(open_sprinkler, event) {
-        if let Some(ifttt_api_key) = &open_sprinkler.config.ifttt.web_hooks_key {
-            ifttt_webhook(event, ifttt_api_key);
+        if let Some(ref ifttt_api_key) = open_sprinkler.config.ifttt.web_hooks_key {
+            ifttt_webhook(event, &open_sprinkler.config.ifttt.web_hooks_url, ifttt_api_key);
         } else {
             tracing::error!("IFTTT Web Hook API key unset");
         }
@@ -261,7 +261,7 @@ fn ifttt_event_enabled(open_sprinkler: &OpenSprinkler, event: &dyn EventType) ->
     }
 }
 
-fn ifttt_webhook(event: &dyn ifttt::WebHookEventPayload, key: &str)
+fn ifttt_webhook(event: &dyn ifttt::WebHookEventPayload, base: &str, key: &str)
 {
     // @todo log request failures
     let body = event.ifttt_payload_json();
@@ -269,7 +269,7 @@ fn ifttt_webhook(event: &dyn ifttt::WebHookEventPayload, key: &str)
     if let Ok(body) = body {
         let client = request::build_client().unwrap();
         let response = client
-            .post(event.ifttt_url(key))
+            .post(event.ifttt_url(base, key))
             .header(header::CONTENT_TYPE, header::HeaderValue::from_static("application/json"))
             .body(body)
             .send();

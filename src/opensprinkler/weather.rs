@@ -494,7 +494,6 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprin
         }
 
         // External IP
-        // @todo IPv6 support
         if params.contains_key("eip") {
             let ip_uint = params.get("eip").unwrap().parse::<u32>();
             if ip_uint.is_ok() {
