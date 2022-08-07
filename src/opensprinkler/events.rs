@@ -103,6 +103,14 @@ impl WeatherUpdateEvent {
     pub fn new(scale: Option<u8>, external_ip: Option<IpAddr>) -> WeatherUpdateEvent {
         WeatherUpdateEvent { scale, external_ip }
     }
+
+    pub fn water_scale(scale: u8) -> Self {
+        WeatherUpdateEvent { scale: Some(scale), external_ip: None }
+    }
+
+    pub fn external_ip(external_ip: IpAddr) -> Self {
+        WeatherUpdateEvent { scale: None, external_ip: Some(external_ip) }
+    }
 }
 
 impl EventType for WeatherUpdateEvent {

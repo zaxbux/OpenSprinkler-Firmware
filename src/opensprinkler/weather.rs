@@ -1,6 +1,6 @@
 pub mod algorithm;
 
-use crate::opensprinkler::http::request;
+use crate::opensprinkler::{http::request, events};
 
 use super::{log, OpenSprinkler};
 use core::fmt;
@@ -270,7 +270,7 @@ mod result {
 }
 
 /// Make weather query
-pub fn check_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprinkler, WeatherUpdateFlag)) -> result::Result<()> {
+pub fn check_weather(open_sprinkler: &mut OpenSprinkler) -> result::Result<()> {
     // Skip checking weather if a) network has failed; or b) controller is configured as remote extender
     if !open_sprinkler.network_connected() || open_sprinkler.is_remote_extension() {
         return Ok(());
@@ -301,13 +301,13 @@ pub fn check_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&Ope
         }
     } else if open_sprinkler.weather_status.checkwt_lasttime.is_none() || now > open_sprinkler.weather_status.checkwt_lasttime.unwrap() + CHECK_WEATHER_TIMEOUT {
         open_sprinkler.weather_status.checkwt_lasttime = Some(now);
-        return Ok(get_weather(open_sprinkler, update_fn)?);
+        return Ok(get_weather(open_sprinkler)?);
     }
 
     Ok(())
 }
 
-fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprinkler, WeatherUpdateFlag)) -> result::Result<()> {
+fn get_weather(open_sprinkler: &mut OpenSprinkler) -> result::Result<()> {
     let url = open_sprinkler.get_weather_service_url()?;
 
     if url.is_none() {
@@ -360,7 +360,7 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprin
                 if scale <= WATER_SCALE_MAX as u8 && scale != open_sprinkler.get_water_scale() {
                     open_sprinkler.config.water_scale = scale;
 
-                    // @todo Push message that watering scale has changed.
+                    events::push_message(open_sprinkler, &events::WeatherUpdateEvent::water_scale(scale));
 
                     tracing::trace!("Watering scale: {}", open_sprinkler.get_water_scale());
                 }
@@ -385,7 +385,7 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprin
             if Some(external_ip) != open_sprinkler.config.external_ip {
                 open_sprinkler.config.external_ip = Some(external_ip);
 
-                // @todo push message that external IP was updated.
+                events::push_message(open_sprinkler, &events::WeatherUpdateEvent::external_ip(external_ip));
 
                 tracing::trace!("External IP: {}", open_sprinkler.config.external_ip.unwrap());
             }
@@ -457,7 +457,8 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprin
                 //open_sprinkler.iopts.wl = u8::try_from(scale).unwrap();
                 open_sprinkler.config.water_scale = u8::try_from(scale).unwrap();
                 open_sprinkler.config.write().unwrap();
-                update_fn(open_sprinkler, WeatherUpdateFlag::WL);
+
+                events::push_message(&open_sprinkler, &events::WeatherUpdateEvent::new(None, open_sprinkler.config.external_ip));
 
                 tracing::trace!("Watering scale: {}", open_sprinkler.get_water_scale());
             }
@@ -472,7 +473,6 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprin
                 //open_sprinkler.nvdata.sunrise_time = u16::try_from(sunrise).unwrap();
                 open_sprinkler.config.sunrise_time = u16::try_from(sunrise).unwrap();
                 save_nvdata = true;
-                update_fn(open_sprinkler, WeatherUpdateFlag::SUNRISE);
 
                 tracing::trace!("Sunrise: {}", open_sprinkler.get_sunrise_time());
             }
@@ -487,7 +487,6 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprin
                 //open_sprinkler.nvdata.sunset_time = u16::try_from(sunset).unwrap();
                 open_sprinkler.config.sunset_time = u16::try_from(sunset).unwrap();
                 save_nvdata = true;
-                update_fn(open_sprinkler, WeatherUpdateFlag::SUNSET);
 
                 tracing::trace!("Sunset: {}", open_sprinkler.get_sunset_time());
             }
@@ -504,7 +503,7 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprin
                     //open_sprinkler.nvdata.external_ip = Some(std::net::IpAddr::V4(eip));
                     open_sprinkler.config.external_ip = Some(std::net::IpAddr::V4(eip));
                     save_nvdata = true;
-                    update_fn(open_sprinkler, WeatherUpdateFlag::EIP);
+                    events::push_message(&open_sprinkler, &events::WeatherUpdateEvent::new(Some(open_sprinkler.config.water_scale), None));
 
                     tracing::trace!("External IP: {}", eip);
                 }
@@ -519,7 +518,6 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprin
                 //open_sprinkler.iopts.tz = u8::try_from(tz).unwrap();
                 open_sprinkler.config.timezone = u8::try_from(tz).unwrap();
                 open_sprinkler.config.write().unwrap();
-                update_fn(open_sprinkler, WeatherUpdateFlag::TZ);
 
                 tracing::trace!("Timezone: {}", open_sprinkler.config.timezone);
             }
@@ -535,11 +533,9 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprin
                     //open_sprinkler.nvdata.rd_stop_time = Some((chrono::Utc::now() + chrono::Duration::hours(rd)).timestamp());
                     open_sprinkler.config.rain_delay_stop_time = Some((chrono::Utc::now() + chrono::Duration::hours(rd)).timestamp());
                     open_sprinkler.rain_delay_start();
-                    update_fn(open_sprinkler, WeatherUpdateFlag::RD);
                     tracing::trace!("Starting rain delay for: {}h", rd);
                 } else if rd == 0 {
                     open_sprinkler.rain_delay_stop();
-                    update_fn(open_sprinkler, WeatherUpdateFlag::RD);
                     tracing::trace!("Ending rain delay");
                 }
             }
@@ -547,9 +543,11 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler, update_fn: &dyn Fn(&OpenSprin
 
         // Raw Data
         if params.contains_key("rawData") {
-            let raw_data = params.get("rawData").unwrap();
-            tracing::trace!("Raw data: {}", raw_data);
-            // @todo Store raw_data in memory for web server
+            if let Some(raw_data) = params.get("rawData") {
+                if let Ok(raw_data) = serde_json::from_str(raw_data) {
+                    open_sprinkler.weather_status.raw_data = Some(raw_data);
+                }
+            }
         }
 
         // Save non-volatile data, if necessary

@@ -196,18 +196,9 @@ fn main() {
             open_sprinkler.update_realtime_flow_count(now_seconds);
 
             // Check weather
-            let _ = weather::check_weather(&mut open_sprinkler, &|open_sprinkler, weather_update_flag| {
-                // at the moment, we only send notification if water level or external IP changed
-                // the other changes, such as sunrise, sunset changes are ignored for notification
-                // @fixme Should this be in the weather module?
-                match weather_update_flag {
-                    //WeatherUpdateFlag::EIP => push_message(&open_sprinkler, WeatherUpdateEvent::new(Some(open_sprinkler.iopts.wl), None)),
-                    weather::WeatherUpdateFlag::EIP => events::push_message(&open_sprinkler, &events::WeatherUpdateEvent::new(Some(open_sprinkler.config.water_scale), None)),
-                    //WeatherUpdateFlag::WL => push_message(&open_sprinkler, WeatherUpdateEvent::new(None, open_sprinkler.nvdata.external_ip)),
-                    weather::WeatherUpdateFlag::WL => events::push_message(&open_sprinkler, &events::WeatherUpdateEvent::new(None, open_sprinkler.config.external_ip)),
-                    _ => (),
-                }
-            });
+            if let Err(ref err) = weather::check_weather(&mut open_sprinkler) {
+                tracing::error!("Weather error: {:?}", err);
+            }
         }
 
         // For OSPI/LINUX, sleep 1 ms to minimize CPU usage
