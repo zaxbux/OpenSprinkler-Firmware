@@ -1,5 +1,5 @@
 
-use crate::utils::duration_to_hms;
+use crate::{utils::duration_to_hms, opensprinkler::program};
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use serde_json::Result;
@@ -81,7 +81,7 @@ impl WebHookEvent for super::ProgramStartEvent {
         let mut payload = String::new();
 
         // Program that was manually started
-        if self.program_id == 254 {
+        if self.program_id == program::MANUAL_PROGRAM_ID {
             payload.push_str("Manually started ");
         } else {
             payload.push_str("Automatically scheduled ");

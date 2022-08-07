@@ -50,7 +50,7 @@ pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, program_data: &mut p
 
             // log station run
             let mut message = log::message::StationMessage::new(
-                q.pid,
+                q.program_index,
                 station_index,
                 duration, // @fixme Maximum duration is 18 hours (64800 seconds), which fits into a [u16]
                 now_seconds,

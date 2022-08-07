@@ -82,7 +82,7 @@ fn get_writer(timestamp: i64) -> Result<io::BufWriter<std::fs::File>, std::io::E
 
 pub mod message {
     use std::io::Write;
-    use crate::opensprinkler::station;
+    use crate::opensprinkler::{station, program};
 
     use super::{get_log_type_name, LogDataType, OpenSprinkler};
 
@@ -105,18 +105,18 @@ pub mod message {
 
     #[derive(Copy, Clone)]
     pub struct StationMessage {
-        pub program_id: usize,
-        pub station_id: station::StationIndex,
+        pub program_index: program::ProgramStart,
+        pub station_index: station::StationIndex,
         pub duration: u16,
         pub timestamp: i64,
         pub flow: Option<f64>,
     }
 
     impl StationMessage {
-        pub fn new(program_id: usize, station_id: station::StationIndex, duration: u16, timestamp: i64) -> StationMessage {
+        pub fn new(program_index: program::ProgramStart, station_index: station::StationIndex, duration: u16, timestamp: i64) -> StationMessage {
             StationMessage {
-                program_id,
-                station_id,
+                program_index,
+                station_index,
                 duration,
                 timestamp,
                 flow: None,
@@ -131,9 +131,9 @@ pub mod message {
     impl Message for StationMessage {
         fn to_string(&self) -> String {
             if self.flow.is_some() {
-                serde_json::json!([self.program_id, self.station_id, self.duration, self.timestamp, format!("{:5.2}", self.flow.unwrap()),]).to_string()
+                serde_json::json!([self.program_index, self.station_index, self.duration, self.timestamp, format!("{:5.2}", self.flow.unwrap()),]).to_string()
             } else {
-                serde_json::json!([self.program_id, self.station_id, self.duration, self.timestamp,]).to_string()
+                serde_json::json!([self.program_index, self.station_index, self.duration, self.timestamp,]).to_string()
             }
         }
     }

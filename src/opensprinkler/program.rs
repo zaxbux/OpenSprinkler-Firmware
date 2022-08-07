@@ -27,14 +27,6 @@ pub const MANUAL_PROGRAM_ID: usize = 254;
 
 pub type Programs = Vec<Program>;
 
-/// Log data structure
-// pub struct LogStruct {
-//     pub station: usize,
-//     pub program: usize,
-//     pub duration: u16,
-//     pub end_time: u64,
-// }
-
 #[derive(Clone, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum ProgramType {
@@ -76,11 +68,12 @@ impl Program {
             schedule_type: ProgramType::Interval,
             start_time_type: 1,
             days: [0, 0],
-            start_times: [-1, -1, -1, -1],
+            start_times: [-1; MAX_NUM_START_TIMES],
             durations: [duration; station::MAX_NUM_STATIONS],
             name: String::from(""),
         }
     }
+
     /// Check if a given time matches program's start time
     ///
     /// This also checks for programs that started the previous day and ran over night.
@@ -241,16 +234,28 @@ impl Program {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ProgramStart {
+    /// Test program (60 seconds per station)
+    Test,
+    /// Short test program (two seconds per station)
+    TestShort,
+    // Run-once program
+    RunOnce,
+    /// User program
+    User(usize),
+}
+
 #[derive(Clone)]
 pub struct QueueElement {
     /// Start time
     pub start_time: i64,
     /// Water time
     pub water_time: i64,
-    /// Station ID
-    pub sid: station::StationIndex,
-    /// Program ID
-    pub pid: usize,
+    /// Station
+    pub station_index: station::StationIndex,
+    /// Program
+    pub program_index: ProgramStart,
 }
 
 pub type QueueElements = collections::VecDeque<QueueElement>;

@@ -571,7 +571,8 @@ impl OpenSprinkler {
 
         for i in 0..sensor::MAX_SENSORS {
             if self.config.programs.len() > i {
-                scheduler::manual_start_program(self, program_data, i + 1, false);
+                // Program switch sensors start the same program index
+                scheduler::manual_start_program(self, program_data, i, false);
             }
         }
     }
@@ -861,7 +862,8 @@ impl OpenSprinkler {
 
                 let q = program_data.queue.get(qid).unwrap();
 
-                if q.pid >= program::TEST_PROGRAM_ID {
+                //if q.program_index >= program::TEST_PROGRAM_ID {
+                if q.program_index == program::ProgramStart::Test || q.program_index == program::ProgramStart::TestShort || q.program_index == program::ProgramStart::RunOnce {
                     // This is a manually started program, skip
                     continue;
                 }
