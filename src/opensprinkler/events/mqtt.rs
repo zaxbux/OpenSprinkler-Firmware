@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Result;
 extern crate paho_mqtt;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MQTTConfig {
     pub enabled: bool,
     pub version: u32,
