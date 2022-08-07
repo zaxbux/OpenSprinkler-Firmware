@@ -12,7 +12,7 @@ pub fn turn_on_station(open_sprinkler: &mut OpenSprinkler, station_id: station::
 
     if open_sprinkler.set_station_bit(station_id, true) == StationBitChange::On {
         //let station_name = open_sprinkler.stations.get(station_id).unwrap().name.to_string();
-        let station_name = open_sprinkler.controller_config.stations.get(station_id).unwrap().name.to_string();
+        let station_name = open_sprinkler.config.stations.get(station_id).unwrap().name.to_string();
         //let station_name = open_sprinkler.get_station_name(station_id).as_str();
         events::push_message(
             open_sprinkler,
@@ -75,7 +75,7 @@ pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, program_data: &mut p
             let _ = log::write_log_message(open_sprinkler, &message, now_seconds);
 
             //let station_name = open_sprinkler.stations[station_id].name.clone();
-            let station_name = &open_sprinkler.controller_config.stations[station_index].name;
+            let station_name = &open_sprinkler.config.stations[station_index].name;
             events::push_message(
                 open_sprinkler,
                 &events::StationEvent::new(
@@ -118,7 +118,7 @@ pub fn activate_master_station(i: usize, open_sprinkler: &mut OpenSprinkler, pro
         }
 
         // if this station is running and is set to activate master
-        if open_sprinkler.is_station_running(station_index) && open_sprinkler.controller_config.stations[station_index].attrib.use_master[i] {
+        if open_sprinkler.is_station_running(station_index) && open_sprinkler.config.stations[station_index].attrib.use_master[i] {
             let q = program_data.queue.get(program_data.station_qid[station_index]).unwrap();
             // check if timing is within the acceptable range
             let start_time = q.start_time + adjusted_on;

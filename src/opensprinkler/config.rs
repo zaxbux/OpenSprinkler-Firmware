@@ -1,26 +1,26 @@
 pub mod cli;
 
-use super::{
-    program,
-    station,
-    sensor,
-    weather,
-};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use super::{program, sensor, station, weather};
+use serde::{Deserialize, Serialize};
 use std::{
-    error, fmt,
+    fmt,
     fs::OpenOptions,
     io::{self, Write},
-    num,
+    net::IpAddr,
     path::PathBuf,
-    sync::Arc,
-    str::FromStr, net::IpAddr,
+    str::FromStr,
 };
 
 #[cfg(feature = "mqtt")]
 use crate::opensprinkler::events::mqtt;
 
 use crate::opensprinkler::events::ifttt;
+
+#[cfg(unix)]
+const CONFIG_FILE_PATH: &'static str = "/etc/opt/config.dat";
+
+#[cfg(not(unix))]
+const CONFIG_FILE_PATH: &'static str = "./config.dat";
 
 #[derive(Clone, Serialize, Deserialize)]
 #[repr(u8)]
@@ -60,29 +60,6 @@ impl Default for RebootCause {
     }
 }
 
-#[derive(Debug)]
-pub enum ParseLocationError {
-    Invalid,
-    ParseFloatError(num::ParseFloatError),
-}
-
-impl fmt::Display for ParseLocationError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match *self {
-            Self::Invalid => write!(f, "Invalid location string"),
-            ParseLocationError::ParseFloatError(ref err) => write!(f, "Float Parse Error: {}", err),
-        }
-    }
-}
-
-impl error::Error for ParseLocationError {}
-
-impl From<std::num::ParseFloatError> for ParseLocationError {
-    fn from(error: std::num::ParseFloatError) -> Self {
-        ParseLocationError::ParseFloatError(error)
-    }
-}
-
 #[derive(Default, Clone, Serialize, Deserialize)]
 pub struct Location {
     lat: f32,
@@ -90,7 +67,7 @@ pub struct Location {
 }
 
 impl TryFrom<String> for Location {
-    type Error = ParseLocationError;
+    type Error = result::ParseLocationError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         if let Some((lat, lng)) = value.split_once(',') {
@@ -100,7 +77,7 @@ impl TryFrom<String> for Location {
             });
         }
 
-        Err(ParseLocationError::Invalid)
+        Err(result::ParseLocationError::Invalid)
     }
 }
 
@@ -112,7 +89,7 @@ impl fmt::Display for Location {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct ControllerConfiguration {
+pub struct Config {
     /// firmware version
     pub firmware_version: semver::Version,
     /// Hardware version
@@ -167,23 +144,60 @@ pub struct ControllerConfiguration {
     #[cfg(feature = "mqtt")]
     pub mqtt: mqtt::MQTTConfig,
 
-    /* Fields that are never saved */
+    /* Fields that are never serialized/deserialized */
+    /// Config path
+    #[serde(skip)]
+    path: PathBuf,
 
     /// Cause of last reboot
     #[serde(skip)]
     pub last_reboot_cause: RebootCause,
 }
 
-impl Default for ControllerConfiguration {
+impl Config {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_path(path: PathBuf) -> Self {
+        Self {
+            path,
+            ..Self::default()
+        }
+    }
+
+    pub fn exists(&self) -> bool {
+        self.path.exists()
+    }
+
+    pub fn read(&self) -> result::Result<Self> {
+        tracing::debug!("Reading config: {:?}", self.path);
+        let reader = io::BufReader::new(OpenOptions::new().read(true).open(&self.path)?);
+        Ok(bson::from_reader(reader)?)
+    }
+
+    //pub fn write<T: Serialize>(&self, document: &T) -> result::Result<()> {
+    pub fn write(&self) -> result::Result<()> {
+        let buf = bson::to_vec(&self)?;
+        Ok(io::BufWriter::new(OpenOptions::new().write(true).create(true).open(&self.path)?).write_all(&buf)?)
+    }
+
+    pub fn write_default(&self) -> result::Result<()> {
+        let buf = bson::to_vec(&Self::default())?;
+        Ok(io::BufWriter::new(OpenOptions::new().write(true).create(true).open(&self.path)?).write_all(&buf)?)
+    }
+}
+
+impl Default for Config {
     fn default() -> Self {
-        ControllerConfiguration {
+        Self {
             firmware_version: semver::Version::parse(core::env!("CARGO_PKG_VERSION")).unwrap(),
             hardware_version: HardwareVersionBase::OpenSprinklerPi,
             extension_board_count: 0,
             enable_controller: true,
             enable_remote_ext_mode: false,
             enable_log: true,
-            reboot_cause: RebootCause::Reset, // If the config file does not exist, these defaults will be used. Therefore, this is the relevant reason.
+            reboot_cause: RebootCause::Reset,                              // If the config file does not exist, these defaults will be used. Therefore, this is the relevant reason.
             device_key: format!("{:x}", md5::compute(b"opendoor")).into(), // @todo Use modern hash like Argon2
             external_ip: None,
             js_url: core::option_env!("JAVASCRIPT_URL").unwrap_or("https://ui.opensprinkler.com").into(),
@@ -205,172 +219,75 @@ impl Default for ControllerConfiguration {
             #[cfg(feature = "mqtt")]
             mqtt: mqtt::MQTTConfig::default(),
 
+            /* Fields that are never serialized/deserialized */
+            path: PathBuf::from_str(CONFIG_FILE_PATH).unwrap(),
             last_reboot_cause: RebootCause::None,
         }
     }
 }
 
-#[derive(Clone, Debug)]
-#[non_exhaustive]
-pub enum Error {
-    Io(Arc<io::Error>),
+impl fmt::Display for Config {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:#?}", serde_json::to_string_pretty(&self))
+    }
+}
 
+pub mod result {
+    use core::{num, fmt};
+    use std::{sync::Arc, io, error};
+
+    pub type Result<T> = core::result::Result<T, Error>;
+
+    #[derive(Clone, Debug)]
     #[non_exhaustive]
-    SerializationError(Arc<bson::ser::Error>),
+    pub enum Error {
+        Io(Arc<io::Error>),
 
-    #[non_exhaustive]
-    DeserializationError(Arc<bson::de::Error>),
-}
+        #[non_exhaustive]
+        SerializationError(Arc<bson::ser::Error>),
 
-impl From<bson::ser::Error> for Error {
-    fn from(err: bson::ser::Error) -> Error {
-        Error::SerializationError(Arc::new(err))
-    }
-}
-
-impl From<bson::de::Error> for Error {
-    fn from(err: bson::de::Error) -> Error {
-        Error::DeserializationError(Arc::new(err))
-    }
-}
-
-impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Error {
-        Error::Io(Arc::new(err))
-    }
-}
-
-pub struct Config {
-    path: PathBuf,
-}
-
-impl Config {
-    pub fn new(path: PathBuf) -> Config {
-        Config { path }
+        #[non_exhaustive]
+        DeserializationError(Arc<bson::de::Error>),
     }
 
-    pub fn exists(&self) -> bool {
-        self.path.exists()
+    impl From<bson::ser::Error> for Error {
+        fn from(err: bson::ser::Error) -> Error {
+            Error::SerializationError(Arc::new(err))
+        }
     }
 
-    pub fn get<T: DeserializeOwned>(&self) -> Result<T, Error> {
-        let reader = io::BufReader::new(OpenOptions::new().read(true).open(&self.path)?);
-        Ok(bson::from_reader(reader)?)
+    impl From<bson::de::Error> for Error {
+        fn from(err: bson::de::Error) -> Error {
+            Error::DeserializationError(Arc::new(err))
+        }
     }
 
-    pub fn commit<T: Serialize>(&self, document: &T) -> Result<(), Error> {
-        let buf = bson::to_vec(document)?;
-        Ok(io::BufWriter::new(OpenOptions::new().write(true).create(true).open(&self.path)?).write_all(&buf)?)
+    impl From<io::Error> for Error {
+        fn from(err: io::Error) -> Error {
+            Error::Io(Arc::new(err))
+        }
     }
 
-    pub fn commit_defaults(&self) -> Result<(), Error> {
-        let document = ControllerConfiguration::default();
-        Ok(self.commit(&document)?)
+    #[derive(Debug)]
+    pub enum ParseLocationError {
+        Invalid,
+        ParseFloatError(num::ParseFloatError),
+    }
+
+    impl fmt::Display for ParseLocationError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match *self {
+                Self::Invalid => write!(f, "Invalid location string"),
+                ParseLocationError::ParseFloatError(ref err) => write!(f, "Float Parse Error: {}", err),
+            }
+        }
+    }
+
+    impl error::Error for ParseLocationError {}
+
+    impl From<std::num::ParseFloatError> for ParseLocationError {
+        fn from(error: std::num::ParseFloatError) -> Self {
+            ParseLocationError::ParseFloatError(error)
+        }
     }
 }
-/*
-pub fn get_config<P: AsRef<Path>>(path: P) -> Result<ConfigDocument, io::Error> {
-    let reader = io::BufReader::new(File::open(path)?);
-    Ok(bson::from_reader(reader).unwrap())
-}
-
-pub fn commit_config<P: AsRef<Path>>(path: P, document: &ConfigDocument) -> Result<(), io::Error> {
-    // Write config
-    let buf = bson::to_vec(document).unwrap();
-    let mut writer = io::BufWriter::new(OpenOptions::new().write(true).create(true).open(path)?);
-    writer.write_all(&buf)?;
-
-    Ok(())
-}
-
-/// Reads the integer options file and returns a deserialized struct
-pub fn get_controller_nv() -> Result<data_type::ControllerNonVolatile, io::Error> {
-    tracing::trace!("Reading controller non-volatile data");
-    Ok(get_config()?.nv)
-}
-
-pub fn commit_controller_nv(nv: &data_type::ControllerNonVolatile) -> Result<(), io::Error> {
-    // Read then modify config
-    let mut config: ConfigDocument = get_config()?;
-    config.nv = nv.clone();
-
-    Ok(commit_config(&config)?)
-}
-
-/// Reads the integer options file and returns a deserialized struct
-pub fn get_integer_options() -> Result<data_type::IntegerOptions, io::Error> {
-    tracing::trace!("Reading integer options");
-    Ok(get_config()?.iopts)
-}
-
-pub fn commit_integer_options(iopts: &data_type::IntegerOptions) -> Result<(), io::Error> {
-    // Read then modify config
-    let mut config: ConfigDocument = get_config()?;
-    config.iopts = iopts.clone();
-
-    Ok(commit_config(&config)?)
-}
-
-/// Reads the string options file and returns a deserialized struct
-pub fn get_string_options() -> Result<data_type::StringOptions, io::Error> {
-    tracing::trace!("Reading string options");
-    Ok(get_config()?.sopts)
-}
-
-pub fn commit_string_options(sopts: &data_type::StringOptions) -> Result<(), io::Error> {
-    // Read then modify config
-    let mut config: ConfigDocument = get_config()?;
-    config.sopts = sopts.clone();
-
-    Ok(commit_config(&config)?)
-}
-
-pub fn get_stations() -> Result<Stations, io::Error> {
-    tracing::trace!("Reading stations");
-    let stations = get_config()?.stations;
-    tracing::trace!("Got {} stations", stations.len());
-    Ok(stations)
-}
-
-pub fn commit_stations(stations: &Stations) -> Result<(), io::Error> {
-    // Read then modify config
-    let mut config: ConfigDocument = get_config()?;
-    config.stations = stations.to_vec();
-
-    Ok(commit_config(&config)?)
-}
-
-pub fn get_programs() -> Result<Programs, io::Error> {
-    tracing::trace!("Reading programs");
-    let programs = get_config()?.programs;
-    tracing::trace!("Got {} programs", programs.len());
-    Ok(programs)
-}
-
-pub fn commit_programs(programs: &Programs) -> Result<(), io::Error> {
-    // Read then modify config
-    let mut config: ConfigDocument = get_config()?;
-    config.programs = programs.to_vec();
-
-    Ok(commit_config(&config)?)
-}
-
-pub fn pre_factory_reset<P: AsRef<Path>>(path: P) -> io::Result<()> {
-    fs::remove_file(path)
-}
-
-pub fn factory_reset() -> io::Result<()> {
-    let config = ConfigDocument {
-        nv: data_type::ControllerNonVolatile {
-            reboot_cause: RebootCause::Reset,
-            ..Default::default()
-        },
-        iopts: data_type::IntegerOptions::default(),
-        sopts: data_type::StringOptions::default(),
-        stations: station::default(),
-        programs: Vec::new(),
-    };
-
-    commit_config(&config)
-}
- */

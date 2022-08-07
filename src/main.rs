@@ -24,18 +24,12 @@ use opensprinkler::{
 
 use crate::opensprinkler::{scheduler, sensor, config};
 
-#[cfg(unix)]
-const CONFIG_FILE_PATH: &'static str = "/etc/opt/config.dat";
-
-#[cfg(not(unix))]
-const CONFIG_FILE_PATH: &'static str = "./config.dat";
-
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
     /// Binary config file path
-    #[clap(short = 'c', long = "config", default_value = CONFIG_FILE_PATH, parse(from_os_str))]
-    config: std::path::PathBuf,
+    #[clap(short = 'c', long = "config", parse(from_os_str))]
+    config: Option<std::path::PathBuf>,
 
     /// Set a config value
     #[clap(long = "set", takes_value = true, required = false, min_values = 2, max_values = 2)]
@@ -82,14 +76,17 @@ fn main() {
     tracing::info!("DEMO MODE");
     // endregion TRACING
 
-    tracing::info!("Using config file: {}", args.config.display());
-
     // OpenSprinkler initialization
     tracing::trace!("Initialize controller");
-    let mut open_sprinkler = OpenSprinkler::new(args.config);
+    let mut open_sprinkler = if let Some(config) = args.config {
+        OpenSprinkler::with_config_path(config)
+    } else {
+        OpenSprinkler::new()
+    };
+
     // Setup options
     // @todo move into ::new()
-    open_sprinkler.options_setup().unwrap();
+    open_sprinkler.setup().unwrap();
 
     // ProgramData initialization
     let mut program_data = program::ProgramQueue::new();
@@ -109,7 +106,7 @@ fn main() {
 
         if let Ok(ok) = result {
             println!("Success: {:?}", ok);
-            open_sprinkler.commit_config().unwrap();
+            open_sprinkler.config.write().unwrap();
         } else if let Err(err) = result {
             println!("Error: {:?}", err);
         }
@@ -214,9 +211,9 @@ fn main() {
                 // @fixme Should this be in the weather module?
                 match weather_update_flag {
                     //WeatherUpdateFlag::EIP => push_message(&open_sprinkler, WeatherUpdateEvent::new(Some(open_sprinkler.iopts.wl), None)),
-                    weather::WeatherUpdateFlag::EIP => events::push_message(&open_sprinkler, &events::WeatherUpdateEvent::new(Some(open_sprinkler.controller_config.water_scale), None)),
+                    weather::WeatherUpdateFlag::EIP => events::push_message(&open_sprinkler, &events::WeatherUpdateEvent::new(Some(open_sprinkler.config.water_scale), None)),
                     //WeatherUpdateFlag::WL => push_message(&open_sprinkler, WeatherUpdateEvent::new(None, open_sprinkler.nvdata.external_ip)),
-                    weather::WeatherUpdateFlag::WL => events::push_message(&open_sprinkler, &events::WeatherUpdateEvent::new(None, open_sprinkler.controller_config.external_ip)),
+                    weather::WeatherUpdateFlag::WL => events::push_message(&open_sprinkler, &events::WeatherUpdateEvent::new(None, open_sprinkler.config.external_ip)),
                     _ => (),
                 }
             });

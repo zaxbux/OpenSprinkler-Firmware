@@ -220,7 +220,7 @@ where
     }
 
     if ifttt_event_enabled(open_sprinkler, event) {
-        if let Some(ifttt_api_key) = &open_sprinkler.controller_config.ifttt.web_hooks_key {
+        if let Some(ifttt_api_key) = &open_sprinkler.config.ifttt.web_hooks_key {
             ifttt_webhook(event, ifttt_api_key);
         } else {
             tracing::error!("IFTTT Web Hook API key unset");
@@ -238,7 +238,7 @@ where
     }
 
     if ifttt_event_enabled(open_sprinkler, event) {
-        if let Some(ifttt_api_key) = &open_sprinkler.controller_config.ifttt.web_hooks_key {
+        if let Some(ifttt_api_key) = &open_sprinkler.config.ifttt.web_hooks_key {
             ifttt_webhook(event, ifttt_api_key);
         } else {
             tracing::error!("IFTTT Web Hook API key unset");
@@ -249,15 +249,15 @@ where
 fn ifttt_event_enabled(open_sprinkler: &OpenSprinkler, event: &dyn EventType) -> bool {
     // @todo This can be more efficient:
     match event.event_type() {
-        NotifyEvent::ProgramStart => open_sprinkler.controller_config.ifttt.program_start,
-        NotifyEvent::Sensor1 => open_sprinkler.controller_config.ifttt.sensor1,
-        NotifyEvent::FlowSensor => open_sprinkler.controller_config.ifttt.flow_sensor,
-        NotifyEvent::WeatherUpdate => open_sprinkler.controller_config.ifttt.weather_update,
-        NotifyEvent::Reboot => open_sprinkler.controller_config.ifttt.reboot,
-        NotifyEvent::StationOff => open_sprinkler.controller_config.ifttt.station_off,
-        NotifyEvent::Sensor2 => open_sprinkler.controller_config.ifttt.sensor2,
-        NotifyEvent::RainDelay => open_sprinkler.controller_config.ifttt.rain_delay,
-        NotifyEvent::StationOn => open_sprinkler.controller_config.ifttt.station_on,
+        NotifyEvent::ProgramStart => open_sprinkler.config.ifttt.program_start,
+        NotifyEvent::Sensor1 => open_sprinkler.config.ifttt.sensor1,
+        NotifyEvent::FlowSensor => open_sprinkler.config.ifttt.flow_sensor,
+        NotifyEvent::WeatherUpdate => open_sprinkler.config.ifttt.weather_update,
+        NotifyEvent::Reboot => open_sprinkler.config.ifttt.reboot,
+        NotifyEvent::StationOff => open_sprinkler.config.ifttt.station_off,
+        NotifyEvent::Sensor2 => open_sprinkler.config.ifttt.sensor2,
+        NotifyEvent::RainDelay => open_sprinkler.config.ifttt.rain_delay,
+        NotifyEvent::StationOn => open_sprinkler.config.ifttt.station_on,
     }
 }
 
