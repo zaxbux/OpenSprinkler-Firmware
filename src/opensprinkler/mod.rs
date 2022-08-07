@@ -562,6 +562,7 @@ impl OpenSprinkler {
         }
     }
 
+    #[cfg(not(feature = "demo"))]
     fn detect_sensor_status(&mut self, i: usize, now_seconds: i64) {
         let sensor_type = self.get_sensor_type(i);
 
@@ -592,17 +593,9 @@ impl OpenSprinkler {
         }
     }
 
-    /// Read sensor status
-    /* fn detect_binary_sensor_status(&mut self, now_seconds: i64) {
-        for i in 0..sensor::MAX_SENSORS {
-            self.detect_sensor_status(i, now_seconds)
-        }
-    } */
-
     /// Check binary sensor status (e.g. rain, soil)
+    #[cfg(not(feature = "demo"))]
     pub fn check_binary_sensor_status(&mut self, now_seconds: i64) {
-        /* self.detect_binary_sensor_status(now_seconds); */
-
         for i in 0..sensor::MAX_SENSORS {
             self.detect_sensor_status(i, now_seconds);
 
@@ -620,6 +613,7 @@ impl OpenSprinkler {
     }
 
     /// Check program switch status
+    #[cfg(not(feature = "demo"))]
     pub fn check_program_switch_status(&mut self, program_data: &mut program::ProgramQueue) {
         let program_switch = self.detect_program_switch_status();
 
@@ -673,10 +667,10 @@ impl OpenSprinkler {
     /// | ----------------------------- | ------------------ | ------------------- |
     /// | [sensor::NormalState::Closed] | [false]            | [true]              |
     /// | [sensor::NormalState::Open]   | [true]             | [false]             |
+    #[cfg(not(feature = "demo"))]
     fn get_sensor_detected(&self, i: usize) -> bool {
         let normal_state = self.get_sensor_normal_state(i);
 
-        #[cfg(not(feature = "demo"))]
         if let Some(ref gpio) = self.gpio {
             let sensor = gpio.get(gpio::SENSOR[i]).and_then(|pin| Ok(pin.into_input()));
 
@@ -700,6 +694,7 @@ impl OpenSprinkler {
     }
 
     /// Return program switch status
+    #[cfg(not(feature = "demo"))]
     pub fn detect_program_switch_status(&mut self) -> [bool; sensor::MAX_SENSORS] {
         let mut detected = [false; sensor::MAX_SENSORS];
 

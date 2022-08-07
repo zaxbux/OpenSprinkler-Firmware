@@ -1,5 +1,5 @@
 use std::{
-    fs::{create_dir_all, read_dir, remove_file, OpenOptions},
+    fs::{self, OpenOptions},
     io::{Write, self},
     path::PathBuf,
 };
@@ -22,11 +22,6 @@ pub enum LogDataType {
     FlowSense = 0x04,
     /// Format: [0,s2,_duration_|0,_timestamp_]
     Sensor2 = 0x05,
-    /*     #[deprecated(
-        since = "3.0.0",
-        note = "OpenSprinkler Pi hardware does not include current sensing circuit"
-    )]
-    Current = 0x80, */
 }
 
 const T24H_SECS: i64 = 86400;
@@ -36,24 +31,22 @@ const T24H_SECS: i64 = 86400;
 /// ### Arguments
 /// * `time` - If a [None] value, the log directory is emptied, otherwise the log file for the specified day is deleted.
 pub fn delete_log(time: Option<i64>) -> io::Result<()> {
-    let log_path = PathBuf::from("./logs/");
+    let mut log_path = PathBuf::from("./logs/");
 
-    if time.is_none() {
+    if let Some(time) = time {
+        // Delete specific file
+        log_path.push((time / T24H_SECS).to_string());
+        log_path.set_extension("txt");
+
+        //if log_path.exists() {
+            fs::remove_file(log_path)?;
+        //}
+    } else {
         // Empty the log directory
         // Note: we don't delete the directory since that could delete a symlink
-        for file in read_dir(log_path).unwrap() {
-            remove_file(file.unwrap().path())?;
+        for file in fs::read_dir(log_path).unwrap() {
+            fs::remove_file(file.unwrap().path())?;
         }
-        return Ok(());
-    }
-
-    // Delete specific file
-    let mut log_file_path = log_path.clone();
-    log_file_path.set_file_name((time.unwrap() / 86400).to_string());
-    log_file_path.set_extension("txt");
-
-    if log_file_path.exists() {
-        remove_file(log_file_path)?;
     }
 
     return Ok(());
@@ -72,19 +65,17 @@ fn get_log_type_name(log_type: &LogDataType) -> &'static str {
 }
 
 fn get_writer(timestamp: i64) -> Result<io::BufWriter<std::fs::File>, std::io::Error> {
-    let log_path = PathBuf::from("./logs/");
+    let mut log_path = PathBuf::from("./logs/");
 
-    // file name will be logs/xxxxx.tx where xxxxx is the day in epoch time
-    let mut log_file_path = log_path.clone();
-    log_file_path.set_file_name((timestamp / T24H_SECS).to_string());
-    log_file_path.set_extension("txt");
-
-    // Step 1 - open file if exists, or create new otherwise, and move file pointer to the end prepare log folder for RPI
     if !log_path.is_dir() {
-        create_dir_all(log_path)?;
+        fs::create_dir_all(&log_path)?;
     }
 
-    Ok(io::BufWriter::new(OpenOptions::new().create(true).append(true).open(log_file_path)?))
+    // file name will be logs/xxxxx.tx where xxxxx is the day in epoch time
+    log_path.push((timestamp / T24H_SECS).to_string());
+    log_path.set_extension("txt");
+
+    Ok(io::BufWriter::new(OpenOptions::new().create(true).append(true).open(log_path)?))
 }
 
 pub mod message {

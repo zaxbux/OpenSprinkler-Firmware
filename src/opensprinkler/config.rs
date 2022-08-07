@@ -25,7 +25,6 @@ const CONFIG_FILE_PATH: &'static str = "./config.dat";
 #[derive(Clone, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum HardwareVersionBase {
-    #[deprecated(note = "Rust port of firmware is not compatible with Arduino/ESP platforms")]
     OpenSprinkler = 0x00,
     OpenSprinklerPi = 0x40,
     Simulated = 0xC0,
@@ -39,17 +38,11 @@ pub enum RebootCause {
     Reset = 1,
     /// Hardware Button
     Button = 2,
-    /* #[deprecated(since = "3.0.0", note = "Wi-Fi is handled by OS")]
-    ResetAP = 3, */
     Timer = 4,
     Web = 5,
-    /* #[deprecated(since = "3.0.0", note = "Wi-Fi is handled by OS")]
-    WifiDone = 6, */
     FirmwareUpdate = 7,
     WeatherFail = 8,
     NetworkFail = 9,
-    /* #[deprecated(since = "3.0.0", note = "NTP is handled by OS")]
-    NTP = 10, */
     Program = 11,
     PowerOn = 99,
 }

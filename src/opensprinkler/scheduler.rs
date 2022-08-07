@@ -349,8 +349,6 @@ pub fn manual_start_program(open_sprinkler: &mut OpenSprinkler, program_data: &m
         }
     }
     if match_found {
-        //let now: i64 = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs() as i64;
-        //schedule_all_stations(open_sprinkler, flow_state, program_data, chrono::Utc::now().timestamp());
         schedule_all_stations(open_sprinkler, program_data, chrono::Utc::now().timestamp());
     }
 }

@@ -22,7 +22,9 @@ use opensprinkler::{
     OpenSprinkler,
 };
 
-use crate::opensprinkler::{scheduler, sensor, config};
+use crate::opensprinkler::{scheduler, config};
+#[cfg(not(feature = "demo"))]
+use crate::opensprinkler::sensor;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -128,7 +130,9 @@ fn main() {
     let mut last_seconds = 0;
     let mut now_minute: i64;
     let mut last_minute = 0;
+    #[cfg(not(feature = "demo"))]
     let mut now_millis: i64;
+    #[cfg(not(feature = "demo"))]
     let mut last_millis = 0;
 
     // Do-once flags
@@ -165,7 +169,9 @@ fn main() {
 
             
             open_sprinkler.check_rain_delay_status(now_seconds);
+            #[cfg(not(feature = "demo"))]
             open_sprinkler.check_binary_sensor_status(now_seconds);
+            #[cfg(not(feature = "demo"))]
             open_sprinkler.check_program_switch_status(&mut program_data);
 
             // since the granularity of start time is minute, we only need to check once every minute
