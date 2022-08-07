@@ -18,15 +18,11 @@ pub mod scheduler;
 #[cfg(target_os = "linux")]
 pub mod system;
 
-use serde::{Deserialize, Serialize};
 use std::cmp::max;
-use std::path::{PathBuf, self};
+use std::path::PathBuf;
 
 use self::config::ControllerConfiguration;
 use self::http::request;
-use self::sensor::{SensorType, MAX_SENSORS};
-use self::station::{StationType, MAX_NUM_BOARDS};
-use self::weather::algorithm;
 
 /// Default reboot timer (seconds)
 pub const REBOOT_DELAY: i64 = 65;
@@ -36,15 +32,6 @@ pub const MINIMUM_OFF_DELAY: u8 = 5;
 
 const SPECIAL_CMD_REBOOT: &'static str = ":>reboot";
 const SPECIAL_CMD_REBOOT_NOW: &'static str = ":>reboot_now";
-
-#[derive(Clone, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum HardwareVersionBase {
-    #[deprecated(note = "Rust port of firmware is not compatible with Arduino/ESP platforms")]
-    OpenSprinkler = 0x00,
-    OpenSprinklerPi = 0x40,
-    Simulated = 0xC0,
-}
 
 #[derive(Copy, Clone)]
 struct ControllerSensorStatus {
@@ -104,30 +91,6 @@ impl Default for ControllerStatus {
     }
 }
 
-#[repr(u8)]
-#[derive(Clone, Copy, Serialize, Deserialize)]
-pub enum RebootCause {
-    /// None
-    None = 0,
-    /// Factory Reset
-    Reset = 1,
-    /// Hardware Button
-    Button = 2,
-    /* #[deprecated(since = "3.0.0", note = "Wi-Fi is handled by OS")]
-    ResetAP = 3, */
-    Timer = 4,
-    Web = 5,
-    /* #[deprecated(since = "3.0.0", note = "Wi-Fi is handled by OS")]
-    WifiDone = 6, */
-    FirmwareUpdate = 7,
-    WeatherFail = 8,
-    NetworkFail = 9,
-    /* #[deprecated(since = "3.0.0", note = "NTP is handled by OS")]
-    NTP = 10, */
-    Program = 11,
-    PowerOn = 99,
-}
-
 /// Flow Count Window (seconds)
 ///
 /// For computing real-time flow rate.
@@ -156,7 +119,7 @@ pub struct OpenSprinkler {
     /// station activation bits. each unsigned char corresponds to a board (8 stations)
     ///
     /// first byte-> master controller, second byte-> ext. board 1, and so on
-    pub station_bits: [u8; MAX_NUM_BOARDS],
+    pub station_bits: [u8; station::MAX_NUM_BOARDS],
 
     //pub nvdata: config::data_type::ControllerNonVolatile,
     //pub iopts: config::data_type::IntegerOptions,
@@ -164,7 +127,7 @@ pub struct OpenSprinkler {
     //pub stations: Stations,
     //pub programs: Programs,
     /// Sensor Status
-    pub sensor_status: [sensor::SensorStatus; MAX_SENSORS],
+    pub sensor_status: [sensor::SensorStatus; sensor::MAX_SENSORS],
 
     /// time when the most recent rain delay started (seconds)
     pub raindelay_on_last_time: Option<i64>,
@@ -183,9 +146,6 @@ pub struct OpenSprinkler {
     ///
     /// When the program was started
     boot_time: chrono::DateTime<chrono::Utc>,
-
-    /// Last reboot cause
-    last_reboot_cause: RebootCause,
 
     sar__next_sid_to_refresh: usize,
     sar__last_now: i64,
@@ -219,10 +179,10 @@ impl OpenSprinkler {
 
             status_current: ControllerStatus::default(),
             status_last: ControllerStatus::default(),
-            sensor_status: [sensor::SensorStatus::default(); MAX_SENSORS],
+            sensor_status: [sensor::SensorStatus::default(); sensor::MAX_SENSORS],
             //nboards,
             //nstations: nboards * SHIFT_REGISTER_LINES,
-            station_bits: [0u8; MAX_NUM_BOARDS],
+            station_bits: [0u8; station::MAX_NUM_BOARDS],
             boot_time: chrono::Utc::now(),
             raindelay_on_last_time: None,
             flow_count_log_start: 0,
@@ -230,14 +190,6 @@ impl OpenSprinkler {
             flow_count_rt_start: 0,
 
             weather_status: weather::WeatherStatus::default(),
-
-            // Initalize defaults
-            //nvdata: config::data_type::ControllerNonVolatile::default(),
-            //iopts: config::data_type::IntegerOptions::default(),
-            //sopts: config::data_type::StringOptions::default(),
-            //stations,
-            //programs,
-            last_reboot_cause: RebootCause::None,
 
 
             // special station auto-refresh
@@ -345,7 +297,7 @@ impl OpenSprinkler {
     /// - `0` = Sensor 1
     /// - `1` = Sensor 2
     /// - ...
-    pub fn get_sensor_type(&self, i: usize) -> Option<SensorType> {
+    pub fn get_sensor_type(&self, i: usize) -> Option<sensor::SensorType> {
         self.controller_config.sensors[i].sensor_type
     }
 
@@ -406,7 +358,7 @@ impl OpenSprinkler {
     /// Realtime flow count
     pub fn update_realtime_flow_count(&mut self, now_seconds: i64) {
         //if open_sprinkler.iopts.sn1t == SensorType::Flow as u8 && now_seconds % FLOW_COUNT_REALTIME_WINDOW == 0 {
-        if self.get_sensor_type(0).unwrap_or(sensor::SensorType::None) == SensorType::Flow && now_seconds % FLOW_COUNT_REALTIME_WINDOW == 0 {
+        if self.get_sensor_type(0).unwrap_or(sensor::SensorType::None) == sensor::SensorType::Flow && now_seconds % FLOW_COUNT_REALTIME_WINDOW == 0 {
             //open_sprinkler.flowcount_rt = if flow_state.flow_count > flow_count_rt_start { flow_state.flow_count - flow_count_rt_start } else { 0 };
             self.flow_count_rt = max(0, self.flow_state.get_flow_count() - self.flow_count_rt_start); // @fixme subtraction overflow
             self.flow_count_rt_start = self.flow_state.get_flow_count();
@@ -422,7 +374,7 @@ impl OpenSprinkler {
                 self.reboot_dev(self.controller_config.reboot_cause);
             }
         } else if self.status_current.reboot_timer != 0 && (now_seconds > self.status_current.reboot_timer) {
-            self.reboot_dev(RebootCause::Timer);
+            self.reboot_dev(config::RebootCause::Timer);
         }
     }
 
@@ -461,7 +413,7 @@ impl OpenSprinkler {
     /// @todo Use primary interface and get mac from it.
     pub fn load_hardware_mac() {}
 
-    pub fn reboot_dev(&mut self, cause: RebootCause) {
+    pub fn reboot_dev(&mut self, cause: config::RebootCause) {
         //self.nvdata.reboot_cause = cause;
         self.controller_config.reboot_cause = cause;
         //self.nvdata_save();
@@ -609,7 +561,7 @@ impl OpenSprinkler {
     fn detect_sensor_status(&mut self, i: usize, now_seconds: i64) {
         let sensor_type = self.get_sensor_type(i);
 
-        if sensor_type.unwrap_or(sensor::SensorType::None) == SensorType::Rain || sensor_type.unwrap_or(sensor::SensorType::None) == SensorType::Soil {
+        if sensor_type.unwrap_or(sensor::SensorType::None) == sensor::SensorType::Rain || sensor_type.unwrap_or(sensor::SensorType::None) == sensor::SensorType::Soil {
             self.status_current.sensors[i].detected = self.get_sensor_detected(i);
 
             if self.status_current.sensors[i].detected {
@@ -673,7 +625,7 @@ impl OpenSprinkler {
             self.reset_all_stations_immediate(program_data);
         }
 
-        for i in 0..MAX_SENSORS {
+        for i in 0..sensor::MAX_SENSORS {
             if self.controller_config.programs.len() > i {
                 scheduler::manual_start_program(self, program_data, i + 1, false);
             }
@@ -752,11 +704,11 @@ impl OpenSprinkler {
     }
 
     /// Return program switch status
-    pub fn detect_program_switch_status(&mut self) -> [bool; MAX_SENSORS] {
-        let mut detected = [false; MAX_SENSORS];
+    pub fn detect_program_switch_status(&mut self) -> [bool; sensor::MAX_SENSORS] {
+        let mut detected = [false; sensor::MAX_SENSORS];
 
-        for i in 0..MAX_SENSORS {
-            if self.get_sensor_type(i).unwrap_or(sensor::SensorType::None) == SensorType::ProgramSwitch {
+        for i in 0..sensor::MAX_SENSORS {
+            if self.get_sensor_type(i).unwrap_or(sensor::SensorType::None) == sensor::SensorType::ProgramSwitch {
                 self.status_current.sensors[i].detected = self.get_sensor_detected(i);
 
                 self.sensor_status[i].history = (self.sensor_status[i].history << 1) | if self.status_current.sensors[i].detected { 1 } else { 0 };
@@ -773,9 +725,9 @@ impl OpenSprinkler {
     }
 
     pub fn sensor_reset_all(&mut self) {
-        self.sensor_status = [sensor::SensorStatus::default(); MAX_SENSORS];
+        self.sensor_status = [sensor::SensorStatus::default(); sensor::MAX_SENSORS];
 
-        for i in 0..MAX_SENSORS {
+        for i in 0..sensor::MAX_SENSORS {
             self.status_last.sensors[i].active = false;
             self.status_current.sensors[i].active = false;
         }
@@ -868,10 +820,10 @@ impl OpenSprinkler {
         //let data: &StationData;
         //let data = self.get_station_data(station);
         match station.station_type {
-            StationType::RadioFrequency => self.switch_rf_station(station::RFStationData::try_from(station.sped.as_ref().unwrap()).unwrap(), value),
-            StationType::Remote => self.switch_remote_station(station::RemoteStationData::try_from(station.sped.as_ref().unwrap()).unwrap(), value),
-            StationType::GPIO => self.switch_gpio_station(station::GPIOStationData::try_from(station.sped.as_ref().unwrap()).unwrap(), value),
-            StationType::HTTP => self.switch_http_station(station::HTTPStationData::try_from(station.sped.as_ref().unwrap()).unwrap(), value),
+            station::StationType::RadioFrequency => self.switch_rf_station(station::RFStationData::try_from(station.sped.as_ref().unwrap()).unwrap(), value),
+            station::StationType::Remote => self.switch_remote_station(station::RemoteStationData::try_from(station.sped.as_ref().unwrap()).unwrap(), value),
+            station::StationType::GPIO => self.switch_gpio_station(station::GPIOStationData::try_from(station.sped.as_ref().unwrap()).unwrap(), value),
+            station::StationType::HTTP => self.switch_http_station(station::HTTPStationData::try_from(station.sped.as_ref().unwrap()).unwrap(), value),
             // Nothing to do for [StationType::Standard] and [StationType::Other]
             _ => (),
         }
@@ -912,8 +864,8 @@ impl OpenSprinkler {
 
         /* self.controller_config.firmware_version = FIRMWARE_VERSION; */ // This is no longer required, it is initialized with the crate version when compiled.
         //self.controller_config.fwm = FIRMWARE_VERSION_REVISION;
-        self.last_reboot_cause = self.controller_config.reboot_cause;
-        self.controller_config.reboot_cause = RebootCause::PowerOn;
+        self.controller_config.last_reboot_cause = self.controller_config.reboot_cause;
+        self.controller_config.reboot_cause = config::RebootCause::PowerOn;
         //self.nvdata_save();
         self.commit_config()
     }
@@ -1001,9 +953,6 @@ impl OpenSprinkler {
     ///
     /// Processes events such as: Rain delay, rain sensing, station state changes, etc.
     pub fn process_dynamic_events(&mut self, program_data: &mut program::ProgramQueue, now_seconds: i64) {
-        /* let sn1 = (self.get_sensor_type(0).unwrap_or(sensor::SensorType::None) == SensorType::Rain || self.get_sensor_type(0).unwrap_or(sensor::SensorType::None) == SensorType::Soil) && self.status_current.sensors[0].active;
-        let sn2 = (self.get_sensor_type(1).unwrap_or(sensor::SensorType::None) == SensorType::Rain || self.get_sensor_type(1).unwrap_or(sensor::SensorType::None) == SensorType::Soil) && self.status_current.sensors[1].active; */
-
         // Determine which rain/soil sensors are currently active
         let mut sn = [false; sensor::MAX_SENSORS];
         for i in 0..sensor::MAX_SENSORS {

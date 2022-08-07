@@ -1,7 +1,10 @@
+pub mod cli;
+
 use super::{
     program,
     station,
-    RebootCause, sensor, weather, HardwareVersionBase,
+    sensor,
+    weather,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
@@ -18,6 +21,44 @@ use std::{
 use crate::opensprinkler::events::mqtt;
 
 use crate::opensprinkler::events::ifttt;
+
+#[derive(Clone, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum HardwareVersionBase {
+    #[deprecated(note = "Rust port of firmware is not compatible with Arduino/ESP platforms")]
+    OpenSprinkler = 0x00,
+    OpenSprinklerPi = 0x40,
+    Simulated = 0xC0,
+}
+
+#[derive(Clone, Copy, Serialize, Deserialize)]
+pub enum RebootCause {
+    /// None
+    None = 0,
+    /// Factory Reset
+    Reset = 1,
+    /// Hardware Button
+    Button = 2,
+    /* #[deprecated(since = "3.0.0", note = "Wi-Fi is handled by OS")]
+    ResetAP = 3, */
+    Timer = 4,
+    Web = 5,
+    /* #[deprecated(since = "3.0.0", note = "Wi-Fi is handled by OS")]
+    WifiDone = 6, */
+    FirmwareUpdate = 7,
+    WeatherFail = 8,
+    NetworkFail = 9,
+    /* #[deprecated(since = "3.0.0", note = "NTP is handled by OS")]
+    NTP = 10, */
+    Program = 11,
+    PowerOn = 99,
+}
+
+impl Default for RebootCause {
+    fn default() -> Self {
+        Self::None
+    }
+}
 
 #[derive(Debug)]
 pub enum ParseLocationError {
@@ -42,7 +83,7 @@ impl From<std::num::ParseFloatError> for ParseLocationError {
     }
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Clone, Serialize, Deserialize)]
 pub struct Location {
     lat: f32,
     lng: f32,
@@ -70,7 +111,7 @@ impl fmt::Display for Location {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ControllerConfiguration {
     /// firmware version
     pub firmware_version: semver::Version,
@@ -125,6 +166,12 @@ pub struct ControllerConfiguration {
     /// MQTT config
     #[cfg(feature = "mqtt")]
     pub mqtt: mqtt::MQTTConfig,
+
+    /* Fields that are never saved */
+
+    /// Cause of last reboot
+    #[serde(skip)]
+    pub last_reboot_cause: RebootCause,
 }
 
 impl Default for ControllerConfiguration {
@@ -157,6 +204,8 @@ impl Default for ControllerConfiguration {
             ifttt: ifttt::EventConfig::default(),
             #[cfg(feature = "mqtt")]
             mqtt: mqtt::MQTTConfig::default(),
+
+            last_reboot_cause: RebootCause::None,
         }
     }
 }
@@ -205,7 +254,7 @@ impl Config {
     }
 
     pub fn get<T: DeserializeOwned>(&self) -> Result<T, Error> {
-        let reader = io::BufReader::new(OpenOptions::new().open(&self.path)?);
+        let reader = io::BufReader::new(OpenOptions::new().read(true).open(&self.path)?);
         Ok(bson::from_reader(reader)?)
     }
 

@@ -22,7 +22,7 @@ use opensprinkler::{
     OpenSprinkler,
 };
 
-use crate::opensprinkler::{scheduler, sensor};
+use crate::opensprinkler::{scheduler, sensor, config};
 
 #[cfg(unix)]
 const CONFIG_FILE_PATH: &'static str = "/etc/opt/config.dat";
@@ -36,6 +36,18 @@ struct Args {
     /// Binary config file path
     #[clap(short = 'c', long = "config", default_value = CONFIG_FILE_PATH, parse(from_os_str))]
     config: std::path::PathBuf,
+
+    /// Set a config value
+    #[clap(long = "set", takes_value = true, required = false, min_values = 2, max_values = 2)]
+    set: Option<Vec<String>>,
+
+    // List config values
+    #[clap(long = "list", takes_value = false)]
+    list: bool,
+
+    // Reset all config values
+    #[clap(long = "reset", takes_value = false)]
+    reset: bool,
 }
 
 fn setup_tracing() {
@@ -77,10 +89,32 @@ fn main() {
     let mut open_sprinkler = OpenSprinkler::new(args.config);
     // Setup options
     // @todo move into ::new()
-    open_sprinkler.options_setup();
+    open_sprinkler.options_setup().unwrap();
 
     // ProgramData initialization
     let mut program_data = program::ProgramQueue::new();
+
+    if args.reset {
+        config::cli::reset(&open_sprinkler);
+        return;
+    }
+
+    if args.list {
+        config::cli::list(&open_sprinkler);
+        return;
+    }
+
+    if let Some(set_config) = args.set {
+        let result = config::cli::set(set_config, &mut open_sprinkler);
+
+        if let Ok(ok) = result {
+            println!("Success: {:?}", ok);
+            open_sprinkler.commit_config().unwrap();
+        } else if let Err(err) = result {
+            println!("Error: {:?}", err);
+        }
+        return;
+    }
 
     //let mut flow_state = FlowSensor::default();
 
