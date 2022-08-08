@@ -553,9 +553,10 @@ impl OpenSprinkler {
     /// Check program switch status
     #[cfg(not(feature = "demo"))]
     pub fn check_program_switch_status(&mut self, program_data: &mut program::ProgramQueue) {
-        let program_switch = self.detect_program_switch_status();
+        let program_switch_detected = self.detect_program_switch_status();
 
-        if program_switch.into_iter().any(|d| d == true) {
+        //if program_switch_detected.into_iter().any(|d| d == true) {
+        if program_switch_detected {
             // immediately stop all stations
             self.reset_all_stations_immediate(program_data);
         }
@@ -633,8 +634,8 @@ impl OpenSprinkler {
 
     /// Return program switch status
     #[cfg(not(feature = "demo"))]
-    pub fn detect_program_switch_status(&mut self) -> [bool; sensor::MAX_SENSORS] {
-        let mut detected = [false; sensor::MAX_SENSORS];
+    pub fn detect_program_switch_status(&mut self) -> bool /* [bool; sensor::MAX_SENSORS] */ {
+        let mut detected = false /* [false; sensor::MAX_SENSORS] */;
 
         for i in 0..sensor::MAX_SENSORS {
             if self.get_sensor_type(i) == Some(sensor::SensorType::ProgramSwitch) {
@@ -644,7 +645,8 @@ impl OpenSprinkler {
 
                 //self.sensor_status[i].history = (self.sensor_status[i].history << 1) | if self.status_current.sensors[i].detected { 1 } else { 0 };
                 //self.sensor_status[i].history = (self.sensor_status[i].history << 1) | if self.sensor_status[i].detected { 1 } else { 0 };
-                self.state.sensor.set_history(i, (self.state.sensor.history(i) << 1) | if self.state.sensor.detected(i) { 1 } else { 0 });
+                //self.state.sensor.set_history(i, (self.state.sensor.history(i) << 1) | if self.state.sensor.detected(i) { 1 } else { 0 });
+                self.state.sensor.push_history(i, self.state.sensor.detected(i));
 
                 // basic noise filtering: only trigger if sensor matches pattern:
                 // i.e. two consecutive lows followed by two consecutive highs
@@ -652,7 +654,10 @@ impl OpenSprinkler {
                 /*if (self.state.sensor.history(i) & 0b1111) == 0b0011 {
                     detected[i] = true;
                 }*/
-                detected[i] = self.state.sensor.history_filter(i);
+                /* detected[i] = self.state.sensor.history_filter(i); */
+                if self.state.sensor.history_filter(i) == true {
+                    detected = true;
+                }
             }
         }
 

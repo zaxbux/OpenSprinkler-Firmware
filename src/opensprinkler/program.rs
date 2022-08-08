@@ -273,7 +273,7 @@ impl ProgramQueue {
     pub fn new() -> Self {
         ProgramQueue {
             queue: collections::VecDeque::new(),
-            station_qid: [None; station::MAX_NUM_STATIONS], // @todo stop using placeholder value?
+            station_qid: [None; station::MAX_NUM_STATIONS],
             last_run: None,
             last_seq_stop_time: None,
         }

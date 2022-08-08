@@ -105,6 +105,8 @@ impl Default for RainDelayState {
     }
 }
 
+const HISTORY_SIZE: usize = 4;
+
 #[derive(Clone, Copy)]
 pub struct SensorState {
     /// time when sensor is detected on last time
@@ -115,9 +117,7 @@ pub struct SensorState {
     pub timestamp_activated: Option<i64>,
 
     /// State history used for "noise filtering"
-    ///
-    /// @todo implement as a vec
-    pub history: u8,
+    pub history: [bool; HISTORY_SIZE],
 
     pub detected: bool,
 
@@ -130,7 +130,7 @@ impl SensorState {
         self.timestamp_on = None;
         self.timestamp_off = None;
         self.timestamp_activated = None;
-        self.history = 0;
+        self.history = [false; HISTORY_SIZE];
         self.active_now = false;
         self.active_previous = false;
     }
@@ -142,7 +142,7 @@ impl Default for SensorState {
             timestamp_on: None,
             timestamp_off: None,
             timestamp_activated: None,
-            history: 0,
+            history: [false; HISTORY_SIZE],
             detected: false,
             active_now: false,
             active_previous: false,
@@ -215,19 +215,20 @@ impl SensorStateVec {
         self.vec[i].timestamp_activated = timestamp_activated
     }
 
-    pub fn history(&self, i: usize) -> u8 {
-        self.vec[i].history
-    }
-
     /// Perform basic noise filtering on sensor history (for program switch type)
     ///
     /// i.e. two consecutive lows followed by two consecutive highs
     pub fn history_filter(&self, i: usize) -> bool {
-        return (self.vec[i].history & 0b1111) == 0b0011;
+        let s: SensorState = self.vec[i];
+        return s.history == [false, false, true, true];
+        //return (self.vec[i].history & 0b1111) == 0b0011;
     }
 
-    pub fn set_history(&mut self, i: usize, history: u8) {
-        self.vec[i].history = history
+    pub fn push_history(&mut self, i: usize, detected: bool) {
+        if let Some(s) = self.vec.get_mut(i) {
+            s.history.rotate_left(1);
+            s.history[HISTORY_SIZE - 1] = detected;
+        }
     }
 
     /// Reset sensors
