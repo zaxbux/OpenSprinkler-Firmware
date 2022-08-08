@@ -572,7 +572,7 @@ impl OpenSprinkler {
         for i in 0..sensor::MAX_SENSORS {
             if self.config.programs.len() > i {
                 // Program switch sensors start the same program index
-                scheduler::manual_start_program(self, program_data, i, false);
+                scheduler::manual_start_program(self, program_data, program::ProgramStart::User(i), false);
             }
         }
     }
