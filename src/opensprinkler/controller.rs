@@ -4,17 +4,17 @@ use super::{events, log, program, sensor, state, station, OpenSprinkler};
 pub const SHIFT_REGISTER_LINES: usize = 8;
 
 /// Turn on a station
-pub fn turn_on_station(open_sprinkler: &mut OpenSprinkler, station_id: station::StationIndex) {
+pub fn turn_on_station(open_sprinkler: &mut OpenSprinkler, station_index: station::StationIndex) {
     // RAH implementation of flow sensor
     open_sprinkler.state.flow.reset();
 
     //if open_sprinkler.set_station_bit(station_id, true) == StationBitChange::On {
-    if open_sprinkler.state.station.set_active(station_id, true) == state::StationChange::Change(true) {
-        let station_name = open_sprinkler.config.stations.get(station_id).unwrap().name.to_string();
+    if open_sprinkler.state.station.set_active(station_index, true) == state::StationChange::Change(true) {
+        let station_name = open_sprinkler.config.stations.get(station_index).unwrap().name.to_string();
         events::push_message(
             open_sprinkler,
             &events::StationEvent {
-                station_id,
+                station_index,
                 station_name,
                 state: true,
                 duration: None,
@@ -61,21 +61,20 @@ pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, program_data: &mut p
                     // Keep a copy for web
                     program_data.last_run = Some(message);
 
-                    if open_sprinkler.get_sensor_type(0).unwrap_or(sensor::SensorType::None) == sensor::SensorType::Flow {
+                    if open_sprinkler.get_sensor_type(0) == Some(sensor::SensorType::Flow) {
                         message.with_flow(flow_volume);
                     }
                     let _ = log::write_log_message(open_sprinkler, &message, now_seconds);
 
                     //let station_name = open_sprinkler.stations[station_id].name.clone();
-                    let station_name = &open_sprinkler.config.stations[station_index].name;
                     events::push_message(
                         open_sprinkler,
                         &events::StationEvent::new(
                             station_index,
-                            station_name,
+                            open_sprinkler.config.stations[station_index].name.clone(),
                             false,
                             Some(duration.into()),
-                            if open_sprinkler.get_sensor_type(0).unwrap_or(sensor::SensorType::None) == sensor::SensorType::Flow {
+                            if open_sprinkler.get_sensor_type(0) == Some(sensor::SensorType::Flow) {
                                 Some(flow_volume)
                             } else {
                                 None

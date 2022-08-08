@@ -81,7 +81,7 @@ impl WebHookEvent for super::ProgramStartEvent {
         let mut payload = String::new();
 
         // Program that was manually started
-        if self.program_id == program::MANUAL_PROGRAM_ID {
+        if self.program_index == program::MANUAL_PROGRAM_ID {
             payload.push_str("Manually started ");
         } else {
             payload.push_str("Automatically scheduled ");

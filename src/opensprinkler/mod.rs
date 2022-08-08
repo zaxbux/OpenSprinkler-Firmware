@@ -253,15 +253,14 @@ impl OpenSprinkler {
         self.state.flow.count_log_start = self.state.flow.get_flow_count();
     }
 
-    pub fn get_flow_log_count(&self) -> u64 {
-        // @fixme potential subtraction overflow
+    pub fn get_flow_log_count(&self) -> i64 {
         self.state.flow.get_flow_count() - self.state.flow.count_log_start
     }
 
     /// Realtime flow count
     pub fn update_realtime_flow_count(&mut self, now_seconds: i64) {
         if self.get_sensor_type(0) == Some(sensor::SensorType::Flow) && now_seconds % FLOW_COUNT_REALTIME_WINDOW == 0 {
-            self.state.flow.count_realtime_now = max(0, self.state.flow.get_flow_count() - self.state.flow.count_realtime_start); // @fixme subtraction overflow
+            self.state.flow.count_realtime_now = max(0, self.state.flow.get_flow_count() - self.state.flow.count_realtime_start);
             self.state.flow.count_realtime_start = self.state.flow.get_flow_count();
         }
     }
@@ -715,7 +714,7 @@ impl OpenSprinkler {
     /// The remote controller is assumed to have the same password as the main controller.
     fn switch_remote_station(&self, data: station::RemoteStationData, value: bool) {
         let mut host = String::from("http://");
-        host.push_str(&data.ip.to_string());
+        host.push_str(&data.host.to_string());
         let timer = match self.config.enable_special_stn_refresh {
             true => (station::MAX_NUM_STATIONS * 4) as i64,
             false => 64800, // 18 hours
@@ -723,7 +722,7 @@ impl OpenSprinkler {
 
         // @todo log request failures
         let client = request::build_client().unwrap();
-        let response = client.get(host).query(&http::request::RemoteStationRequestParametersV2_1_9::new(&self.config.device_key, data.sid, value, timer)).send();
+        let response = client.get(host).query(&http::request::RemoteStationRequestParametersV2_1_9::new(&self.config.device_key, data.station_index, value, timer)).send();
 
         if let Err(error) = response {
             tracing::error!("[Remote Station] HTTP request error: {:?}", error);

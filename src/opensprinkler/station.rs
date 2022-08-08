@@ -139,9 +139,9 @@ pub struct RFStationData {
 /// @todo: Support for IPv6, string hostname, path, and custom password (or deprecate in favour of HTTP station type?)
 #[derive(Clone, Serialize, Deserialize)]
 pub struct RemoteStationData {
-    pub ip: IpAddr,
+    pub host: IpAddr,
     pub port: u16,
-    pub sid: StationIndex,
+    pub station_index: StationIndex,
 }
 
 /// GPIO station data structures - Must fit in STATION_SPECIAL_DATA_SIZE

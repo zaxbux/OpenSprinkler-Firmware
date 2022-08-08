@@ -73,7 +73,7 @@ impl fmt::Display for MQTTConfig {
 /// Program Start
 #[derive(Serialize, Deserialize)]
 pub struct ProgramSchedPayload {
-    pub program_id: usize,
+    pub program_index: usize,
     pub program_name: String,
     pub manual: bool,
     pub water_level: u8,
@@ -93,7 +93,7 @@ pub struct RainDelayPayload {
 
 #[derive(Serialize, Deserialize)]
 pub struct FlowSensorPayload {
-    pub count: u64,
+    pub count: i64,
     pub volume: f64,
 }
 
@@ -151,7 +151,7 @@ impl Payload<ProgramSchedPayload> for super::ProgramStartEvent {
 
     fn mqtt_payload(&self) -> ProgramSchedPayload {
         ProgramSchedPayload {
-            program_id: self.program_id,
+            program_index: self.program_index,
             program_name: self.program_name.clone(),
             manual: self.manual,
             water_level: self.water_level,
@@ -204,7 +204,7 @@ impl Payload<BinarySensorPayload> for super::RebootEvent {
 
 impl Payload<StationPayload> for super::StationEvent {
     fn mqtt_topic(&self) -> String {
-        format!("station/{}", self.station_id)
+        format!("station/{}", self.station_index)
     }
 
     fn mqtt_payload(&self) -> StationPayload {

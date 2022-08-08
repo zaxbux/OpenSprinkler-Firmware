@@ -1,4 +1,4 @@
-use std::net::IpAddr;
+use std::{net::IpAddr, borrow::Cow};
 use reqwest::header;
 
 use super::{OpenSprinkler, http::request, station};
@@ -23,17 +23,17 @@ pub enum NotifyEvent {
 }
 
 pub struct ProgramStartEvent {
-    pub program_id: usize,
+    pub program_index: usize,
     pub program_name: String,
     pub manual: bool,
     pub water_level: u8,
 }
 
 impl ProgramStartEvent {
-    pub fn new(program_id: usize, program_name: &str, manual: bool, water_level: u8) -> ProgramStartEvent {
+    pub fn new(program_index: usize, program_name: String, manual: bool, water_level: u8) -> ProgramStartEvent {
         ProgramStartEvent {
-            program_id,
-            program_name: program_name.to_string(),
+            program_index,
+            program_name,
             manual,
             water_level,
         }
@@ -68,12 +68,12 @@ impl EventType for BinarySensorEvent {
 }
 
 pub struct FlowSensorEvent {
-    pub count: u64,
+    pub count: i64,
     pub volume: f64,
 }
 
 impl FlowSensorEvent {
-    pub fn new(count: u64, pulse_rate: u16) -> FlowSensorEvent {
+    pub fn new(count: i64, pulse_rate: u16) -> FlowSensorEvent {
         FlowSensorEvent {
             count,
             volume: count as f64 * f64::from(pulse_rate),
@@ -129,7 +129,7 @@ impl EventType for RebootEvent {
 }
 
 pub struct StationEvent {
-    pub station_id: station::StationIndex,
+    pub station_index: station::StationIndex,
     pub station_name: String,
     pub state: bool,
     pub duration: Option<i64>,
@@ -137,10 +137,10 @@ pub struct StationEvent {
 }
 
 impl StationEvent {
-    pub fn new(station_id: station::StationIndex, station_name: &str, state: bool, duration: Option<i64>, flow: Option<f64>) -> StationEvent {
+    pub fn new(station_index: station::StationIndex, station_name: String, state: bool, duration: Option<i64>, flow: Option<f64>) -> StationEvent {
         StationEvent {
-            station_id,
-            station_name: station_name.to_string(),
+            station_index,
+            station_name,
             state,
             duration,
             flow,

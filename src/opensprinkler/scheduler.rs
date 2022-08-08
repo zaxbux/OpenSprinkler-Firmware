@@ -6,8 +6,8 @@ pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, program_data: &mut pr
     // first, go through run time queue to assign queue elements to stations
     let mut qid = 0;
     for q in program_data.queue.iter() {
-        let sid = q.station_index;
-        if let Some(sqi) = program_data.station_qid[sid] {
+        let station_index = q.station_index;
+        if let Some(sqi) = program_data.station_qid[station_index] {
             // skip if station is already assigned a queue element and that queue element has an earlier start time
             if program_data.queue[sqi].start_time < q.start_time {
                 continue;
@@ -15,7 +15,7 @@ pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, program_data: &mut pr
         }
         
         // otherwise assign the queue element to station
-        program_data.station_qid[sid] = Some(qid);
+        program_data.station_qid[station_index] = Some(qid);
         qid += 1;
     }
     // next, go through the stations and perform time keeping
@@ -176,7 +176,7 @@ pub fn check_program_schedule(open_sprinkler: &mut OpenSprinkler, program_data: 
                 tracing::trace!("Program {{id = {}, name = {}}} scheduled", program_index, program.name);
                 events::push_message(
                     &open_sprinkler,
-                    &events::ProgramStartEvent::new(program_index, &program.name, program.use_weather == 0, if program.use_weather != 0 { open_sprinkler.config.water_scale } else { 100 }),
+                    &events::ProgramStartEvent::new(program_index, program.name.clone(), program.use_weather == 0, if program.use_weather != 0 { open_sprinkler.config.water_scale } else { 100 }),
                 );
             }
         }
@@ -243,19 +243,19 @@ fn schedule_all_stations(open_sprinkler: &mut OpenSprinkler, program_data: &mut 
 }
 
 /// Manually start a program
-pub fn manual_start_program(open_sprinkler: &mut OpenSprinkler, program_data: &mut program::ProgramQueue, pid: program::ProgramStart, uwt: bool) {
+pub fn manual_start_program(open_sprinkler: &mut OpenSprinkler, program_data: &mut program::ProgramQueue, program_start: program::ProgramStart, uwt: bool) {
     let mut match_found = false;
     open_sprinkler.reset_all_stations_immediate(program_data);
 
-    let program = match pid {
+    let program = match program_start {
         program::ProgramStart::Test => program::Program::test_program(60),
         program::ProgramStart::TestShort => program::Program::test_program(2),
         program::ProgramStart::RunOnce => todo!(),
         program::ProgramStart::User(index) => open_sprinkler.config.programs[index].clone(),
     };
 
-    if let program::ProgramStart::User(index) = pid {
-        events::push_message(open_sprinkler, &events::ProgramStartEvent::new(index, &program.name, !uwt, if uwt { open_sprinkler.config.water_scale } else { 100 }));
+    if let program::ProgramStart::User(index) = program_start {
+        events::push_message(open_sprinkler, &events::ProgramStartEvent::new(index, program.name, !uwt, if uwt { open_sprinkler.config.water_scale } else { 100 }));
     }
 
     for station_index in 0..open_sprinkler.get_station_count() {
@@ -264,7 +264,7 @@ pub fn manual_start_program(open_sprinkler: &mut OpenSprinkler, program_data: &m
             continue;
         }
 
-        let mut water_time = match pid {
+        let mut water_time = match program_start {
             program::ProgramStart::Test => 60,
             program::ProgramStart::TestShort => 2,
             program::ProgramStart::RunOnce => todo!(),

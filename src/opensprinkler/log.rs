@@ -139,13 +139,13 @@ pub mod message {
     }
 
     pub struct FlowSenseMessage {
-        flow_count: u64,
+        flow_count: i64,
         timestamp: i64,
         duration: Option<i64>,
     }
 
     impl FlowSenseMessage {
-        pub fn new(flow_count: u64, timestamp: i64) -> FlowSenseMessage {
+        pub fn new(flow_count: i64, timestamp: i64) -> FlowSenseMessage {
             FlowSenseMessage { flow_count, timestamp, duration: None }
         }
 
