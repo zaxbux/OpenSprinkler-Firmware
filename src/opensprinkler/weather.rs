@@ -153,27 +153,6 @@ impl<'de> de::Deserialize<'de> for WeatherAlgorithm {
     }
 }
 
-#[derive(Default)]
-pub struct WeatherStatus {
-    /// time when weather was checked (seconds)
-    pub checkwt_lasttime: Option<i64>,
-
-    /// time when weather check was successful (seconds)
-    pub checkwt_success_lasttime: Option<i64>,
-
-    /// Result of the most recent request to the weather service
-    pub last_response_code: Option<ErrorCode>,
-
-    /// Data returned by the weather service (used by web server)
-    pub raw_data: WeatherServiceRawData,
-}
-
-impl WeatherStatus {
-    pub fn last_response_was_successful(&self) -> bool {
-        self.last_response_code == Some(ErrorCode::Success)
-    }
-}
-
 #[repr(u8)]
 pub enum WeatherUpdateFlag {
     SUNRISE = 0x01,
@@ -277,27 +256,27 @@ pub fn check_weather(open_sprinkler: &mut OpenSprinkler) -> result::Result<()> {
     }
 
     // Skip checking weather if program is active
-    if open_sprinkler.status_current.program_busy {
+    if open_sprinkler.state.program.busy {
         return Ok(());
     }
 
     let now = chrono::Utc::now().timestamp();
 
-    if open_sprinkler.weather_status.checkwt_success_lasttime.is_some() && now > open_sprinkler.weather_status.checkwt_success_lasttime.unwrap() + CHECK_WEATHER_SUCCESS_TIMEOUT {
+    if open_sprinkler.state.weather.checkwt_success_lasttime.is_some() && now > open_sprinkler.state.weather.checkwt_success_lasttime.unwrap() + CHECK_WEATHER_SUCCESS_TIMEOUT {
         // if last successful weather call timestamp is more than allowed threshold
         // and if the selected adjustment method is not manual
         // reset watering percentage to 100
-        open_sprinkler.weather_status.checkwt_success_lasttime = None;
+        open_sprinkler.state.weather.checkwt_success_lasttime = None;
 
         if let Some(ref algorithm) = open_sprinkler.config.weather.algorithm {
             if !algorithm.use_manual_scale() {
                 open_sprinkler.set_water_scale(100); // reset watering percentage to 100%
-                open_sprinkler.weather_status.raw_data = None; // reset wt_rawData and errCode
-                open_sprinkler.weather_status.last_response_code = None;
+                open_sprinkler.state.weather.raw_data = None; // reset wt_rawData and errCode
+                open_sprinkler.state.weather.last_response_code = None;
             }
         }
-    } else if open_sprinkler.weather_status.checkwt_lasttime.is_none() || now > open_sprinkler.weather_status.checkwt_lasttime.unwrap() + CHECK_WEATHER_TIMEOUT {
-        open_sprinkler.weather_status.checkwt_lasttime = Some(now);
+    } else if open_sprinkler.state.weather.checkwt_lasttime.is_none() || now > open_sprinkler.state.weather.checkwt_lasttime.unwrap() + CHECK_WEATHER_TIMEOUT {
+        open_sprinkler.state.weather.checkwt_lasttime = Some(now);
         return Ok(get_weather(open_sprinkler)?);
     }
 
@@ -344,15 +323,15 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler) -> result::Result<()> {
 
         let data = json.unwrap();
 
-        open_sprinkler.weather_status.last_response_code = Some(data.error_code);
+        open_sprinkler.state.weather.last_response_code = Some(data.error_code);
 
-        tracing::debug!("Weather service returned response code: {}", open_sprinkler.weather_status.last_response_code.as_ref().unwrap());
+        tracing::debug!("Weather service returned response code: {}", open_sprinkler.state.weather.last_response_code.as_ref().unwrap());
 
-        if open_sprinkler.weather_status.last_response_was_successful() {
+        if open_sprinkler.state.weather.last_response_was_successful() {
             open_sprinkler.update_check_weather_success_timestamp();
         }
 
-        if open_sprinkler.weather_status.last_response_was_successful() {
+        if open_sprinkler.state.weather.last_response_was_successful() {
             if let Some(scale) = data.scale {
                 if scale <= WATER_SCALE_MAX as u8 && scale != open_sprinkler.get_water_scale() {
                     open_sprinkler.config.water_scale = scale;
@@ -407,15 +386,15 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler) -> result::Result<()> {
         }
 
         if let Some(raw_data) = data.raw_data {
-            open_sprinkler.weather_status.raw_data = Some(raw_data);
+            open_sprinkler.state.weather.raw_data = Some(raw_data);
         }
 
         open_sprinkler.config.write().unwrap();
 
         let _ = log::write_log_message(
             &open_sprinkler,
-            &log::message::WaterLevelMessage::new(open_sprinkler.get_water_scale(), open_sprinkler.weather_status.checkwt_success_lasttime.unwrap()),
-            open_sprinkler.weather_status.checkwt_success_lasttime.unwrap(),
+            &log::message::WaterLevelMessage::new(open_sprinkler.get_water_scale(), open_sprinkler.state.weather.checkwt_success_lasttime.unwrap()),
+            open_sprinkler.state.weather.checkwt_success_lasttime.unwrap(),
         );
 
         return Ok(());
@@ -426,27 +405,27 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler) -> result::Result<()> {
         let mut save_nvdata = false;
 
         // first check errCode, only update lswc timestamp if errCode is 0
-        open_sprinkler.weather_status.last_response_code = None;
+        open_sprinkler.state.weather.last_response_code = None;
         if params.contains_key("errCode") {
             let err_code = params.get("errCode").unwrap_or(&String::from("")).parse::<i8>();
 
             if err_code.is_ok() {
                 let err_code = err_code.unwrap();
-                open_sprinkler.weather_status.last_response_code = Some(match err_code {
+                open_sprinkler.state.weather.last_response_code = Some(match err_code {
                     0 => ErrorCode::Success,
                     _ => ErrorCode::Unknown(err_code),
                 });
 
                 tracing::debug!("Weather service returned response code: {}", err_code);
 
-                if open_sprinkler.weather_status.last_response_was_successful() {
+                if open_sprinkler.state.weather.last_response_was_successful() {
                     open_sprinkler.update_check_weather_success_timestamp();
                 }
             }
         }
 
         // Watering Level (scale)
-        if open_sprinkler.weather_status.last_response_was_successful() && params.contains_key("scale") {
+        if open_sprinkler.state.weather.last_response_was_successful() && params.contains_key("scale") {
             let scale = params.get("scale").unwrap().parse::<i32>().unwrap_or(-1);
             if scale >= 0 && scale <= WATER_SCALE_MAX && scale != open_sprinkler.get_water_scale() as i32 {
                 // Only save if the value has changed
@@ -531,7 +510,7 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler) -> result::Result<()> {
         if params.contains_key("rawData") {
             if let Some(raw_data) = params.get("rawData") {
                 if let Ok(raw_data) = serde_json::from_str(raw_data) {
-                    open_sprinkler.weather_status.raw_data = Some(raw_data);
+                    open_sprinkler.state.weather.raw_data = Some(raw_data);
                 }
             }
         }
@@ -543,8 +522,8 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler) -> result::Result<()> {
 
         let _ = log::write_log_message(
             &open_sprinkler,
-            &log::message::WaterLevelMessage::new(open_sprinkler.get_water_scale(), open_sprinkler.weather_status.checkwt_success_lasttime.unwrap()),
-            open_sprinkler.weather_status.checkwt_success_lasttime.unwrap(),
+            &log::message::WaterLevelMessage::new(open_sprinkler.get_water_scale(), open_sprinkler.state.weather.checkwt_success_lasttime.unwrap()),
+            open_sprinkler.state.weather.checkwt_success_lasttime.unwrap(),
         );
     }
 

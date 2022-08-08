@@ -19,7 +19,8 @@ pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, program_data: &mut pr
     }
     // next, go through the stations and perform time keeping
     for board_index in 0..open_sprinkler.get_board_count() {
-        let bitvalue = open_sprinkler.station_bits[board_index];
+        //let bitvalue = open_sprinkler.station_bits[board_index];
+        let board_active = open_sprinkler.state.station.active[board_index];
         for s in 0..controller::SHIFT_REGISTER_LINES {
             let station_index = board_index * 8 + s;
 
@@ -41,7 +42,8 @@ pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, program_data: &mut pr
                 }
             }
             // if current station is not running, check if we should turn it on
-            if !((bitvalue >> s) & 1 != 0) {
+            //if !((bitvalue >> s) & 1 != 0) {
+            if board_active[s] == false {
                 if now_seconds >= q.start_time && now_seconds < q.start_time + q.water_time {
                     controller::turn_on_station(open_sprinkler, station_index);
                 }
@@ -87,7 +89,7 @@ pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, program_data: &mut pr
         // reset runtime
         program_data.reset_runtime();
         // reset program busy bit
-        open_sprinkler.status_current.program_busy = false;
+        open_sprinkler.state.program.busy = false;
         // log flow sensor reading if flow sensor is used
         if open_sprinkler.get_sensor_type(0).unwrap_or(sensor::SensorType::None) == sensor::SensorType::Flow {
             let _ = log::write_log_message(&open_sprinkler, &log::message::FlowSenseMessage::new(open_sprinkler.get_flow_log_count(), now_seconds), now_seconds);
@@ -227,14 +229,15 @@ fn schedule_all_stations(open_sprinkler: &mut OpenSprinkler, program_data: &mut 
             con_start_time += 1;
         }
 
-        if !open_sprinkler.status_current.program_busy {
-            open_sprinkler.status_current.program_busy = true;
+        if !open_sprinkler.state.program.busy {
+            open_sprinkler.state.program.busy = true;
 
             // start flow count
             if open_sprinkler.get_sensor_type(0) == Some(sensor::SensorType::Flow) {
                 // if flow sensor is connected
                 open_sprinkler.start_flow_log_count();
-                open_sprinkler.sensor_status[0].timestamp_activated = Some(now_seconds);
+                //open_sprinkler.sensor_status[0].timestamp_activated = Some(now_seconds);
+                open_sprinkler.state.sensor.set_timestamp_activated(0, Some(now_seconds));
             }
         }
     }

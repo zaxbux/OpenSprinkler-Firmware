@@ -1,4 +1,4 @@
-use super::{OpenSprinkler, StationBitChange, events, program, sensor, log, station};
+use super::{events, log, program, sensor, state, station, OpenSprinkler};
 
 /// Stations/Zones per board
 pub const SHIFT_REGISTER_LINES: usize = 8;
@@ -6,9 +6,10 @@ pub const SHIFT_REGISTER_LINES: usize = 8;
 /// Turn on a station
 pub fn turn_on_station(open_sprinkler: &mut OpenSprinkler, station_id: station::StationIndex) {
     // RAH implementation of flow sensor
-    open_sprinkler.flow_state.reset();
+    open_sprinkler.state.flow.reset();
 
-    if open_sprinkler.set_station_bit(station_id, true) == StationBitChange::On {
+    //if open_sprinkler.set_station_bit(station_id, true) == StationBitChange::On {
+    if open_sprinkler.state.station.set_active(station_id, true) == state::StationChange::Change(true) {
         let station_name = open_sprinkler.config.stations.get(station_id).unwrap().name.to_string();
         events::push_message(
             open_sprinkler,
@@ -27,7 +28,8 @@ pub fn turn_on_station(open_sprinkler: &mut OpenSprinkler, station_id: station::
 ///
 /// Turns off a scheduled station, writes a log record, and pushes a notification event.
 pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, program_data: &mut program::ProgramQueue, now_seconds: i64, station_index: station::StationIndex) {
-    open_sprinkler.set_station_bit(station_index, false);
+    //open_sprinkler.set_station_bit(station_index, false);
+    open_sprinkler.state.station.set_active(station_index, false);
 
     let qid = program_data.station_qid[station_index];
 
@@ -37,7 +39,7 @@ pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, program_data: &mut p
     }
 
     // RAH implementation of flow sensor
-    let flow_volume = open_sprinkler.flow_state.measure();
+    let flow_volume = open_sprinkler.state.flow.measure();
 
     let q = program_data.queue.get(qid).unwrap();
 
@@ -73,7 +75,11 @@ pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, program_data: &mut p
                     station_name,
                     false,
                     Some(duration.into()),
-                    if open_sprinkler.get_sensor_type(0).unwrap_or(sensor::SensorType::None) == sensor::SensorType::Flow { Some(flow_volume) } else { None },
+                    if open_sprinkler.get_sensor_type(0).unwrap_or(sensor::SensorType::None) == sensor::SensorType::Flow {
+                        Some(flow_volume)
+                    } else {
+                        None
+                    },
                 ),
             );
         }
@@ -87,34 +93,33 @@ pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, program_data: &mut p
 /// Actuate master stations based on need
 ///
 /// This function iterates over all stations and activates the necessary "master" station.
-pub fn activate_master_station(i: usize, open_sprinkler: &mut OpenSprinkler, program_data: &program::ProgramQueue, now_seconds: i64) {
-    let master_station = open_sprinkler.get_master_station(i);
+pub fn activate_master_station(master_station: usize, open_sprinkler: &mut OpenSprinkler, program_data: &program::ProgramQueue, now_seconds: i64) {
+    let config = open_sprinkler.get_master_station(master_station);
 
-    if master_station.station.is_none() {
-        return;
-    }
+    if let Some(station_index_master) = config.station {
+        let adjusted_on = config.get_adjusted_on_time();
+        let adjusted_off = config.get_adjusted_off_time();
 
-    let master_station_index = master_station.station.unwrap();
-    let adjusted_on = master_station.get_adjusted_on_time();
-    let adjusted_off = master_station.get_adjusted_off_time();
+        for station_index in 0..open_sprinkler.get_station_count() {
+            // skip if this is the master station
+            if station_index_master == station_index {
+                continue;
+            }
 
-    for station_index in 0..open_sprinkler.get_station_count() {
-        // skip if this is the master station
-        if master_station_index == station_index {
-            continue;
-        }
-
-        // if this station is running and is set to activate master
-        if open_sprinkler.is_station_running(station_index) && open_sprinkler.config.stations[station_index].attrib.use_master[i] {
-            let q = program_data.queue.get(program_data.station_qid[station_index]).unwrap();
-            // check if timing is within the acceptable range
-            let start_time = q.start_time + adjusted_on;
-            let stop_time = q.start_time + q.water_time + adjusted_off;
-            if now_seconds >= start_time && now_seconds <= stop_time {
-                open_sprinkler.set_station_bit(master_station_index, true);
-                return;
+            // if this station is running and is set to activate master
+            if open_sprinkler.is_station_running(station_index) && open_sprinkler.config.stations[station_index].attrib.use_master[master_station] {
+                let q = program_data.queue.get(program_data.station_qid[station_index]).unwrap();
+                // check if timing is within the acceptable range
+                let start_time = q.start_time + adjusted_on;
+                let stop_time = q.start_time + q.water_time + adjusted_off;
+                if now_seconds >= start_time && now_seconds <= stop_time {
+                    //open_sprinkler.set_station_bit(master_station_index, true);
+                    open_sprinkler.state.station.set_active(station_index_master, true);
+                    return;
+                }
             }
         }
+        //open_sprinkler.set_station_bit(master_station_index, false);
+        open_sprinkler.state.station.set_active(station_index_master, false);
     }
-    open_sprinkler.set_station_bit(master_station_index, false);
 }

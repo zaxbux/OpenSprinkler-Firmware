@@ -175,7 +175,7 @@ fn main() {
             // ====== Run program data ======
             // Check if a program is running currently
             // If so, do station run-time keeping
-            if open_sprinkler.status_current.program_busy {
+            if open_sprinkler.state.program.busy {
                 opensprinkler::scheduler::do_time_keeping(&mut open_sprinkler, &mut program_data, now_seconds);
             }
 
