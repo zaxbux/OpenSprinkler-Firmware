@@ -88,7 +88,7 @@ impl WebHookEvent for super::ProgramStartEvent {
         }
         payload.push_str("Program ");
         payload.push_str(&self.program_name);
-        payload.push_str(format!(" with {}% water level.", self.water_level).as_str());
+        payload.push_str(format!(" with {}% water level.", self.water_scale).as_str());
 
         payload
     }

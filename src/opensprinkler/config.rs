@@ -116,7 +116,7 @@ pub struct Config {
     /// Rain-delay stop time (seconds since unix epoch)
     pub rain_delay_stop_time: Option<i64>,
     /// water level (default 100%)
-    pub water_scale: u8,
+    pub water_scale: f32,
     /// Stations
     pub stations: station::Stations,
     /// station delay time (-10 minutes to 10 minutes).
@@ -201,7 +201,7 @@ impl Default for Config {
             sunrise_time: 360, // 0600 default sunrise
             sunset_time: 1080, // 1800 default sunrise
             rain_delay_stop_time: None,
-            water_scale: 100,
+            water_scale: 1.0,
             stations: station::default(),
             station_delay_time: 120,
             master_stations: [station::MasterStationConfig::default(); station::MAX_MASTER_STATIONS],

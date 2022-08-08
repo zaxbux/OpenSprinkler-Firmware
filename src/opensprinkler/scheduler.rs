@@ -132,6 +132,12 @@ pub fn check_program_schedule(open_sprinkler: &mut OpenSprinkler, program_data: 
                 continue;
             }
 
+            let water_scale = if program.use_weather {
+                open_sprinkler.config.water_scale
+            } else {
+                1.0
+            };
+
             // process all selected stations
             for station_index in 0..open_sprinkler.get_station_count() {
 
@@ -143,27 +149,24 @@ pub fn check_program_schedule(open_sprinkler: &mut OpenSprinkler, program_data: 
                 // if station has non-zero water time and the station is not disabled
                 if program.durations[station_index] > 0 && !open_sprinkler.config.stations[station_index].attrib.is_disabled {
                     // water time is scaled by watering percentage
-                    let mut water_time = utils::water_time_resolve(program.durations[station_index], open_sprinkler.get_sunrise_time(), open_sprinkler.get_sunset_time());
+                    let mut water_time = water_scale * utils::water_time_resolve(program.durations[station_index], open_sprinkler.get_sunrise_time(), open_sprinkler.get_sunset_time());
                     // if the program is set to use weather scaling
-                    if program.use_weather != 0 {
-                        let wl = open_sprinkler.config.water_scale;
-                        water_time = water_time * i64::from(wl) / 100;
-                        if wl < 20 && water_time < 10 {
-                            // if water_percentage is less than 20% and water_time is less than 10 seconds
-                            // do not water
-                            water_time = 0;
+                    if program.use_weather {
+                        if water_scale < 0.2 && water_time < 10.0 {
+                            // if water_percentage is less than 20% and water_time is less than 10 seconds, do not water
+                            water_time = 0.0;
                         }
                     }
 
-                    if water_time > 0 {
+                    if water_time > 0.0 {
                         // check if water time is still valid
                         // because it may end up being zero after scaling
-                        let q = program_data.enqueue(program::QueueElement {
-                            start_time: 0,
-                            water_time,
+                        let q = program_data.enqueue(program::QueueElement::new(
+                            0,
+                            water_time as i64,
                             station_index,
-                            program_index: program::ProgramStart::User(program_index),
-                        });
+                            program::ProgramStart::User(program_index),
+                        ));
                         if q.is_ok() {
                             match_found = true;
                         } else {
@@ -173,10 +176,11 @@ pub fn check_program_schedule(open_sprinkler: &mut OpenSprinkler, program_data: 
                 }
             }
             if match_found {
-                tracing::trace!("Program {{id = {}, name = {}}} scheduled", program_index, program.name);
+                let program_name = program.name.clone();
+                tracing::trace!("Program {{id = {}, name = {}}} scheduled", program_index, program_name);
                 events::push_message(
                     &open_sprinkler,
-                    &events::ProgramStartEvent::new(program_index, program.name.clone(), program.use_weather == 0, if program.use_weather != 0 { open_sprinkler.config.water_scale } else { 100 }),
+                    &events::ProgramStartEvent::new(program_index, program_name, water_scale),
                 );
             }
         }
@@ -243,7 +247,7 @@ fn schedule_all_stations(open_sprinkler: &mut OpenSprinkler, program_data: &mut 
 }
 
 /// Manually start a program
-pub fn manual_start_program(open_sprinkler: &mut OpenSprinkler, program_data: &mut program::ProgramQueue, program_start: program::ProgramStart, uwt: bool) {
+pub fn manual_start_program(open_sprinkler: &mut OpenSprinkler, program_data: &mut program::ProgramQueue, program_start: program::ProgramStart, use_water_scale: bool) {
     let mut match_found = false;
     open_sprinkler.reset_all_stations_immediate(program_data);
 
@@ -254,8 +258,14 @@ pub fn manual_start_program(open_sprinkler: &mut OpenSprinkler, program_data: &m
         program::ProgramStart::User(index) => open_sprinkler.config.programs[index].clone(),
     };
 
+    let water_scale = if use_water_scale {
+        open_sprinkler.config.water_scale
+    } else {
+        1.0
+    };
+
     if let program::ProgramStart::User(index) = program_start {
-        events::push_message(open_sprinkler, &events::ProgramStartEvent::new(index, program.name, !uwt, if uwt { open_sprinkler.config.water_scale } else { 100 }));
+        events::push_message(open_sprinkler, &events::ProgramStartEvent::new(index, program.name,  water_scale));
     }
 
     for station_index in 0..open_sprinkler.get_station_count() {
@@ -264,24 +274,23 @@ pub fn manual_start_program(open_sprinkler: &mut OpenSprinkler, program_data: &m
             continue;
         }
 
-        let mut water_time = match program_start {
-            program::ProgramStart::Test => 60,
-            program::ProgramStart::TestShort => 2,
+        let water_time = water_scale * match program_start {
+            program::ProgramStart::Test => 60.0,
+            program::ProgramStart::TestShort => 2.0,
             program::ProgramStart::RunOnce => todo!(),
             program::ProgramStart::User(_) => utils::water_time_resolve(program.durations[station_index], open_sprinkler.get_sunrise_time(), open_sprinkler.get_sunset_time()),
         };
 
-        if uwt {
-            water_time = water_time * (i64::try_from(open_sprinkler.config.water_scale).unwrap() / 100);
-        }
-        if water_time > 0 && !open_sprinkler.config.stations.get(station_index).unwrap().attrib.is_disabled {
+        //water_time = water_time * water_scale;
+
+        if water_time > 0.0 && !open_sprinkler.config.stations.get(station_index).unwrap().attrib.is_disabled {
             if program_data
-                .enqueue(program::QueueElement {
-                    start_time: 0,
-                    water_time,
+                .enqueue(program::QueueElement::new(
+                    0,
+                    water_time as i64,
                     station_index,
-                    program_index: program::ProgramStart::Test,
-                })
+                    program::ProgramStart::Test,
+                ))
                 .is_ok()
             {
                 match_found = true;

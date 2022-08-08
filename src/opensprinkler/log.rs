@@ -107,13 +107,13 @@ pub mod message {
     pub struct StationMessage {
         pub program_index: program::ProgramStart,
         pub station_index: station::StationIndex,
-        pub duration: u16,
+        pub duration: i64,
         pub timestamp: i64,
         pub flow: Option<f64>,
     }
 
     impl StationMessage {
-        pub fn new(program_index: program::ProgramStart, station_index: station::StationIndex, duration: u16, timestamp: i64) -> StationMessage {
+        pub fn new(program_index: program::ProgramStart, station_index: station::StationIndex, duration: i64, timestamp: i64) -> StationMessage {
             StationMessage {
                 program_index,
                 station_index,
@@ -163,18 +163,18 @@ pub mod message {
     }
 
     pub struct WaterLevelMessage {
-        water_level: u8,
+        water_scale: f32,
         timestamp: i64,
     }
 
     impl WaterLevelMessage {
-        pub fn new(water_level: u8, timestamp: i64) -> WaterLevelMessage {
-            WaterLevelMessage { water_level, timestamp }
+        pub fn new(water_scale: f32, timestamp: i64) -> WaterLevelMessage {
+            WaterLevelMessage { water_scale, timestamp }
         }
     }
     impl Message for WaterLevelMessage {
         fn to_string(&self) -> String {
-            serde_json::json!([0, get_log_type_name(&LogDataType::WaterLevel), self.water_level, self.timestamp,]).to_string()
+            serde_json::json!([0, get_log_type_name(&LogDataType::WaterLevel), self.water_scale, self.timestamp,]).to_string()
         }
     }
 

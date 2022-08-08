@@ -38,7 +38,7 @@ const MAGIC_SUNSET_TO_SUNRISE: u16 = 65535;
 /// - [MAGIC_SUNSET_TO_SUNRISE]
 /// 
 /// The maximum runtime of a station is 18 hours or 64800 seconds, this value will fit in a [u16].
-pub fn water_time_resolve(water_time: u16, sunrise_time: u16, sunset_time: u16) -> i64 {
+pub fn water_time_resolve(water_time: u16, sunrise_time: u16, sunset_time: u16) -> f32 {
     match water_time {
         MAGIC_SUNRISE_TO_SUNSET => ((sunset_time - sunrise_time) * 60).into(),
         MAGIC_SUNSET_TO_SUNRISE => ((sunrise_time + 1440 - sunset_time) * 60).into(), // 1440 minutes = 24 hours

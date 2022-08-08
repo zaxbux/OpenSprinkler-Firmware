@@ -1,4 +1,4 @@
-use std::{net::IpAddr, borrow::Cow};
+use std::net::IpAddr;
 use reqwest::header;
 
 use super::{OpenSprinkler, http::request, station};
@@ -25,17 +25,17 @@ pub enum NotifyEvent {
 pub struct ProgramStartEvent {
     pub program_index: usize,
     pub program_name: String,
-    pub manual: bool,
-    pub water_level: u8,
+    /* pub manual: bool, */
+    pub water_scale: f32,
 }
 
 impl ProgramStartEvent {
-    pub fn new(program_index: usize, program_name: String, manual: bool, water_level: u8) -> ProgramStartEvent {
+    pub fn new(program_index: usize, program_name: String, /*manual: bool,*/ water_scale: f32) -> ProgramStartEvent {
         ProgramStartEvent {
             program_index,
             program_name,
-            manual,
-            water_level,
+            /*manual,*/
+            water_scale,
         }
     }
 }
@@ -88,16 +88,16 @@ impl EventType for FlowSensorEvent {
 }
 
 pub struct WeatherUpdateEvent {
-    pub scale: Option<u8>,
+    pub scale: Option<f32>,
     pub external_ip: Option<IpAddr>,
 }
 
 impl WeatherUpdateEvent {
-    pub fn new(scale: Option<u8>, external_ip: Option<IpAddr>) -> WeatherUpdateEvent {
+    pub fn new(scale: Option<f32>, external_ip: Option<IpAddr>) -> WeatherUpdateEvent {
         WeatherUpdateEvent { scale, external_ip }
     }
 
-    pub fn water_scale(scale: u8) -> Self {
+    pub fn water_scale(scale: f32) -> Self {
         WeatherUpdateEvent { scale: Some(scale), external_ip: None }
     }
 

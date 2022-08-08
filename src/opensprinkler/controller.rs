@@ -48,13 +48,13 @@ pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, program_data: &mut p
             if now_seconds > q.start_time {
                 // record lastrun log (only for non-master stations)
                 if !open_sprinkler.is_master_station(station_index) {
-                    let duration = u16::try_from(now_seconds - q.start_time).unwrap();
+                    let duration = now_seconds - q.start_time;
 
                     // log station run
                     let mut message = log::message::StationMessage::new(
                         q.program_index,
                         station_index,
-                        duration, // @fixme Maximum duration is 18 hours (64800 seconds), which fits into a [u16]
+                        duration, // Maximum duration is 18 hours (64800 seconds), which fits into a [u16]
                         now_seconds,
                     );
 

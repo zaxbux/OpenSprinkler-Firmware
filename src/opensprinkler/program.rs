@@ -1,4 +1,7 @@
-use std::{cmp::{max, min}, collections};
+use std::{
+    cmp::{max, min},
+    collections,
+};
 
 use chrono::{Datelike, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
@@ -42,7 +45,7 @@ pub struct Program {
     /// Program enabled
     pub enabled: bool,
     /// Weather data
-    pub use_weather: u8,
+    pub use_weather: bool,
     /// Odd/Even day restriction
     pub odd_even: u8,
     /// Schedule type
@@ -63,7 +66,7 @@ impl Program {
     pub fn test_program(duration: u16) -> Program {
         Program {
             enabled: false,
-            use_weather: 0,
+            use_weather: false,
             odd_even: 0,
             schedule_type: ProgramType::Interval,
             start_time_type: 1,
@@ -258,6 +261,17 @@ pub struct QueueElement {
     pub program_index: ProgramStart,
 }
 
+impl QueueElement {
+    pub fn new(start_time: i64, water_time: i64, station_index: station::StationIndex, program_index: ProgramStart) -> Self {
+        Self {
+            start_time,
+            water_time,
+            station_index,
+            program_index,
+        }
+    }
+}
+
 pub type QueueElements = collections::VecDeque<QueueElement>;
 
 pub struct ProgramQueue {
@@ -291,7 +305,9 @@ impl ProgramQueue {
             return Ok(self.queue.back_mut().unwrap());
         }
 
-        Err(result::ProgramError { message: String::from("runtime queue is full")})
+        Err(result::ProgramError {
+            message: String::from("runtime queue is full"),
+        })
     }
 
     /// Remove an element from the queue
@@ -303,7 +319,7 @@ impl ProgramQueue {
             let _ = self.queue.remove(qid);
         }
     }
-    
+
     /// Reset all stations
     ///
     /// This function sets the duration of every station to 0, which causes all stations to turn off in the next processing cycle.
@@ -316,35 +332,35 @@ impl ProgramQueue {
     }
 
     /// Add a program
-    /// 
+    ///
     /// @todo used by web server
     pub fn add(&mut self, _program: Program) {
         todo!();
     }
 
     /// Delete a program
-    /// 
+    ///
     /// @todo used by web server
     pub fn remove(&mut self, _index: usize) {
         todo!();
     }
 
     /// Modify a program
-    /// 
+    ///
     /// @todo used by web server
     pub fn modify(&self, _index: usize, _value: Program) {
         todo!();
     }
 
     /// Move a program up (i.e. swap a program with the one above it)
-    /// 
+    ///
     /// @todo used by web server
     pub fn move_up(&self, _index: usize) {
         todo!();
     }
 
     /// Delete all programs
-    /// 
+    ///
     /// @todo used by web server
     pub fn erase_all(&mut self) {
         todo!();

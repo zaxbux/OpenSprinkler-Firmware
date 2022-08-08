@@ -75,8 +75,8 @@ impl fmt::Display for MQTTConfig {
 pub struct ProgramSchedPayload {
     pub program_index: usize,
     pub program_name: String,
-    pub manual: bool,
-    pub water_level: u8,
+    /* pub manual: bool, */
+    pub water_scale: f32,
 }
 
 /// Sensor
@@ -100,7 +100,7 @@ pub struct FlowSensorPayload {
 /// Weather Update
 #[derive(Serialize, Deserialize)]
 pub struct WeatherUpdatePayload {
-    pub scale: Option<u8>,
+    pub scale: Option<f32>,
     pub external_ip: Option<IpAddr>,
 }
 
@@ -153,8 +153,8 @@ impl Payload<ProgramSchedPayload> for super::ProgramStartEvent {
         ProgramSchedPayload {
             program_index: self.program_index,
             program_name: self.program_name.clone(),
-            manual: self.manual,
-            water_level: self.water_level,
+            /* manual: self.manual, */
+            water_scale: self.water_scale,
         }
     }
 }

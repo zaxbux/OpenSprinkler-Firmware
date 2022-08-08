@@ -177,7 +177,7 @@ impl OpenSprinkler {
         return Ok(None);
     }
 
-    pub fn get_water_scale(&self) -> u8 {
+    pub fn get_water_scale(&self) -> f32 {
         self.config.water_scale
     }
 
@@ -239,8 +239,7 @@ impl OpenSprinkler {
         self.get_master_station_index(0) == Some(station_index) || self.get_master_station_index(1) == Some(station_index)
     }
 
-    pub fn set_water_scale(&mut self, scale: u8) {
-        //self.iopts.wl = scale;
+    pub fn set_water_scale(&mut self, scale: f32) {
         self.config.water_scale = scale;
     }
 

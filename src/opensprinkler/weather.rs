@@ -184,7 +184,7 @@ pub struct WeatherServiceResponse {
     #[serde(rename(deserialize = "errCode"), deserialize_with = "weather_service_error_code")]
     error_code: ErrorCode,
 
-    scale: Option<u8>,
+    scale: Option<f32>,
 
     sunrise: Option<u16>,
 
@@ -219,7 +219,7 @@ pub const CHECK_WEATHER_TIMEOUT: i64 = 21613; // approx 360 minutes
 /// Weather check success interval (seconds)
 pub const CHECK_WEATHER_SUCCESS_TIMEOUT: i64 = 86400; // 24 hours
 
-pub const WATER_SCALE_MAX: i32 = 250;
+pub const WATER_SCALE_MAX: f32 = 2.5;
 
 mod result {
     use std::{error, fmt, result};
@@ -270,7 +270,7 @@ pub fn check_weather(open_sprinkler: &mut OpenSprinkler) -> result::Result<()> {
 
         if let Some(ref algorithm) = open_sprinkler.config.weather.algorithm {
             if !algorithm.use_manual_scale() {
-                open_sprinkler.set_water_scale(100); // reset watering percentage to 100%
+                open_sprinkler.set_water_scale(1.0); // reset watering percentage to 100%
                 open_sprinkler.state.weather.raw_data = None; // reset wt_rawData and errCode
                 open_sprinkler.state.weather.last_response_code = None;
             }
@@ -333,8 +333,8 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler) -> result::Result<()> {
 
         if open_sprinkler.state.weather.last_response_was_successful() {
             if let Some(scale) = data.scale {
-                if scale <= WATER_SCALE_MAX as u8 && scale != open_sprinkler.get_water_scale() {
-                    open_sprinkler.config.water_scale = scale;
+                if scale <= WATER_SCALE_MAX && scale != open_sprinkler.get_water_scale() {
+                    open_sprinkler.set_water_scale(scale);
 
                     events::push_message(open_sprinkler, &events::WeatherUpdateEvent::water_scale(scale));
 
@@ -426,10 +426,10 @@ fn get_weather(open_sprinkler: &mut OpenSprinkler) -> result::Result<()> {
 
         // Watering Level (scale)
         if open_sprinkler.state.weather.last_response_was_successful() && params.contains_key("scale") {
-            let scale = params.get("scale").unwrap().parse::<i32>().unwrap_or(-1);
-            if scale >= 0 && scale <= WATER_SCALE_MAX && scale != open_sprinkler.get_water_scale() as i32 {
+            let scale: i32 = params.get("scale").unwrap().parse::<i32>().unwrap_or(-1);
+            if scale >= 0 && scale <= (WATER_SCALE_MAX * 100.0) as i32 && scale != open_sprinkler.get_water_scale() as i32 {
                 // Only save if the value has changed
-                open_sprinkler.config.water_scale = u8::try_from(scale).unwrap();
+                open_sprinkler.set_water_scale(scale as f32 * 100.0);
                 open_sprinkler.config.write().unwrap();
 
                 events::push_message(&open_sprinkler, &events::WeatherUpdateEvent::new(None, open_sprinkler.config.external_ip));
