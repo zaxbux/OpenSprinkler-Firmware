@@ -234,7 +234,7 @@ fn schedule_all_stations(open_sprinkler: &mut OpenSprinkler, program_data: &mut 
             if open_sprinkler.get_sensor_type(0) == Some(sensor::SensorType::Flow) {
                 // if flow sensor is connected
                 open_sprinkler.start_flow_log_count();
-                open_sprinkler.sensor_status[0].active_last_time = Some(now_seconds);
+                open_sprinkler.sensor_status[0].timestamp_activated = Some(now_seconds);
             }
         }
     }

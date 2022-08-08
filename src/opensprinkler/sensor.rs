@@ -62,12 +62,29 @@ impl Default for SensorConfig {
 #[derive(Clone, Copy, Default)]
 pub struct SensorStatus {
     /// time when sensor is detected on last time
-    pub on_timer: Option<i64>,
+    pub timestamp_on: Option<i64>,
     /// time when sensor is detected off last time
-    pub off_timer: Option<i64>,
+    pub timestamp_off: Option<i64>,
     /// most recent time when sensor is activated
-    pub active_last_time: Option<i64>,
+    pub timestamp_activated: Option<i64>,
 
     /// State history used for "noise filtering"
     pub history: u8,
+
+    pub detected: bool,
+
+    pub active_now: bool,
+    pub active_previous: bool,
+}
+
+
+impl SensorStatus {
+    pub fn reset(&mut self) {
+        self.timestamp_on = None;
+        self.timestamp_off = None;
+        self.timestamp_activated = None;
+        self.history = 0;
+        self.active_now = false;
+        self.active_previous = false;
+    }
 }

@@ -38,16 +38,20 @@ struct ControllerSensorStatus {
 }
 
 /// Volatile controller status bits
-#[derive(Copy, Clone)]
+///
+/// For keeping track of status changes
+#[derive(Clone)]
 pub struct ControllerStatus {
     /// rain delay bit (when [true], rain delay is applied)
-    pub rain_delayed: bool,
+    rain_delayed_now: bool,
+
+    rain_delayed_previous: bool,
     /// [true] means a program is being executed currently
     pub program_busy: bool,
     /// [true] means a safe reboot has been marked
     pub safe_reboot: bool,
     /// Sensor status
-    sensors: [ControllerSensorStatus; 2],
+    //sensors: [ControllerSensorStatus; 2],
     /// Reboot timer
     pub reboot_timer: i64,
 }
@@ -55,12 +59,13 @@ pub struct ControllerStatus {
 impl Default for ControllerStatus {
     fn default() -> Self {
         ControllerStatus {
-            rain_delayed: false,
+            rain_delayed_now: false,
+            rain_delayed_previous: false,
             program_busy: false,
             safe_reboot: false,
             reboot_timer: 0,
 
-            sensors: [ControllerSensorStatus { detected: false, active: false }, ControllerSensorStatus { detected: false, active: false }],
+            //sensors: [ControllerSensorStatus { detected: false, active: false }, ControllerSensorStatus { detected: false, active: false }],
         }
     }
 }
@@ -73,7 +78,7 @@ const FLOW_COUNT_REALTIME_WINDOW: i64 = 30;
 pub struct OpenSprinkler {
     pub config: config::Config,
     pub status_current: ControllerStatus,
-    pub status_last: ControllerStatus,
+    //pub status_last: ControllerStatus,
 
     /// Weather service status
     pub weather_status: weather::WeatherStatus,
@@ -82,7 +87,7 @@ pub struct OpenSprinkler {
     pub raindelay_on_last_time: Option<i64>,
 
     /// Sensor Status
-    pub sensor_status: [sensor::SensorStatus; sensor::MAX_SENSORS], // @todo refactor
+    pub sensor_status: [sensor::SensorStatus; sensor::MAX_SENSORS],
 
     /// station activation bits. each unsigned char corresponds to a board (8 stations)
     ///
@@ -481,7 +486,8 @@ impl OpenSprinkler {
 
     /// Check rain delay status
     pub fn check_rain_delay_status(&mut self, now_seconds: i64) {
-        if self.status_current.rain_delayed {
+        //if self.status_current.rain_delayed {
+        if self.status_current.rain_delayed_now {
             if now_seconds >= self.config.rain_delay_stop_time.unwrap_or(0) {
                 // rain delay is over
                 self.rain_delay_stop();
@@ -494,46 +500,55 @@ impl OpenSprinkler {
         }
 
         // Check controller status changes and write log
-        if self.status_last.rain_delayed != self.status_current.rain_delayed {
-            if self.status_current.rain_delayed {
+        //if self.status_last.rain_delayed != self.status_current.rain_delayed {
+        if self.status_current.rain_delayed_previous != self.status_current.rain_delayed_now {
+            //if self.status_current.rain_delayed {
+            if self.status_current.rain_delayed_now {
                 // rain delay started, record time
-                self.raindelay_on_last_time = now_seconds.try_into().unwrap();
+                self.raindelay_on_last_time = Some(now_seconds);
                 events::push_message(self, &events::RainDelayEvent::new(true));
             } else {
                 // rain delay stopped, write log
                 let _ = log::write_log_message(&self, &log::message::SensorMessage::new(log::LogDataType::RainDelay, now_seconds), now_seconds);
                 events::push_message(self, &events::RainDelayEvent::new(false));
             }
-            events::push_message(&self, &events::RainDelayEvent::new(true));
-            self.status_last.rain_delayed = self.status_current.rain_delayed;
+            //events::push_message(&self, &events::RainDelayEvent::new(self.status_current.rain_delayed));
+            events::push_message(&self, &events::RainDelayEvent::new(self.status_current.rain_delayed_now));
+            //self.status_last.rain_delayed = self.status_current.rain_delayed;
+            self.status_current.rain_delayed_previous = self.status_current.rain_delayed_now;
         }
     }
 
     #[cfg(not(feature = "demo"))]
     fn detect_sensor_status(&mut self, i: usize, now_seconds: i64) {
-        let sensor_type = self.get_sensor_type(i);
+        /*let sensor_type = self.get_sensor_type(i);
 
-        if sensor_type.unwrap_or(sensor::SensorType::None) == sensor::SensorType::Rain || sensor_type.unwrap_or(sensor::SensorType::None) == sensor::SensorType::Soil {
-            self.status_current.sensors[i].detected = self.get_sensor_detected(i);
+        if sensor_type.unwrap_or(sensor::SensorType::None) == sensor::SensorType::Rain || sensor_type.unwrap_or(sensor::SensorType::None) == sensor::SensorType::Soil {*/
+        if let Some(sensor::SensorType::Rain) | Some(sensor::SensorType::Soil) = self.get_sensor_type(i) {
+            //self.status_current.sensors[i].detected = self.get_sensor_detected(i);
+            self.sensor_status[i].detected = self.get_sensor_detected(i);
 
-            if self.status_current.sensors[i].detected {
-                if self.sensor_status[i].on_timer.is_none() {
+            //if self.status_current.sensors[i].detected {
+            if self.sensor_status[i].detected {
+                if self.sensor_status[i].timestamp_on.is_none() {
                     // add minimum of 5 seconds on-delay
-                    self.sensor_status[i].on_timer = Some(max(self.get_sensor_on_delay(i) * 60, MINIMUM_ON_DELAY).into());
-                    self.sensor_status[i].off_timer = Some(0);
+                    self.sensor_status[i].timestamp_on = Some(max(self.get_sensor_on_delay(i) * 60, MINIMUM_ON_DELAY).into());
+                    self.sensor_status[i].timestamp_off = Some(0);
                 } else {
-                    if now_seconds > self.sensor_status[i].on_timer.unwrap_or(0) {
-                        self.status_current.sensors[i].active = true;
+                    if now_seconds > self.sensor_status[i].timestamp_on.unwrap_or(0) {
+                        //self.status_current.sensors[i].active = true;
+                        self.sensor_status[i].active_now = true;
                     }
                 }
             } else {
-                if self.sensor_status[i].off_timer.is_none() {
+                if self.sensor_status[i].timestamp_off.is_none() {
                     // add minimum of 5 seconds off-delay
-                    self.sensor_status[i].off_timer = Some(max(self.get_sensor_off_delay(i) * 60, MINIMUM_OFF_DELAY).into());
-                    self.sensor_status[i].on_timer = Some(0);
+                    self.sensor_status[i].timestamp_off = Some(max(self.get_sensor_off_delay(i) * 60, MINIMUM_OFF_DELAY).into());
+                    self.sensor_status[i].timestamp_on = Some(0);
                 } else {
-                    if now_seconds > self.sensor_status[i].off_timer.unwrap_or(0) {
-                        self.status_current.sensors[i].active = false;
+                    if now_seconds > self.sensor_status[i].timestamp_off.unwrap_or(0) {
+                        //self.status_current.sensors[i].active = false;
+                        self.sensor_status[i].active_now = false;
                     }
                 }
             }
@@ -546,16 +561,21 @@ impl OpenSprinkler {
         for i in 0..sensor::MAX_SENSORS {
             self.detect_sensor_status(i, now_seconds);
 
-            if self.status_last.sensors[i].active != self.status_current.sensors[i].active {
+            // State change
+            //if self.status_last.sensors[i].active != self.status_current.sensors[i].active {
+            if self.sensor_status[i].active_previous != self.sensor_status[i].active_now {
                 // send notification when sensor becomes active
-                if self.status_current.sensors[i].active {
-                    self.sensor_status[i].active_last_time = Some(now_seconds);
+                //if self.status_current.sensors[i].active {
+                if self.sensor_status[i].active_now {
+                    self.sensor_status[i].timestamp_activated = Some(now_seconds);
                 } else {
                     let _ = log::write_log_message(&self, &log::message::SensorMessage::new(log::LogDataType::Sensor1, now_seconds), now_seconds);
                 }
-                events::push_message(&self, &events::BinarySensorEvent::new(i, self.status_current.sensors[i].active));
+                //events::push_message(&self, &events::BinarySensorEvent::new(i, self.status_current.sensors[i].active));
+                events::push_message(&self, &events::BinarySensorEvent::new(i, self.sensor_status[i].active_now));
             }
-            self.status_last.sensors[i].active = self.status_current.sensors[i].active;
+            //self.status_last.sensors[i].active = self.status_current.sensors[i].active;
+            self.sensor_status[i].active_previous = self.sensor_status[i].active_now;
         }
     }
 
@@ -646,10 +666,12 @@ impl OpenSprinkler {
         let mut detected = [false; sensor::MAX_SENSORS];
 
         for i in 0..sensor::MAX_SENSORS {
-            if self.get_sensor_type(i).unwrap_or(sensor::SensorType::None) == sensor::SensorType::ProgramSwitch {
-                self.status_current.sensors[i].detected = self.get_sensor_detected(i);
+            if self.get_sensor_type(i) == Some(sensor::SensorType::ProgramSwitch) {
+                //self.status_current.sensors[i].detected = self.get_sensor_detected(i);
+                self.sensor_status[i].detected = self.get_sensor_detected(i);
 
-                self.sensor_status[i].history = (self.sensor_status[i].history << 1) | if self.status_current.sensors[i].detected { 1 } else { 0 };
+                //self.sensor_status[i].history = (self.sensor_status[i].history << 1) | if self.status_current.sensors[i].detected { 1 } else { 0 };
+                self.sensor_status[i].history = (self.sensor_status[i].history << 1) | if self.sensor_status[i].detected { 1 } else { 0 };
 
                 // basic noise filtering: only trigger if sensor matches pattern:
                 // i.e. two consecutive lows followed by two consecutive highs
@@ -663,11 +685,15 @@ impl OpenSprinkler {
     }
 
     pub fn sensor_reset_all(&mut self) {
-        self.sensor_status = [sensor::SensorStatus::default(); sensor::MAX_SENSORS];
+        /*self.sensor_status = [sensor::SensorStatus::default(); sensor::MAX_SENSORS];
 
         for i in 0..sensor::MAX_SENSORS {
             self.status_last.sensors[i].active = false;
             self.status_current.sensors[i].active = false;
+        } */
+
+        for i in 0..sensor::MAX_SENSORS {
+            self.sensor_status[i].reset();
         }
     }
 
@@ -781,13 +807,15 @@ impl OpenSprinkler {
 
     /// Start rain delay
     pub fn rain_delay_start(&mut self) {
-        self.status_current.rain_delayed = true;
+        //self.status_current.rain_delayed = true;
+        self.status_current.rain_delayed_now = true;
         self.config.write().unwrap();
     }
 
     /// Stop rain delay
     pub fn rain_delay_stop(&mut self) {
-        self.status_current.rain_delayed = false;
+        //self.status_current.rain_delayed = false;
+        self.status_current.rain_delayed_now = false;
         self.config.rain_delay_stop_time = None;
         self.config.write().unwrap();
     }
@@ -838,8 +866,11 @@ impl OpenSprinkler {
         // Determine which rain/soil sensors are currently active
         let mut sn = [false; sensor::MAX_SENSORS];
         for i in 0..sensor::MAX_SENSORS {
-            let sensor_type = self.get_sensor_type(i).unwrap_or(sensor::SensorType::None);
-            sn[i] = (sensor_type == sensor::SensorType::Rain || sensor_type == sensor::SensorType::Rain) && self.status_current.sensors[i].active;
+            /*let sensor_type = self.get_sensor_type(i).unwrap_or(sensor::SensorType::None);
+            sn[i] = (sensor_type == sensor::SensorType::Rain || sensor_type == sensor::SensorType::Rain) && self.status_current.sensors[i].active;*/
+            if let Some(sensor_type) = self.get_sensor_type(i) {
+                sn[i] = (sensor_type == sensor::SensorType::Rain || sensor_type == sensor::SensorType::Rain) && self.sensor_status[i].active_now;
+            }
         }
 
         for board_index in 0..self.get_board_count() {
@@ -874,7 +905,8 @@ impl OpenSprinkler {
                 }
 
                 // if rain delay is on and zone does not ignore rain delay, turn it off
-                if self.status_current.rain_delayed && !self.config.stations[station_index].attrib.ignore_rain_delay {
+                //if self.status_current.rain_delayed && !self.config.stations[station_index].attrib.ignore_rain_delay {
+                if self.status_current.rain_delayed_now && !self.config.stations[station_index].attrib.ignore_rain_delay {
                     controller::turn_off_station(self, program_data, now_seconds, station_index);
                 }
 
@@ -893,7 +925,7 @@ impl Default for OpenSprinkler {
         Self {
             config: config::Config::default(),
             status_current: ControllerStatus::default(),
-            status_last: ControllerStatus::default(),
+            //status_last: ControllerStatus::default(),
             weather_status: weather::WeatherStatus::default(),
             raindelay_on_last_time: None,
             sensor_status: [sensor::SensorStatus::default(); sensor::MAX_SENSORS],
