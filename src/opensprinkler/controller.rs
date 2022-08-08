@@ -31,63 +31,65 @@ pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, program_data: &mut p
     //open_sprinkler.set_station_bit(station_index, false);
     open_sprinkler.state.station.set_active(station_index, false);
 
-    let qid = program_data.station_qid[station_index];
+    if let Some(qid) = program_data.station_qid[station_index] {
+        // ignore if we are turning off a station that is not running or is not scheduled to run
+        if let Some(q) = program_data.queue.get(qid) {
+            /* if qid >= program_data.queue.len() {
+                return;
+            } */
 
-    // ignore if we are turning off a station that is not running or is not scheduled to run
-    if qid >= program_data.queue.len() {
-        return;
-    }
+            // RAH implementation of flow sensor
+            let flow_volume = open_sprinkler.state.flow.measure();
 
-    // RAH implementation of flow sensor
-    let flow_volume = open_sprinkler.state.flow.measure();
+            //let q = program_data.queue.get(qid).unwrap();
 
-    let q = program_data.queue.get(qid).unwrap();
+            // check if the current time is past the scheduled start time,
+            // because we may be turning off a station that hasn't started yet
+            if now_seconds > q.start_time {
+                // record lastrun log (only for non-master stations)
+                if !open_sprinkler.is_master_station(station_index) {
+                    let duration = u16::try_from(now_seconds - q.start_time).unwrap();
 
-    // check if the current time is past the scheduled start time,
-    // because we may be turning off a station that hasn't started yet
-    if now_seconds > q.start_time {
-        // record lastrun log (only for non-master stations)
-        if !open_sprinkler.is_master_station(station_index) {
-            let duration = u16::try_from(now_seconds - q.start_time).unwrap();
+                    // log station run
+                    let mut message = log::message::StationMessage::new(
+                        q.program_index,
+                        station_index,
+                        duration, // @fixme Maximum duration is 18 hours (64800 seconds), which fits into a [u16]
+                        now_seconds,
+                    );
 
-            // log station run
-            let mut message = log::message::StationMessage::new(
-                q.program_index,
-                station_index,
-                duration, // @fixme Maximum duration is 18 hours (64800 seconds), which fits into a [u16]
-                now_seconds,
-            );
+                    // Keep a copy for web
+                    program_data.last_run = Some(message);
 
-            // Keep a copy for web
-            program_data.last_run = Some(message);
-
-            if open_sprinkler.get_sensor_type(0).unwrap_or(sensor::SensorType::None) == sensor::SensorType::Flow {
-                message.with_flow(flow_volume);
-            }
-            let _ = log::write_log_message(open_sprinkler, &message, now_seconds);
-
-            //let station_name = open_sprinkler.stations[station_id].name.clone();
-            let station_name = &open_sprinkler.config.stations[station_index].name;
-            events::push_message(
-                open_sprinkler,
-                &events::StationEvent::new(
-                    station_index,
-                    station_name,
-                    false,
-                    Some(duration.into()),
                     if open_sprinkler.get_sensor_type(0).unwrap_or(sensor::SensorType::None) == sensor::SensorType::Flow {
-                        Some(flow_volume)
-                    } else {
-                        None
-                    },
-                ),
-            );
+                        message.with_flow(flow_volume);
+                    }
+                    let _ = log::write_log_message(open_sprinkler, &message, now_seconds);
+
+                    //let station_name = open_sprinkler.stations[station_id].name.clone();
+                    let station_name = &open_sprinkler.config.stations[station_index].name;
+                    events::push_message(
+                        open_sprinkler,
+                        &events::StationEvent::new(
+                            station_index,
+                            station_name,
+                            false,
+                            Some(duration.into()),
+                            if open_sprinkler.get_sensor_type(0).unwrap_or(sensor::SensorType::None) == sensor::SensorType::Flow {
+                                Some(flow_volume)
+                            } else {
+                                None
+                            },
+                        ),
+                    );
+                }
+            }
+
+            // dequeue the element
+            program_data.dequeue(qid);
+            program_data.station_qid[station_index] = None;
         }
     }
-
-    // dequeue the element
-    program_data.dequeue(qid);
-    program_data.station_qid[station_index] = 0xFF;
 }
 
 /// Actuate master stations based on need
@@ -108,14 +110,22 @@ pub fn activate_master_station(master_station: usize, open_sprinkler: &mut OpenS
 
             // if this station is running and is set to activate master
             if open_sprinkler.is_station_running(station_index) && open_sprinkler.config.stations[station_index].attrib.use_master[master_station] {
-                let q = program_data.queue.get(program_data.station_qid[station_index]).unwrap();
-                // check if timing is within the acceptable range
-                let start_time = q.start_time + adjusted_on;
-                let stop_time = q.start_time + q.water_time + adjusted_off;
-                if now_seconds >= start_time && now_seconds <= stop_time {
-                    //open_sprinkler.set_station_bit(master_station_index, true);
-                    open_sprinkler.state.station.set_active(station_index_master, true);
-                    return;
+                //let q = program_data.queue.get(program_data.station_qid[station_index]).unwrap();
+                if let Some(qid) = program_data.station_qid[station_index] {
+                    if let Some(q) = program_data.queue.get(qid) {
+                        // check if timing is within the acceptable range
+                        let start_time = q.start_time + adjusted_on;
+                        let stop_time = q.start_time + q.water_time + adjusted_off;
+                        if now_seconds >= start_time && now_seconds <= stop_time {
+                            //open_sprinkler.set_station_bit(master_station_index, true);
+                            open_sprinkler.state.station.set_active(station_index_master, true);
+                            return;
+                        }
+                    } else {
+                        panic!("This should not happen");
+                    }
+                } else {
+                    panic!("This should not happen");
                 }
             }
         }

@@ -263,7 +263,7 @@ pub type QueueElements = collections::VecDeque<QueueElement>;
 pub struct ProgramQueue {
     pub queue: QueueElements,
     /// this array stores the queue element index for each scheduled station
-    pub station_qid: [usize; station::MAX_NUM_STATIONS],
+    pub station_qid: [Option<usize>; station::MAX_NUM_STATIONS],
     /// Number of programs
     pub last_run: Option<log::message::StationMessage>,
     // the last stop time of a sequential station
@@ -273,7 +273,7 @@ impl ProgramQueue {
     pub fn new() -> Self {
         ProgramQueue {
             queue: collections::VecDeque::new(),
-            station_qid: [0xFFusize; station::MAX_NUM_STATIONS], // @todo stop using placeholder value?
+            station_qid: [None; station::MAX_NUM_STATIONS], // @todo stop using placeholder value?
             last_run: None,
             last_seq_stop_time: None,
         }
@@ -281,7 +281,7 @@ impl ProgramQueue {
 
     pub fn reset_runtime(&mut self) {
         self.last_seq_stop_time = None;
-        self.station_qid = [0xFFusize; station::MAX_NUM_STATIONS];
+        self.station_qid = [None; station::MAX_NUM_STATIONS];
     }
 
     // this returns a pointer to the next available slot in the queue

@@ -868,34 +868,30 @@ impl OpenSprinkler {
                 // If this is a normal program (not a run-once or test program)
                 // and either the controller is disabled, or
                 // if raining and ignore rain bit is cleared
-                // @FIXME
-                let qid = program_data.station_qid[station_index];
-                if qid == 255 {
-                    continue;
-                }
+                if let Some(qid) = program_data.station_qid[station_index] {
+                    let q = program_data.queue.get(qid).unwrap();
 
-                let q = program_data.queue.get(qid).unwrap();
+                    //if q.program_index >= program::TEST_PROGRAM_ID {
+                    if q.program_index == program::ProgramStart::Test || q.program_index == program::ProgramStart::TestShort || q.program_index == program::ProgramStart::RunOnce {
+                        // This is a manually started program, skip
+                        continue;
+                    }
 
-                //if q.program_index >= program::TEST_PROGRAM_ID {
-                if q.program_index == program::ProgramStart::Test || q.program_index == program::ProgramStart::TestShort || q.program_index == program::ProgramStart::RunOnce {
-                    // This is a manually started program, skip
-                    continue;
-                }
-
-                // If system is disabled, turn off zone
-                if !self.config.enable_controller {
-                    controller::turn_off_station(self, program_data, now_seconds, station_index);
-                }
-
-                // if rain delay is on and zone does not ignore rain delay, turn it off
-                //if self.status_current.rain_delayed && !self.config.stations[station_index].attrib.ignore_rain_delay {
-                if self.state.rain_delay.active_now && !self.config.stations[station_index].attrib.ignore_rain_delay {
-                    controller::turn_off_station(self, program_data, now_seconds, station_index);
-                }
-
-                for i in 0..sensor::MAX_SENSORS {
-                    if sn[i] && !self.config.stations[station_index].attrib.ignore_sensor[i] {
+                    // If system is disabled, turn off zone
+                    if !self.config.enable_controller {
                         controller::turn_off_station(self, program_data, now_seconds, station_index);
+                    }
+
+                    // if rain delay is on and zone does not ignore rain delay, turn it off
+                    //if self.status_current.rain_delayed && !self.config.stations[station_index].attrib.ignore_rain_delay {
+                    if self.state.rain_delay.active_now && !self.config.stations[station_index].attrib.ignore_rain_delay {
+                        controller::turn_off_station(self, program_data, now_seconds, station_index);
+                    }
+
+                    for i in 0..sensor::MAX_SENSORS {
+                        if sn[i] && !self.config.stations[station_index].attrib.ignore_sensor[i] {
+                            controller::turn_off_station(self, program_data, now_seconds, station_index);
+                        }
                     }
                 }
             }

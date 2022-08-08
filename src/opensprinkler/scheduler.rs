@@ -7,14 +7,15 @@ pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, program_data: &mut pr
     let mut qid = 0;
     for q in program_data.queue.iter() {
         let sid = q.station_index;
-        let sqi = program_data.station_qid[sid];
-        // skip if station is already assigned a queue element
-        // and that queue element has an earlier start time
-        if sqi < 255 && program_data.queue[sqi].start_time < q.start_time {
-            continue;
+        if let Some(sqi) = program_data.station_qid[sid] {
+            // skip if station is already assigned a queue element and that queue element has an earlier start time
+            if program_data.queue[sqi].start_time < q.start_time {
+                continue;
+            }
         }
+        
         // otherwise assign the queue element to station
-        program_data.station_qid[sid] = qid;
+        program_data.station_qid[sid] = Some(qid);
         qid += 1;
     }
     // next, go through the stations and perform time keeping
@@ -29,23 +30,21 @@ pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, program_data: &mut pr
                 continue;
             }
 
-            if program_data.station_qid[station_index] == 255 {
-                continue;
-            }
-
-            let q = program_data.queue[program_data.station_qid[station_index]].clone();
-            // check if this station is scheduled, either running or waiting to run
-            if q.start_time > 0 {
-                // if so, check if we should turn it off
-                if now_seconds >= q.start_time + q.water_time {
-                    controller::turn_off_station(open_sprinkler, program_data, now_seconds, station_index);
+            if let Some(qid) = program_data.station_qid[station_index] {
+                let q = program_data.queue[qid].clone();
+                // check if this station is scheduled, either running or waiting to run
+                if q.start_time > 0 {
+                    // if so, check if we should turn it off
+                    if now_seconds >= q.start_time + q.water_time {
+                        controller::turn_off_station(open_sprinkler, program_data, now_seconds, station_index);
+                    }
                 }
-            }
-            // if current station is not running, check if we should turn it on
-            //if !((bitvalue >> s) & 1 != 0) {
-            if board_active[s] == false {
-                if now_seconds >= q.start_time && now_seconds < q.start_time + q.water_time {
-                    controller::turn_on_station(open_sprinkler, station_index);
+                // if current station is not running, check if we should turn it on
+                //if !((bitvalue >> s) & 1 != 0) {
+                if board_active[s] == false {
+                    if now_seconds >= q.start_time && now_seconds < q.start_time + q.water_time {
+                        controller::turn_on_station(open_sprinkler, station_index);
+                    }
                 }
             }
         }
