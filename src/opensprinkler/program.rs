@@ -320,6 +320,20 @@ impl ProgramQueue {
         }
     }
 
+    /// Clean Queue
+    ///
+    /// This removes queue elements if:
+    /// - water_time is not greater than zero; or
+    /// - if current time is greater than element duration
+    pub fn clean_queue(&mut self, now_seconds: i64) {
+        for qi in 0..self.queue.len() {
+            let q = self.queue.get(qi).unwrap();
+            if !(q.water_time > 0) || now_seconds >= q.start_time + q.water_time {
+                self.dequeue(qi);
+            }
+        }
+    }
+
     /// Reset all stations
     ///
     /// This function sets the duration of every station to 0, which causes all stations to turn off in the next processing cycle.

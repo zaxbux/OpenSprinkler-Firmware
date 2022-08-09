@@ -1,21 +1,21 @@
 use crate::utils;
 
-use super::{controller, events, log, program, sensor, OpenSprinkler};
+use super::{controller, events, log, program, OpenSprinkler};
 
-pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, program_data: &mut program::ProgramQueue, now_seconds: i64) {
+pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, now_seconds: i64) {
     // first, go through run time queue to assign queue elements to stations
     let mut qid = 0;
-    for q in program_data.queue.iter() {
+    for q in open_sprinkler.state.program.queue.queue.iter() {
         let station_index = q.station_index;
-        if let Some(sqi) = program_data.station_qid[station_index] {
+        if let Some(sqi) = open_sprinkler.state.program.queue.station_qid[station_index] {
             // skip if station is already assigned a queue element and that queue element has an earlier start time
-            if program_data.queue[sqi].start_time < q.start_time {
+            if open_sprinkler.state.program.queue.queue[sqi].start_time < q.start_time {
                 continue;
             }
         }
         
         // otherwise assign the queue element to station
-        program_data.station_qid[station_index] = Some(qid);
+        open_sprinkler.state.program.queue.station_qid[station_index] = Some(qid);
         qid += 1;
     }
     // next, go through the stations and perform time keeping
@@ -30,17 +30,16 @@ pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, program_data: &mut pr
                 continue;
             }
 
-            if let Some(qid) = program_data.station_qid[station_index] {
-                let q = program_data.queue[qid].clone();
+            if let Some(qid) = open_sprinkler.state.program.queue.station_qid[station_index] {
+                let q = open_sprinkler.state.program.queue.queue[qid].clone();
                 // check if this station is scheduled, either running or waiting to run
                 if q.start_time > 0 {
                     // if so, check if we should turn it off
                     if now_seconds >= q.start_time + q.water_time {
-                        controller::turn_off_station(open_sprinkler, program_data, now_seconds, station_index);
+                        controller::turn_off_station(open_sprinkler, now_seconds, station_index);
                     }
                 }
                 // if current station is not running, check if we should turn it on
-                //if !((bitvalue >> s) & 1 != 0) {
                 if board_active[s] == false {
                     if now_seconds >= q.start_time && now_seconds < q.start_time + q.water_time {
                         controller::turn_on_station(open_sprinkler, station_index);
@@ -51,18 +50,18 @@ pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, program_data: &mut pr
     }
 
     // finally, go through the queue again and clear up elements marked for removal
-    clean_queue(program_data, now_seconds);
+    open_sprinkler.state.program.queue.clean_queue(now_seconds);
 
     // process dynamic events
-    open_sprinkler.process_dynamic_events(program_data, now_seconds);
+    open_sprinkler.process_dynamic_events(now_seconds);
 
     // activate / deactivate valves
     open_sprinkler.apply_all_station_bits();
 
     // check through runtime queue, calculate the last stop time of sequential stations
-    program_data.last_seq_stop_time = None;
+    open_sprinkler.state.program.queue.last_seq_stop_time = None;
 
-    for q in program_data.queue.iter() {
+    for q in open_sprinkler.state.program.queue.queue.iter() {
         let station_index = q.station_index;
 
         // check if any sequential station has a valid stop time
@@ -71,26 +70,26 @@ pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, program_data: &mut pr
         if sequential_stop_time > now_seconds {
             // only need to update last_seq_stop_time for sequential stations
             if open_sprinkler.config.stations[station_index].attrib.is_sequential && !open_sprinkler.is_remote_extension() {
-                program_data.last_seq_stop_time = if sequential_stop_time > program_data.last_seq_stop_time.unwrap() {
+                open_sprinkler.state.program.queue.last_seq_stop_time = if sequential_stop_time > open_sprinkler.state.program.queue.last_seq_stop_time.unwrap() {
                     Some(sequential_stop_time)
                 } else {
-                    program_data.last_seq_stop_time
+                    open_sprinkler.state.program.queue.last_seq_stop_time
                 };
             }
         }
     }
 
     // if the runtime queue is empty, reset all stations
-    if program_data.queue.is_empty() {
+    if open_sprinkler.state.program.queue.queue.is_empty() {
         // turn off all stations
         open_sprinkler.clear_all_station_bits();
         open_sprinkler.apply_all_station_bits();
         // reset runtime
-        program_data.reset_runtime();
+        open_sprinkler.state.program.queue.reset_runtime();
         // reset program busy bit
         open_sprinkler.state.program.busy = false;
         // log flow sensor reading if flow sensor is used
-        if open_sprinkler.get_sensor_type(0).unwrap_or(sensor::SensorType::None) == sensor::SensorType::Flow {
+        if open_sprinkler.is_flow_sensor_enabled() {
             let _ = log::write_log_message(&open_sprinkler, &log::message::FlowSenseMessage::new(open_sprinkler.get_flow_log_count(), now_seconds), now_seconds);
             events::push_message(
                 &open_sprinkler,
@@ -103,21 +102,7 @@ pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, program_data: &mut pr
     }
 }
 
-/// Clean Queue
-///
-/// This removes queue elements if:
-/// - water_time is not greater than zero; or
-/// - if current time is greater than element duration
-fn clean_queue(program_data: &mut program::ProgramQueue, now_seconds: i64) {
-    for qi in 0..program_data.queue.len() {
-        let q = program_data.queue.get(qi).unwrap();
-        if !(q.water_time > 0) || now_seconds >= q.start_time + q.water_time {
-            program_data.dequeue(qi);
-        }
-    }
-}
-
-pub fn check_program_schedule(open_sprinkler: &mut OpenSprinkler, program_data: &mut program::ProgramQueue, now_seconds: i64) {
+pub fn check_program_schedule(open_sprinkler: &mut OpenSprinkler, now_seconds: i64) {
     tracing::trace!("Checking program schedule");
     let mut match_found = false;
 
@@ -161,7 +146,7 @@ pub fn check_program_schedule(open_sprinkler: &mut OpenSprinkler, program_data: 
                     if water_time > 0.0 {
                         // check if water time is still valid
                         // because it may end up being zero after scaling
-                        let q = program_data.enqueue(program::QueueElement::new(
+                        let q = open_sprinkler.state.program.queue.enqueue(program::QueueElement::new(
                             0,
                             water_time as i64,
                             station_index,
@@ -188,14 +173,14 @@ pub fn check_program_schedule(open_sprinkler: &mut OpenSprinkler, program_data: 
 
     // calculate start and end time
     if match_found {
-        schedule_all_stations(open_sprinkler, program_data, now_seconds as i64);
+        schedule_all_stations(open_sprinkler, now_seconds as i64);
     }
 }
 
 /// Scheduler
 ///
 /// This function loops through the queue and schedules the start time of each station
-fn schedule_all_stations(open_sprinkler: &mut OpenSprinkler, program_data: &mut program::ProgramQueue, now_seconds: i64) {
+fn schedule_all_stations(open_sprinkler: &mut OpenSprinkler, now_seconds: i64) {
     tracing::trace!("Scheduling all stations");
     let mut con_start_time = now_seconds + 1; // concurrent start time
     let mut seq_start_time = con_start_time; // sequential start time
@@ -203,11 +188,13 @@ fn schedule_all_stations(open_sprinkler: &mut OpenSprinkler, program_data: &mut 
     let station_delay: i64 = utils::water_time_decode_signed(open_sprinkler.config.station_delay_time).into();
 
     // if the sequential queue has stations running
-    if program_data.last_seq_stop_time.unwrap_or(0) > now_seconds {
-        seq_start_time = program_data.last_seq_stop_time.unwrap_or(0) + station_delay;
+    if open_sprinkler.state.program.queue.last_seq_stop_time.unwrap_or(0) > now_seconds {
+        seq_start_time = open_sprinkler.state.program.queue.last_seq_stop_time.unwrap_or(0) + station_delay;
     }
 
-    for q in program_data.queue.iter_mut() {
+    for qi in 0..open_sprinkler.state.program.queue.queue.len() {
+        let mut q = &mut open_sprinkler.state.program.queue.queue[qi];
+
         if q.start_time > 0 {
             // if this queue element has already been scheduled, skip
             continue;
@@ -218,9 +205,8 @@ fn schedule_all_stations(open_sprinkler: &mut OpenSprinkler, program_data: &mut 
 
         let station_index = q.station_index;
 
-        // if this is a sequential station and the controller is not in remote extension mode
-        // use sequential scheduling. station delay time apples
-        if open_sprinkler.config.stations[station_index].attrib.is_sequential && !open_sprinkler.is_remote_extension() {
+        // if this is a sequential station and the controller is not in remote extension mode, use sequential scheduling. station delay time apples
+        if open_sprinkler.config.stations[station_index].attrib.is_sequential && open_sprinkler.config.enable_remote_ext_mode /* !open_sprinkler.is_remote_extension() */ {
             // sequential scheduling
             q.start_time = seq_start_time;
             seq_start_time += q.water_time;
@@ -236,10 +222,9 @@ fn schedule_all_stations(open_sprinkler: &mut OpenSprinkler, program_data: &mut 
             open_sprinkler.state.program.busy = true;
 
             // start flow count
-            if open_sprinkler.get_sensor_type(0) == Some(sensor::SensorType::Flow) {
+            if open_sprinkler.is_flow_sensor_enabled() {
                 // if flow sensor is connected
                 open_sprinkler.start_flow_log_count();
-                //open_sprinkler.sensor_status[0].timestamp_activated = Some(now_seconds);
                 open_sprinkler.state.sensor.set_timestamp_activated(0, Some(now_seconds));
             }
         }
@@ -247,9 +232,9 @@ fn schedule_all_stations(open_sprinkler: &mut OpenSprinkler, program_data: &mut 
 }
 
 /// Manually start a program
-pub fn manual_start_program(open_sprinkler: &mut OpenSprinkler, program_data: &mut program::ProgramQueue, program_start: program::ProgramStart, use_water_scale: bool) {
+pub fn manual_start_program(open_sprinkler: &mut OpenSprinkler, program_start: program::ProgramStart, use_water_scale: bool) {
     let mut match_found = false;
-    open_sprinkler.reset_all_stations_immediate(program_data);
+    open_sprinkler.reset_all_stations_immediate();
 
     let program = match program_start {
         program::ProgramStart::Test => program::Program::test_program(60),
@@ -284,7 +269,7 @@ pub fn manual_start_program(open_sprinkler: &mut OpenSprinkler, program_data: &m
         //water_time = water_time * water_scale;
 
         if water_time > 0.0 && !open_sprinkler.config.stations.get(station_index).unwrap().attrib.is_disabled {
-            if program_data
+            if open_sprinkler.state.program.queue
                 .enqueue(program::QueueElement::new(
                     0,
                     water_time as i64,
@@ -298,6 +283,6 @@ pub fn manual_start_program(open_sprinkler: &mut OpenSprinkler, program_data: &m
         }
     }
     if match_found {
-        schedule_all_stations(open_sprinkler, program_data, chrono::Utc::now().timestamp());
+        schedule_all_stations(open_sprinkler, chrono::Utc::now().timestamp());
     }
 }

@@ -17,14 +17,13 @@ use tracing_subscriber::FmtSubscriber;
 
 use opensprinkler::{
     events,
-    program,
+    //program,
     weather,
     OpenSprinkler,
 };
 
 use crate::opensprinkler::{scheduler, config};
 #[cfg(not(feature = "demo"))]
-use crate::opensprinkler::sensor;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -90,9 +89,6 @@ fn main() {
         return;
     }
 
-    // ProgramData initialization
-    let mut program_data = program::ProgramQueue::new();
-
     if args.reset {
         config::cli::reset(&open_sprinkler);
         return;
@@ -132,7 +128,7 @@ fn main() {
     while running.load(Ordering::SeqCst) {
         // handle flow sensor using polling every 1ms (maximum freq 1/(2*1ms)=500Hz)
         #[cfg(not(feature = "demo"))]
-        if open_sprinkler.get_sensor_type(0).unwrap_or(sensor::SensorType::None) == sensor::SensorType::Flow {
+        if open_sprinkler.is_flow_sensor_enabled() {
             now_millis = chrono::Utc::now().timestamp_millis();
 
             if now_millis > last_millis {
@@ -161,7 +157,7 @@ fn main() {
             #[cfg(not(feature = "demo"))]
             {
                 open_sprinkler.check_binary_sensor_status(now_seconds);
-                open_sprinkler.check_program_switch_status(&mut program_data);
+                open_sprinkler.check_program_switch_status();
             }
 
             // since the granularity of start time is minute, we only need to check once every minute
@@ -169,21 +165,21 @@ fn main() {
                 last_minute = now_minute;
 
                 // Schedule program data
-                scheduler::check_program_schedule(&mut open_sprinkler, &mut program_data, now_seconds);
+                scheduler::check_program_schedule(&mut open_sprinkler, now_seconds);
             }
 
             // ====== Run program data ======
             // Check if a program is running currently
             // If so, do station run-time keeping
             if open_sprinkler.state.program.busy {
-                opensprinkler::scheduler::do_time_keeping(&mut open_sprinkler, &mut program_data, now_seconds);
+                opensprinkler::scheduler::do_time_keeping(&mut open_sprinkler, now_seconds);
             }
 
-            opensprinkler::controller::activate_master_station(0, &mut open_sprinkler, &program_data, now_seconds);
-            opensprinkler::controller::activate_master_station(1, &mut open_sprinkler, &program_data, now_seconds);
+            opensprinkler::controller::activate_master_station(0, &mut open_sprinkler, now_seconds);
+            opensprinkler::controller::activate_master_station(1, &mut open_sprinkler, now_seconds);
 
             // Process dynamic events
-            open_sprinkler.process_dynamic_events(&mut program_data, now_seconds);
+            open_sprinkler.process_dynamic_events(now_seconds);
 
             // Actuate valves
             open_sprinkler.apply_all_station_bits();

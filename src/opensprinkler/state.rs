@@ -1,4 +1,4 @@
-use super::{gpio, sensor, station, weather, controller};
+use super::{gpio, sensor, station, weather, controller, program};
 
 pub type StationBits = [bool; controller::SHIFT_REGISTER_LINES];
 
@@ -80,11 +80,15 @@ impl Default for StationState {
 pub struct ProgramState {
     /// A program is currently being executed
     pub busy: bool,
+    pub queue: program::ProgramQueue,
 }
 
 impl Default for ProgramState {
     fn default() -> Self {
-        Self { busy: false }
+        Self {
+            busy: false,
+            queue: program::ProgramQueue::new(),
+        }
     }
 }
 

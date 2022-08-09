@@ -256,9 +256,13 @@ impl OpenSprinkler {
         self.state.flow.get_flow_count() - self.state.flow.count_log_start
     }
 
+    pub fn is_flow_sensor_enabled(&self) -> bool {
+        self.get_sensor_type(0) == Some(sensor::SensorType::Flow)
+    }
+
     /// Realtime flow count
     pub fn update_realtime_flow_count(&mut self, now_seconds: i64) {
-        if self.get_sensor_type(0) == Some(sensor::SensorType::Flow) && now_seconds % FLOW_COUNT_REALTIME_WINDOW == 0 {
+        if self.is_flow_sensor_enabled() && now_seconds % FLOW_COUNT_REALTIME_WINDOW == 0 {
             self.state.flow.count_realtime_now = max(0, self.state.flow.get_flow_count() - self.state.flow.count_realtime_start);
             self.state.flow.count_realtime_start = self.state.flow.get_flow_count();
         }
@@ -423,7 +427,6 @@ impl OpenSprinkler {
 
     /// Check rain delay status
     pub fn check_rain_delay_status(&mut self, now_seconds: i64) {
-        //if self.status_current.rain_delayed {
         if self.state.rain_delay.active_now {
             if now_seconds >= self.config.rain_delay_stop_time.unwrap_or(0) {
                 // rain delay is over
@@ -447,38 +450,16 @@ impl OpenSprinkler {
             }
             tracing::trace!("Rain Delay state changed {}", self.state.rain_delay.active_now);
             events::push_message(&self, &events::RainDelayEvent::new(self.state.rain_delay.active_now));
-            //self.state.rain_delay.active_previous = self.state.rain_delay.active_now;
         }
     }
 
     /// @todo compare to original implementation
     #[cfg(not(feature = "demo"))]
     fn detect_sensor_status(&mut self, i: usize, now_seconds: i64) {
-        /*let sensor_type = self.get_sensor_type(i);
-
-        if sensor_type.unwrap_or(sensor::SensorType::None) == sensor::SensorType::Rain || sensor_type.unwrap_or(sensor::SensorType::None) == sensor::SensorType::Soil {*/
         if let Some(sensor::SensorType::Rain) | Some(sensor::SensorType::Soil) = self.get_sensor_type(i) {
-            //self.status_current.sensors[i].detected = self.get_sensor_detected(i);
-            //self.sensor_status[i].detected = self.get_sensor_detected(i);
             self.state.sensor.set_detected(i, self.get_sensor_detected(i));
 
-            //if self.status_current.sensors[i].detected {
-            //if self.sensor_status[i].detected {
             if self.state.sensor.detected(i) {
-                //if self.sensor_status[i].timestamp_on.is_none() {
-                /* if self.state.sensor.timestamp_on(i).is_none() {
-                    // add minimum of 5 seconds on-delay
-                    self.state.sensor.set_timestamp_on(i, Some(max(self.get_sensor_on_delay(i) * 60, MINIMUM_ON_DELAY).into()));
-                    self.state.sensor.set_timestamp_off(i, Some(0));
-                } else {
-                    //if now_seconds > self.sensor_status[i].timestamp_on.unwrap_or(0) {
-                    if now_seconds > self.state.sensor.timestamp_on(i).unwrap_or(0) {
-                        //self.status_current.sensors[i].active = true;
-                        //self.sensor_status[i].active_now = true;
-                        self.state.sensor.set_state_now(i, true);
-                    }
-                } */
-
                 if let Some(timestamp_on) = self.state.sensor.timestamp_on(i) {
                     if now_seconds > timestamp_on {
                         self.state.sensor.set_state(i, true);
@@ -489,17 +470,6 @@ impl OpenSprinkler {
                     self.state.sensor.set_timestamp_off(i, Some(0));
                 }
             } else {
-                /* if self.sensor_status[i].timestamp_off.is_none() {
-                    // add minimum of 5 seconds off-delay
-                    self.sensor_status[i].timestamp_off = Some(max(self.get_sensor_off_delay(i) * 60, MINIMUM_OFF_DELAY).into());
-                    self.sensor_status[i].timestamp_on = Some(0);
-                } else {
-                    if now_seconds > self.sensor_status[i].timestamp_off.unwrap_or(0) {
-                        //self.status_current.sensors[i].active = false;
-                        self.sensor_status[i].active_now = false;
-                    }
-                } */
-
                 if let Some(timestamp_off) = self.state.sensor.timestamp_off(i) {
                     if now_seconds > timestamp_off {
                         self.state.sensor.set_state(i, false);
@@ -520,44 +490,32 @@ impl OpenSprinkler {
             self.detect_sensor_status(i, now_seconds);
 
             // State change
-            //if self.status_last.sensors[i].active != self.status_current.sensors[i].active {
-            //if self.sensor_status[i].active_previous != self.sensor_status[i].active_now {
             if !self.state.sensor.state_equal(i) {
                 // send notification when sensor becomes active
-                //if self.status_current.sensors[i].active {
-                //if self.sensor_status[i].active_now {
                 if self.state.sensor.state(i) {
-                    //self.sensor_status[i].timestamp_activated = Some(now_seconds);
                     self.state.sensor.set_timestamp_activated(i, Some(now_seconds));
                 } else {
                     let message = log::message::SensorMessage::new(log::LogDataType::Sensor1, now_seconds);
                     let _ = log::write_log_message(&self, &message, now_seconds);
                 }
-                //events::push_message(&self, &events::BinarySensorEvent::new(i, self.status_current.sensors[i].active));
-                //events::push_message(&self, &events::BinarySensorEvent::new(i, self.sensor_status[i].active_now));
                 events::push_message(&self, &events::BinarySensorEvent::new(i, self.state.sensor.state(i)));
             }
-            //self.status_last.sensors[i].active = self.status_current.sensors[i].active;
-            //self.sensor_status[i].active_previous = self.sensor_status[i].active_now;
             self.state.sensor.set_state_equal(i);
         }
     }
 
     /// Check program switch status
     #[cfg(not(feature = "demo"))]
-    pub fn check_program_switch_status(&mut self, program_data: &mut program::ProgramQueue) {
-        let program_switch_detected = self.detect_program_switch_status();
-
-        //if program_switch_detected.into_iter().any(|d| d == true) {
-        if program_switch_detected {
+    pub fn check_program_switch_status(&mut self) {
+        if self.detect_program_switch_status() {
             // immediately stop all stations
-            self.reset_all_stations_immediate(program_data);
+            self.reset_all_stations_immediate();
         }
 
         for i in 0..sensor::MAX_SENSORS {
             if self.config.programs.len() > i {
                 // Program switch sensors start the same program index
-                scheduler::manual_start_program(self, program_data, program::ProgramStart::User(i), false);
+                scheduler::manual_start_program(self, program::ProgramStart::User(i), false);
             }
         }
     }
@@ -565,10 +523,10 @@ impl OpenSprinkler {
     /// Immediately reset all stations
     ///
     /// No log records will be written
-    pub fn reset_all_stations_immediate(&mut self, program_data: &mut program::ProgramQueue) {
+    pub fn reset_all_stations_immediate(&mut self) {
         self.clear_all_station_bits();
         self.apply_all_station_bits();
-        program_data.reset_runtime();
+        self.state.program.queue.reset_runtime();
     }
 
     /// Check and process special program command
@@ -843,15 +801,11 @@ impl OpenSprinkler {
     /// Process dynamic events
     ///
     /// Processes events such as: Rain delay, rain sensing, station state changes, etc.
-    pub fn process_dynamic_events(&mut self, program_data: &mut program::ProgramQueue, now_seconds: i64) {
+    pub fn process_dynamic_events(&mut self, now_seconds: i64) {
         // Determine which rain/soil sensors are currently active
         let mut sn = [false; sensor::MAX_SENSORS];
         for i in 0..sensor::MAX_SENSORS {
-            /*let sensor_type = self.get_sensor_type(i).unwrap_or(sensor::SensorType::None);
-            sn[i] = (sensor_type == sensor::SensorType::Rain || sensor_type == sensor::SensorType::Rain) && self.status_current.sensors[i].active;*/
-            //if let Some(sensor_type) = self.get_sensor_type(i) {
             if let Some(sensor::SensorType::Rain) | Some(sensor::SensorType::Soil) = self.get_sensor_type(i) {
-                //sn[i] = (sensor_type == sensor::SensorType::Rain || sensor_type == sensor::SensorType::Rain) && self.sensor_status[i].active_now;
                 sn[i] = self.state.sensor.state(i);
             }
         }
@@ -865,13 +819,10 @@ impl OpenSprinkler {
                     continue;
                 }
 
-                // If this is a normal program (not a run-once or test program)
-                // and either the controller is disabled, or
-                // if raining and ignore rain bit is cleared
-                if let Some(qid) = program_data.station_qid[station_index] {
-                    let q = program_data.queue.get(qid).unwrap();
+                // If this is a normal program (not a run-once or test program) and either the controller is disabled, or if raining and ignore rain bit is cleared
+                if let Some(qid) = self.state.program.queue.station_qid[station_index] {
+                    let q = self.state.program.queue.queue.get(qid).unwrap();
 
-                    //if q.program_index >= program::TEST_PROGRAM_ID {
                     if q.program_index == program::ProgramStart::Test || q.program_index == program::ProgramStart::TestShort || q.program_index == program::ProgramStart::RunOnce {
                         // This is a manually started program, skip
                         continue;
@@ -879,18 +830,17 @@ impl OpenSprinkler {
 
                     // If system is disabled, turn off zone
                     if !self.config.enable_controller {
-                        controller::turn_off_station(self, program_data, now_seconds, station_index);
+                        controller::turn_off_station(self, now_seconds, station_index);
                     }
 
                     // if rain delay is on and zone does not ignore rain delay, turn it off
-                    //if self.status_current.rain_delayed && !self.config.stations[station_index].attrib.ignore_rain_delay {
                     if self.state.rain_delay.active_now && !self.config.stations[station_index].attrib.ignore_rain_delay {
-                        controller::turn_off_station(self, program_data, now_seconds, station_index);
+                        controller::turn_off_station(self, now_seconds, station_index);
                     }
 
                     for i in 0..sensor::MAX_SENSORS {
                         if sn[i] && !self.config.stations[station_index].attrib.ignore_sensor[i] {
-                            controller::turn_off_station(self, program_data, now_seconds, station_index);
+                            controller::turn_off_station(self, now_seconds, station_index);
                         }
                     }
                 }
