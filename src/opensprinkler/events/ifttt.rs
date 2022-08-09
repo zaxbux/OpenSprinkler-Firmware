@@ -1,8 +1,6 @@
 
 use crate::{utils::duration_to_hms, opensprinkler::program};
-use reqwest::Url;
 use serde::{Deserialize, Serialize};
-use serde_json::Result;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct EventConfig {
@@ -52,21 +50,19 @@ pub trait WebHookEvent {
 }
 
 pub trait WebHookEventPayload: WebHookEvent {
-    fn ifttt_url(&self, base: &str, key: &str) -> Url;
-    fn ifttt_payload_json(&self) -> Result<String>;
+    fn ifttt_url(&self, base: &str, key: &str) -> Result<reqwest::Url, url::ParseError>;
+    fn ifttt_payload_json(&self) -> serde_json::Result<String>;
 }
 
 impl<T> WebHookEventPayload for T
 where
     T: WebHookEvent,
 {
-    fn ifttt_url(&self, base: &str, key: &str) -> reqwest::Url {
-        let url = reqwest::Url::parse(format!("{}/trigger/{}/with/key/{}", base, self.ifttt_event(), key).as_str()).unwrap();
-
-        url
+    fn ifttt_url(&self, base: &str, key: &str) -> Result<reqwest::Url, url::ParseError> {
+        Ok(reqwest::Url::parse(format!("{}/trigger/{}/with/key/{}", base, self.ifttt_event(), key).as_str())?)
     }
 
-    fn ifttt_payload_json(&self) -> Result<String> {
+    fn ifttt_payload_json(&self) -> serde_json::Result<String> {
         let payload = WebHookPayload { value1: self.ifttt_payload() };
         serde_json::to_string(&payload)
     }

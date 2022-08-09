@@ -8,6 +8,9 @@ pub mod ifttt;
 #[cfg(feature = "mqtt")]
 pub mod mqtt;
 
+#[cfg(test)]
+mod tests;
+
 #[repr(u16)]
 #[derive(Copy, Clone)]
 pub enum NotifyEvent {
@@ -261,15 +264,16 @@ fn ifttt_webhook(event: &dyn ifttt::WebHookEventPayload, base: &str, key: &str)
     let body = event.ifttt_payload_json();
 
     if let Ok(body) = body {
-        let client = request::build_client().unwrap();
-        let response = client
-            .post(event.ifttt_url(base, key))
-            .header(header::CONTENT_TYPE, header::HeaderValue::from_static("application/json"))
-            .body(body)
-            .send();
+        if let Ok(url) = event.ifttt_url(base, key) {
+            let response = request::build_client().unwrap()
+                .post(url)
+                .header(header::CONTENT_TYPE, header::HeaderValue::from_static("application/json"))
+                .body(body)
+                .send();
 
-        if let Err(error) = response {
-            tracing::error!("Error making IFTTT Web Hook request: {:?}", error);
+            if let Err(error) = response {
+                tracing::error!("Error making IFTTT Web Hook request: {:?}", error);
+            }
         }
     }
 }
