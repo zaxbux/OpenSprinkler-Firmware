@@ -59,6 +59,12 @@ pub struct Location {
     lng: f32,
 }
 
+impl Location {
+    pub fn new(lat: f32, lng: f32) -> Self {
+        Self { lat, lng }
+    }
+}
+
 impl TryFrom<String> for Location {
     type Error = result::ParseLocationError;
 
