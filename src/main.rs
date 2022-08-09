@@ -167,12 +167,22 @@ fn main() {
                 open_sprinkler.check_program_switch_status();
             }
 
-            // since the granularity of start time is minute, we only need to check once every minute
+            
             if now_minute > last_minute {
                 last_minute = now_minute;
 
                 // Schedule program data
+                // since the granularity of start time is minute, we only need to check once every minute
                 scheduler::check_program_schedule(&mut open_sprinkler, now_seconds);
+
+                // STUN: Get external IP
+                if let Ok(Some(ip)) = open_sprinkler.get_external_ip() {
+                    if open_sprinkler.config.external_ip != Some(ip) {
+                        open_sprinkler.config.external_ip = Some(ip);
+                        open_sprinkler.config.write().unwrap();
+                        tracing::trace!("External IP: {}", ip);
+                    }
+                }
             }
 
             // ====== Run program data ======

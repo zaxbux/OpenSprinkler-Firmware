@@ -19,6 +19,7 @@ pub mod system;
 pub mod state;
 
 use std::cmp::max;
+use std::net::{ToSocketAddrs, self};
 use std::path::PathBuf;
 
 use self::http::request;
@@ -741,7 +742,7 @@ impl OpenSprinkler {
     pub fn rain_delay_start(&mut self) {
         self.state.rain_delay.active_previous = self.state.rain_delay.active_now;
         self.state.rain_delay.active_now = true;
-        self.config.write().unwrap();
+        //self.config.write().unwrap();
     }
 
     /// Stop rain delay
@@ -846,6 +847,16 @@ impl OpenSprinkler {
                 }
             }
         }
+    }
+
+    pub fn get_external_ip(&mut self) -> Result<Option<net::IpAddr>, stunclient::Error> {
+        if let Some(stun_server) = "openrelay.metered.ca:80".to_socket_addrs()?.filter(|x|x.is_ipv4()).next() {
+            let udp = net::UdpSocket::bind(net::SocketAddr::new(net::IpAddr::V4(net::Ipv4Addr::new(0, 0, 0, 0)), 0))?;
+            let client = stunclient::StunClient::new(stun_server);
+            return Ok(Some(client.query_external_address(&udp)?.ip()));
+        }
+
+        Ok(None)
     }
 }
 
