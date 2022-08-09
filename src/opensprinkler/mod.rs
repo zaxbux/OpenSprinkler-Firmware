@@ -437,22 +437,17 @@ impl OpenSprinkler {
         }
 
         // Check controller status changes and write log
-        //if self.status_last.rain_delayed != self.status_current.rain_delayed {
         if self.state.rain_delay.active_previous != self.state.rain_delay.active_now {
-            //if self.status_current.rain_delayed {
             if self.state.rain_delay.active_now {
                 // rain delay started, record time
                 self.state.rain_delay.timestamp_active_last = Some(now_seconds);
-                events::push_message(self, &events::RainDelayEvent::new(true));
             } else {
                 // rain delay stopped, write log
                 let _ = log::write_log_message(&self, &log::message::SensorMessage::new(log::LogDataType::RainDelay, now_seconds), now_seconds);
-                events::push_message(self, &events::RainDelayEvent::new(false));
             }
-            //events::push_message(&self, &events::RainDelayEvent::new(self.status_current.rain_delayed));
+            tracing::trace!("Rain Delay state changed {}", self.state.rain_delay.active_now);
             events::push_message(&self, &events::RainDelayEvent::new(self.state.rain_delay.active_now));
-            //self.status_last.rain_delayed = self.status_current.rain_delayed;
-            self.state.rain_delay.active_previous = self.state.rain_delay.active_now;
+            //self.state.rain_delay.active_previous = self.state.rain_delay.active_now;
         }
     }
 
@@ -786,12 +781,14 @@ impl OpenSprinkler {
 
     /// Start rain delay
     pub fn rain_delay_start(&mut self) {
+        self.state.rain_delay.active_previous = self.state.rain_delay.active_now;
         self.state.rain_delay.active_now = true;
         self.config.write().unwrap();
     }
 
     /// Stop rain delay
     pub fn rain_delay_stop(&mut self) {
+        self.state.rain_delay.active_previous = self.state.rain_delay.active_now;
         self.state.rain_delay.active_now = false;
         self.config.rain_delay_stop_time = None;
         self.config.write().unwrap();
