@@ -10,6 +10,7 @@ use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
+        Mutex,
     },
     thread,
 };
@@ -23,7 +24,6 @@ use opensprinkler::{
 };
 
 use crate::opensprinkler::{scheduler, config};
-#[cfg(not(feature = "demo"))]
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -114,6 +114,9 @@ fn main() {
     // Push reboot notification on startup
     events::push_message(&open_sprinkler, &events::RebootEvent::new(true));
 
+    let open_sprinkler = Mutex::new(open_sprinkler);
+    let open_sprinkler = Arc::new(open_sprinkler);
+
     // Time-keeping
     let mut now_seconds: i64;
     let mut last_seconds = 0;
@@ -124,8 +127,12 @@ fn main() {
     #[cfg(not(feature = "demo"))]
     let mut last_millis = 0;
 
+    let open_sprinkler = Arc::clone(&open_sprinkler);
+
     // Main loop
     while running.load(Ordering::SeqCst) {
+        
+        let mut open_sprinkler = open_sprinkler.lock().unwrap();
         // handle flow sensor using polling every 1ms (maximum freq 1/(2*1ms)=500Hz)
         #[cfg(not(feature = "demo"))]
         if open_sprinkler.is_flow_sensor_enabled() {
@@ -201,6 +208,8 @@ fn main() {
     }
 
     tracing::info!("Got Ctrl-C, exiting...");
+    let open_sprinkler = open_sprinkler.lock().unwrap();
+    #[cfg(feature = "mqtt")]
     if let Err(ref err) = open_sprinkler.mqtt.disconnect() {
         tracing::error!("MQTT disconnect error: {:?}", err)
     }

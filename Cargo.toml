@@ -46,6 +46,7 @@ clap = { version = "3.2.16", features = ["derive"] }
 url = "2.2.2"
 nix = { version = "0.24.2", features = ["fs", "reboot", "net", "time"] }
 mockito = "0.31.0"
+stunclient = "0.3.1"
 
 [dependencies.rppal]
 version = "0.13.1"

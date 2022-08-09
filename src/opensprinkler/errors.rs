@@ -29,6 +29,7 @@ impl fmt::Display for SetupError {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
     		SetupError::ConfigError(err) => write!(f, "Configuration error: {:?}", err),
+			#[cfg(feature = "mqtt")]
     		SetupError::MqttError(err) => write!(f, "MQTT error: {:?}", err),
 		}
 	}
