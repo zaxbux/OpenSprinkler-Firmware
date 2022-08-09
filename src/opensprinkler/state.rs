@@ -251,6 +251,7 @@ impl SensorStateVec {
 
 
 /// State for recording/logging realtime flow count
+#[derive(Debug)]
 pub struct FlowState {
     /// Flow count (initial)
     pub count_log_start: i64,
@@ -267,7 +268,7 @@ pub struct FlowState {
     /// time when valve turns off (last rising edge pulse detected before off)
     time_measure_stop: i64,
     /// total # of gallons+1 from flow_start to flow_stop
-    gallons: u64,
+    volume: u64,
 
     /// current flow count
     flow_count: i64,
@@ -276,11 +277,19 @@ pub struct FlowState {
 }
 
 impl FlowState {
+    #[cfg(not(test))]
+    const MIN_MILLIS: i64 = 90000;
+
+    #[cfg(test)]
+    const MIN_MILLIS: i64 = 0;
+
     pub fn poll(&mut self, logic_level: gpio::Level) {
-        if self.previous_logic_level.unwrap_or(gpio::Level::Low) == gpio::Level::Low && logic_level != gpio::Level::Low {
-            // only record on falling edge
-            self.previous_logic_level = Some(logic_level);
-            return;
+        if let Some(previous_logic_level) = self.previous_logic_level {
+            if !(previous_logic_level == gpio::Level::High && logic_level == gpio::Level::Low) {
+                // only record on falling edge
+                self.previous_logic_level = Some(logic_level);
+                return;
+            }
         }
         self.previous_logic_level = Some(logic_level);
         let now_millis = chrono::Utc::now().timestamp_millis();
@@ -289,21 +298,21 @@ impl FlowState {
         /* RAH implementation of flow sensor */
         if self.time_measure_start == 0 {
             // if first pulse, record time
-            self.gallons = 0;
+            self.volume = 0;
             self.time_measure_start = now_millis;
         }
-        if now_millis - self.time_measure_start < 90000 {
+        if now_millis - self.time_measure_start < Self::MIN_MILLIS {
             // wait 90 seconds before recording time_begin
-            self.gallons = 0;
+            self.volume = 0;
         } else {
-            if self.gallons == 1 {
+            if self.volume == 1 {
                 self.time_begin = now_millis;
             }
         }
         // get time in ms for stop
         self.time_measure_stop = now_millis;
         // increment gallon count for each poll
-        self.gallons += 1;
+        self.volume += 1;
     }
 
     /// Reset the current flow measurement state
@@ -312,24 +321,17 @@ impl FlowState {
     }
 
     /// last flow rate measured (averaged over flow_gallons) from last valve stopped (used to write to log file).
+    /// 
+    /// L/min
     pub fn measure(&mut self) -> f64 {
-        if self.gallons > 1 {
+        if self.volume > 1 {
             // RAH calculate GPM, 1 pulse per gallon
-
-            //if self.time_measure_stop <= self.time_measure_start {
-            if self.get_duration() <= 0 {
-                //self.flow_last_gpm = 0.0;
-                //return 0.0;
-            } else {
-                //self.flow_last_gpm = 60000.0 / (self.get_duration() as f64 / (self.gallons - 1) as f64);
-                return 60000.0 / (self.get_duration() as f64 / (self.gallons - 1) as f64);
+            if self.get_duration() > 0 {
+                return 60000.0 / (self.get_duration() as f64 / (self.volume - 1) as f64);
             }
-        } else {
-            // RAH if not one gallon (two pulses) measured then record 0 gpm
-            //self.flow_last_gpm = 0.0;
-            //return 0.0;
         }
 
+        // RAH if not one gallon (two pulses) measured then return 0 gpm
         return 0.0;
     }
 
@@ -348,7 +350,7 @@ impl Default for FlowState {
             time_begin: 0,
             time_measure_start: 0,
             time_measure_stop: 0,
-            gallons: 0,
+            volume: 0,
             flow_count: 0,
             previous_logic_level: None,
 
@@ -413,5 +415,42 @@ impl Default for ControllerState {
             reboot_request: false,
             reboot_timestamp: 0,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{thread, time::Duration};
+
+    use crate::opensprinkler::gpio;
+
+
+    /// Test Flow Pulse
+    /// 
+    /// Simulation:
+    /// - Sensor: 1L/pulse
+    /// - Duration: 10 seconds.
+    /// - Pulses: 50
+    /// - Total flow: 5L/s or 300L/min
+    #[test]
+    fn test_flow_state() {
+        let mut flow_state = super::FlowState::default();
+
+        let duration = 10;
+        let pulses = 50;
+        let sleep_dur = Duration::from_secs_f64(duration as f64 / pulses as f64);
+
+        for p in 0..pulses {
+            flow_state.poll(gpio::Level::Low);
+            flow_state.poll(gpio::Level::High);
+
+            thread::sleep(sleep_dur);
+
+            assert_eq!(flow_state.get_flow_count(), p + 1);
+        }
+
+        assert_eq!(flow_state.get_flow_count(), pulses, "Testing {} pulses", pulses);
+        assert_eq!(flow_state.get_duration() / 1000, duration, "Testing {}s duration", duration);
+        // todo: determine what the measurement value should be
     }
 }

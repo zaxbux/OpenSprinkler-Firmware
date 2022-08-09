@@ -134,7 +134,7 @@ pub struct RFStationData {
     pub timing: u16,
 }
 
-/// Remote station data structures - Must fit in STATION_SPECIAL_DATA_SIZE
+/// Remote station data structures
 ///
 /// @todo: Support for IPv6, string hostname, path, and custom password (or deprecate in favour of HTTP station type?)
 #[derive(Clone, Serialize, Deserialize)]
@@ -144,7 +144,7 @@ pub struct RemoteStationData {
     pub station_index: StationIndex,
 }
 
-/// GPIO station data structures - Must fit in STATION_SPECIAL_DATA_SIZE
+/// GPIO station data structures
 #[derive(Clone, Serialize, Deserialize)]
 pub struct GPIOStationData {
     /// GPIO Pin (BCM #)
@@ -164,7 +164,7 @@ impl GPIOStationData {
     }
 }
 
-/// HTTP station data structures - Must fit in STATION_SPECIAL_DATA_SIZE
+/// HTTP station data structures
 #[derive(Clone, Serialize, Deserialize)]
 pub struct HTTPStationData {
     pub uri: String,
@@ -235,4 +235,13 @@ pub fn default() -> Stations {
     }
 
     stations
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn test_try_from_station_data() {
+        todo!();
+    }
 }
