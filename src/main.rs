@@ -46,7 +46,7 @@ struct Args {
     reset: bool,
 }
 
-fn setup_tracing() {
+pub fn setup_tracing() {
     // a builder for `FmtSubscriber`.
     let subscriber = FmtSubscriber::builder()
         // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
