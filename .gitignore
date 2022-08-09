@@ -2,6 +2,7 @@ logs/**
 data/
 
 *.dat
+*.dat.test
 *.sh
 .vscode
 

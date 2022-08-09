@@ -88,6 +88,9 @@ impl Default for ProgramState {
     }
 }
 
+/// Rain Delay state
+/// 
+/// @todo: Use timestamp / config.stop_time instead of active flags
 pub struct RainDelayState {
     /// time when the most recent rain delay started (seconds)
     pub timestamp_active_last: Option<i64>,
