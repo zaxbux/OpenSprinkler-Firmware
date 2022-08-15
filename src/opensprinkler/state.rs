@@ -1,6 +1,6 @@
-use super::{gpio, sensor, station, weather, controller, program};
+use super::{gpio, sensor, station, weather, program};
 
-pub type StationBits = [bool; controller::SHIFT_REGISTER_LINES];
+pub type StationBits = [bool; station::SHIFT_REGISTER_LINES];
 
 
 #[derive(PartialEq)]
@@ -70,7 +70,7 @@ impl StationState {
 impl Default for StationState {
     fn default() -> Self {
         Self {
-            active: [[false; controller::SHIFT_REGISTER_LINES]; station::MAX_NUM_BOARDS],
+            active: [[false; station::SHIFT_REGISTER_LINES]; station::MAX_NUM_BOARDS],
             auto_refresh_next_index: station::MAX_NUM_STATIONS >> 1,
             auto_refresh_timestamp: 0,
         }

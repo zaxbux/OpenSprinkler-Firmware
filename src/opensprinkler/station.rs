@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::utils;
 
-use super::{controller, sensor};
+use super::sensor;
 
 pub type StationIndex = usize;
 
@@ -13,8 +13,11 @@ pub const MAX_EXT_BOARDS: usize = 24;
 /// maximum number of 8-zone boards including expanders
 pub const MAX_NUM_BOARDS: usize = 1 + MAX_EXT_BOARDS;
 
+/// Stations/Zones per board
+pub const SHIFT_REGISTER_LINES: usize = 8;
+
 /// maximum number of stations
-pub const MAX_NUM_STATIONS: usize = MAX_NUM_BOARDS * controller::SHIFT_REGISTER_LINES as usize;
+pub const MAX_NUM_STATIONS: usize = MAX_NUM_BOARDS * SHIFT_REGISTER_LINES as usize;
 
 pub const MAX_MASTER_STATIONS: usize = 2;
 

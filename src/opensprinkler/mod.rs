@@ -10,7 +10,6 @@ pub mod sensor;
 pub mod station;
 pub mod weather;
 
-pub mod controller;
 pub mod errors;
 #[cfg(feature = "mqtt")]
 mod mqtt;
@@ -221,7 +220,7 @@ impl OpenSprinkler {
     }
 
     pub fn get_station_count(&self) -> usize {
-        self.get_board_count() * controller::SHIFT_REGISTER_LINES
+        self.get_board_count() * station::SHIFT_REGISTER_LINES
     }
 
     pub fn is_station_running(&self, station_index: station::StationIndex) -> bool {
@@ -1007,8 +1006,8 @@ impl OpenSprinkler {
         }
 
         for board_index in 0..self.get_board_count() {
-            for line in 0..controller::SHIFT_REGISTER_LINES {
-                let station_index = board_index * controller::SHIFT_REGISTER_LINES + line;
+            for line in 0..station::SHIFT_REGISTER_LINES {
+                let station_index = board_index * station::SHIFT_REGISTER_LINES + line;
 
                 // Ignore master stations because they are handled separately
                 if self.is_master_station(station_index) {

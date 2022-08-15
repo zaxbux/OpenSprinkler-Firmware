@@ -1,6 +1,6 @@
 use crate::utils;
 
-use super::{controller, events, log, program, OpenSprinkler};
+use super::{events, log, program, OpenSprinkler, station};
 
 pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, now_seconds: i64) {
     // first, go through run time queue to assign queue elements to stations
@@ -22,7 +22,7 @@ pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, now_seconds: i64) {
     for board_index in 0..open_sprinkler.get_board_count() {
         //let bitvalue = open_sprinkler.station_bits[board_index];
         let board_active = open_sprinkler.state.station.active[board_index];
-        for s in 0..controller::SHIFT_REGISTER_LINES {
+        for s in 0..station::SHIFT_REGISTER_LINES {
             let station_index = board_index * 8 + s;
 
             // skip master station
