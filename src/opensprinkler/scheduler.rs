@@ -90,7 +90,7 @@ pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, now_seconds: i64) {
         open_sprinkler.state.program.busy = false;
         // log flow sensor reading if flow sensor is used
         if open_sprinkler.is_flow_sensor_enabled() {
-            open_sprinkler.write_log_message(log::message::FlowSenseMessage::new(open_sprinkler.get_flow_log_count(), now_seconds), now_seconds);
+            open_sprinkler.write_log_message(log::message::FlowSenseMessage::new(open_sprinkler.get_flow_log_count(), now_seconds));
             open_sprinkler.push_event(events::FlowSensorEvent::new(
                 open_sprinkler.get_flow_log_count(),
                 open_sprinkler.get_flow_pulse_rate(),

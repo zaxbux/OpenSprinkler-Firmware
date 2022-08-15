@@ -155,9 +155,9 @@ impl OpenSprinkler {
         }
     }
 
-    pub fn write_log_message<T: log::message::Message>(&self, message: T, now_seconds: i64) {
+    pub fn write_log_message<T: log::message::Message>(&self, message: T) {
         if self.is_logging_enabled() {
-            if let Err(ref err) = log::write_log_message(message, now_seconds) {
+            if let Err(ref err) = log::write_log_message(message) {
                 tracing::error!("Error writing log message: {:?}", err);
             }
         }
@@ -468,7 +468,7 @@ impl OpenSprinkler {
                         if self.is_flow_sensor_enabled() {
                             message.with_flow(flow_volume);
                         }
-                        self.write_log_message(message, now_seconds);
+                        self.write_log_message(message);
                         self.push_event(events::StationEvent::new(
                             station_index,
                             self.config.stations[station_index].name.clone(),
@@ -589,7 +589,7 @@ impl OpenSprinkler {
                 self.state.rain_delay.timestamp_active_last = Some(now_seconds);
             } else {
                 // rain delay stopped, write log
-                self.write_log_message(log::message::SensorMessage::new(log::LogDataType::RainDelay, now_seconds), now_seconds);
+                self.write_log_message(log::message::SensorMessage::new(log::LogDataType::RainDelay, now_seconds));
             }
             tracing::trace!("Rain Delay state changed {}", self.state.rain_delay.active_now);
             self.push_event(events::RainDelayEvent::new(self.state.rain_delay.active_now));

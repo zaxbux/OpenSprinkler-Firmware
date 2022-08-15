@@ -64,7 +64,7 @@ fn get_log_type_name(log_type: &LogDataType) -> &'static str {
     }
 }
 
-fn get_writer(timestamp: i64) -> Result<io::BufWriter<std::fs::File>, std::io::Error> {
+fn get_writer() -> Result<io::BufWriter<std::fs::File>, std::io::Error> {
     let mut log_path = PathBuf::from("./logs/");
 
     if !log_path.is_dir() {
@@ -72,7 +72,7 @@ fn get_writer(timestamp: i64) -> Result<io::BufWriter<std::fs::File>, std::io::E
     }
 
     // file name will be logs/xxxxx.tx where xxxxx is the day in epoch time
-    log_path.push((timestamp / T24H_SECS).to_string());
+    log_path.push(chrono::Utc::now().format("%Y%m%d").to_string());
     log_path.set_extension("txt");
 
     Ok(io::BufWriter::new(OpenOptions::new().create(true).append(true).open(log_path)?))
@@ -187,6 +187,6 @@ pub mod message {
     }
 }
 
-pub fn write_log_message<T: message::Message>(message: T, timestamp: i64) -> Result<usize, std::io::Error> {
-    get_writer(timestamp)?.write(&message.to_string().as_bytes())
+pub fn write_log_message<T: message::Message>(message: T) -> Result<usize, std::io::Error> {
+    get_writer()?.write(&message.to_string().as_bytes())
 }
