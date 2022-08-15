@@ -4,21 +4,12 @@ version = "0.0.1-alpha"
 edition = "2021"
 
 [features]
-default = ["demo", "ifttt"]
+default = ["ifttt", "mqtt", "station-rf", "station-gpio"]
 demo = []
 ifttt = []
 mqtt = ["paho-mqtt"]
 station-rf = []
 station-gpio = []
-
-[build]
-
-#[env]
-#JAVASCRIPT_URL = ""
-#WEATHER_SERVICE_URL = ""
-
-[target]
-rustc-env = {key = "value"}
 
 [build-dependencies]
 cmake = "0.1.48"
@@ -72,6 +63,6 @@ ruspiro-timer = { version = "0.6.0", features = ["pi4_low"] }
 paho-mqtt-sys = { path = "C:/Users/Zach/repos/github.com/paho.mqtt.rust/paho-mqtt-sys" }
 rppal = { path = "C:/Users/Zach/repos/github.com/zaxbux/rppal" }
 
-[target.'cfg(target_os = "linux")'.patch.crates-io]
-ruspiro-interrupt = { path = "/home/ospi/repos/ruspiro-interrupt/interrupt" }
-ruspiro-singleton = { path = "/home/ospi/repos/ruspiro-singleton" }
+# [target.'cfg(target_os = "linux")'.patch.crates-io]
+# ruspiro-interrupt = { path = "/home/ospi/repos/ruspiro-interrupt/interrupt" }
+# ruspiro-singleton = { path = "/home/ospi/repos/ruspiro-singleton" }
