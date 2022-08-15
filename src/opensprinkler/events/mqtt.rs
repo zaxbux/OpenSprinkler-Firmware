@@ -2,11 +2,10 @@ use core::fmt;
 use std::net::IpAddr;
 
 use serde::{Deserialize, Serialize};
-use serde_json::Result;
 extern crate paho_mqtt;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MQTTConfig {
+pub struct Config {
     pub enabled: bool,
     pub version: u32,
     /// Broker
@@ -21,9 +20,12 @@ pub struct MQTTConfig {
     pub availability_topic: String,
     pub offline_payload: String,
     pub online_payload: String,
+
+    /// Enabled events
+    pub events: super::EventsEnabled,
 }
 
-impl MQTTConfig {
+impl Config {
     const PROTOCOL_TCP: &'static str = "tcp";
     const PROTOCOL_SSL: &'static str = "tcp";
     const PROTOCOL_WS: &'static str = "ws";
@@ -45,9 +47,9 @@ impl MQTTConfig {
     }
 }
 
-impl Default for MQTTConfig {
+impl Default for Config {
     fn default() -> Self {
-        MQTTConfig {
+        Self {
             enabled: false,
             version: paho_mqtt::MQTT_VERSION_3_1_1,
             host: None,
@@ -60,11 +62,12 @@ impl Default for MQTTConfig {
             offline_payload: String::from("offline"),
             online_payload: String::from("online"),
 
+            events: super::EventsEnabled::default(),
         }
     }
 }
 
-impl fmt::Display for MQTTConfig {
+impl fmt::Display for Config {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self.uri())
     }
@@ -118,110 +121,102 @@ pub struct StationPayload {
     pub flow: Option<f64>,
 }
 
-pub trait Payload<P>
-where
-    P: serde::Serialize,
-{
+pub trait MqttEvent {
     fn mqtt_topic(&self) -> String;
-    fn mqtt_payload(&self) -> P;
+    fn mqtt_payload(&self) -> serde_json::Result<String>;
 }
 
-pub trait EventPayload<P>: Payload<P>
-where
-    P: serde::Serialize,
-{
-    fn mqtt_payload_json(&self) -> Result<String>;
-}
-
-impl<E, P> EventPayload<P> for E
-where
-    E: Payload<P> + super::EventType,
-    P: serde::Serialize,
-{
-    #[inline]
-    fn mqtt_payload_json(&self) -> Result<String> {
-        serde_json::to_string(&(self.mqtt_payload()))
-    }
-}
-
-impl Payload<ProgramSchedPayload> for super::ProgramStartEvent {
+impl MqttEvent for super::ProgramStartEvent {
     fn mqtt_topic(&self) -> String {
         String::from("program")
     }
 
-    fn mqtt_payload(&self) -> ProgramSchedPayload {
-        ProgramSchedPayload {
+    fn mqtt_payload(&self) -> serde_json::Result<String> {
+        serde_json::to_string(&ProgramSchedPayload {
             program_index: self.program_index,
             program_name: self.program_name.clone(),
             /* manual: self.manual, */
             water_scale: self.water_scale,
-        }
+        })
     }
 }
 
-impl Payload<BinarySensorPayload> for super::BinarySensorEvent {
+impl MqttEvent for super::BinarySensorEvent {
     fn mqtt_topic(&self) -> String {
         format!("sensor{}", self.index)
     }
 
-    fn mqtt_payload(&self) -> BinarySensorPayload {
-        BinarySensorPayload { state: self.state }
+    fn mqtt_payload(&self) -> serde_json::Result<String> {
+        serde_json::to_string(&BinarySensorPayload { state: self.state })
     }
 }
 
-impl Payload<FlowSensorPayload> for super::FlowSensorEvent {
+impl MqttEvent for super::FlowSensorEvent {
     fn mqtt_topic(&self) -> String {
         String::from("sensor/flow")
     }
 
-    fn mqtt_payload(&self) -> FlowSensorPayload {
-        FlowSensorPayload { count: self.count, volume: self.volume }
+    fn mqtt_payload(&self) -> serde_json::Result<String> {
+        serde_json::to_string(&FlowSensorPayload { count: self.count, volume: self.volume })
     }
 }
 
-impl Payload<WeatherUpdatePayload> for super::WeatherUpdateEvent {
+impl MqttEvent for super::WeatherUpdateEvent {
     fn mqtt_topic(&self) -> String {
         String::from("weather")
     }
 
-    fn mqtt_payload(&self) -> WeatherUpdatePayload {
-        WeatherUpdatePayload {
+    fn mqtt_payload(&self) -> serde_json::Result<String> {
+        serde_json::to_string(&WeatherUpdatePayload {
             scale: self.scale,
             external_ip: self.external_ip,
-        }
+        })
     }
 }
 
-impl Payload<BinarySensorPayload> for super::RebootEvent {
+impl MqttEvent for super::RebootEvent {
     fn mqtt_topic(&self) -> String {
         String::from("system")
     }
 
-    fn mqtt_payload(&self) -> BinarySensorPayload {
-        BinarySensorPayload { state: self.state }
+    fn mqtt_payload(&self) -> serde_json::Result<String> {
+        serde_json::to_string(&BinarySensorPayload { state: self.state })
     }
 }
 
-impl Payload<StationPayload> for super::StationEvent {
+impl MqttEvent for super::StationEvent {
     fn mqtt_topic(&self) -> String {
         format!("station/{}", self.station_index)
     }
 
-    fn mqtt_payload(&self) -> StationPayload {
-        StationPayload {
+    fn mqtt_payload(&self) -> serde_json::Result<String> {
+        serde_json::to_string(&StationPayload {
             state: self.state,
             duration: self.duration,
             flow: self.flow,
-        }
+        })
     }
 }
 
-impl Payload<RainDelayPayload> for super::RainDelayEvent {
+impl MqttEvent for super::RainDelayEvent {
     fn mqtt_topic(&self) -> String {
         String::from("raindelay")
     }
 
-    fn mqtt_payload(&self) -> RainDelayPayload {
-        RainDelayPayload { state: self.state }
+    fn mqtt_payload(&self) -> serde_json::Result<String> {
+        serde_json::to_string(&RainDelayPayload { state: self.state })
+    }
+}
+
+pub(super) trait PublishMqttMessage {
+    fn mqtt_publish<E: super::Event>(&self, config: &Config, event: &E) -> Result<(), serde_json::Error>;
+}
+
+impl PublishMqttMessage for super::Events {
+    fn mqtt_publish<E: super::Event>(&self, config: &Config, event: &E) -> Result<(), serde_json::Error> {
+        self.mqtt_client
+            .publish(paho_mqtt::MessageBuilder::new().topic(format!("{}/{}", config.root_topic, event.mqtt_topic())).payload(event.mqtt_payload()?).finalize());
+
+        Ok(())
     }
 }

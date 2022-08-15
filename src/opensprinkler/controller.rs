@@ -11,9 +11,8 @@ pub fn turn_on_station(open_sprinkler: &mut OpenSprinkler, station_index: statio
     //if open_sprinkler.set_station_bit(station_id, true) == StationBitChange::On {
     if open_sprinkler.state.station.set_active(station_index, true) == state::StationChange::Change(true) {
         let station_name = open_sprinkler.config.stations.get(station_index).unwrap().name.to_string();
-        events::push_message(
-            open_sprinkler,
-            &events::StationEvent {
+        open_sprinkler.push_event(
+            events::StationEvent {
                 station_index,
                 station_name,
                 state: true,
@@ -62,9 +61,8 @@ pub fn turn_off_station(open_sprinkler: &mut OpenSprinkler, now_seconds: i64, st
                     let _ = log::write_log_message(open_sprinkler, &message, now_seconds);
 
                     //let station_name = open_sprinkler.stations[station_id].name.clone();
-                    events::push_message(
-                        open_sprinkler,
-                        &events::StationEvent::new(
+                    open_sprinkler.push_event(
+                        events::StationEvent::new(
                             station_index,
                             open_sprinkler.config.stations[station_index].name.clone(),
                             false,

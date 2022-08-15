@@ -2,16 +2,25 @@ use mockito::mock;
 
 #[test]
 fn test_ifttt_webhook() {
-	let _m = mock("POST", "/trigger/sensor0/with/key/abc")
-            .with_status(200)
-			.with_body(serde_json::json!({
-				"value1": "Sensor 1 activated",
-			}).to_string())
-			.match_header("Content-Type", "application/json")
-			.expect(1)
-            .create();
+    let _m = mock("POST", "/trigger/sensor0/with/key/abc")
+        .with_status(200)
+        .with_body(
+            serde_json::json!({
+                "value1": "Sensor 1 activated",
+            })
+            .to_string(),
+        )
+        .match_header("Content-Type", "application/json")
+        .expect(1)
+        .create();
 
-	super::ifttt_webhook(&super::BinarySensorEvent::new(0, true), &mockito::server_url(), "abc");
+    let events = super::Events::new().expect("Error creating [Events]");
+    let mut config = super::config::Config::default();
+    config.ifttt.web_hooks_url = mockito::server_url();
+    config.ifttt.web_hooks_key = String::from("abc");
+	config.ifttt.events.sensor1 = true;
 
-	_m.assert();
+    assert!(events.push(&config, super::BinarySensorEvent::new(0, true)).is_ok());
+
+    _m.assert();
 }

@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 use std::{
     cmp::{max, min},
     collections,

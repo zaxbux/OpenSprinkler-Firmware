@@ -1,19 +1,19 @@
-use super::events::{self, mqtt::MQTTConfig};
+use super::events::{self, mqtt::Config};
 
 extern crate paho_mqtt as mqtt;
 
 #[derive(Clone)]
 pub struct Mqtt {
     client: Option<mqtt::AsyncClient>,
-    config: MQTTConfig,
+    config: Config,
 }
 
 impl Mqtt {
     pub fn new() -> Self {
-        Self { client: None, config: MQTTConfig::default() }
+        Self { client: None, config: Config::default() }
     }
 
-    pub fn setup(&mut self, config: &MQTTConfig) -> mqtt::errors::Result<()> {
+    pub fn setup(&mut self, config: &Config) -> mqtt::errors::Result<()> {
         self.config = config.clone();
 
         let client = mqtt::AsyncClient::new(Self::get_create_options().finalize())?;
@@ -27,7 +27,9 @@ impl Mqtt {
     }
 
     fn get_create_options() -> mqtt::CreateOptionsBuilder {
-        mqtt::CreateOptionsBuilder::new().client_id("OS")
+        mqtt::CreateOptionsBuilder::new()
+        .client_id("") // Cause the broker to assign a random client ID
+        .persistence(None) // [None] will cause filesystem-based persistence to be disabled
     }
 
     fn get_connect_options(&self) -> Option<mqtt::ConnectOptionsBuilder> {
@@ -36,7 +38,9 @@ impl Mqtt {
         let offline_message = mqtt::Message::new_retained(self.resolve_topic(&self.config.availability_topic), self.config.offline_payload.as_bytes(), 0);
 
         let mut builder = mqtt::ConnectOptionsBuilder::new();
-        builder.mqtt_version(self.config.version).clean_session(true).will_message(offline_message);
+        builder.mqtt_version(self.config.version)
+            .clean_session(true)
+            .will_message(offline_message);
 
         if let Some(uri) = self.config.uri() {
             builder.server_uris(&[uri]);
@@ -101,13 +105,12 @@ impl Mqtt {
         Ok(None)
     }
 
-    pub fn publish<E, S>(&self, event: &E) -> Result<Option<mqtt::DeliveryToken>, mqtt::Error>
+    pub fn publish<E>(&self, event: &E) -> Result<Option<mqtt::DeliveryToken>, mqtt::Error>
     where
-        E: events::Event<S>,
-        S: serde::Serialize,
+        E: events::Event,
     {
         if let Some(ref client) = self.client {
-            if let Ok(payload) = event.mqtt_payload_json() {
+            if let Ok(payload) = event.mqtt_payload() {
                 let tok = client.publish(mqtt::Message::new(self.resolve_topic(&event.mqtt_topic()), payload, 0));
                 return Ok(Some(tok));
             }

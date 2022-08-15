@@ -91,13 +91,10 @@ pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, now_seconds: i64) {
         // log flow sensor reading if flow sensor is used
         if open_sprinkler.is_flow_sensor_enabled() {
             let _ = log::write_log_message(&open_sprinkler, &log::message::FlowSenseMessage::new(open_sprinkler.get_flow_log_count(), now_seconds), now_seconds);
-            events::push_message(
-                &open_sprinkler,
-                &events::FlowSensorEvent::new(
-                    open_sprinkler.get_flow_log_count(),
-                    open_sprinkler.get_flow_pulse_rate(),
-                ),
-            );
+            open_sprinkler.push_event(events::FlowSensorEvent::new(
+                open_sprinkler.get_flow_log_count(),
+                open_sprinkler.get_flow_pulse_rate(),
+            ));
         }
     }
 }
@@ -163,10 +160,7 @@ pub fn check_program_schedule(open_sprinkler: &mut OpenSprinkler, now_seconds: i
             if match_found {
                 let program_name = program.name.clone();
                 tracing::trace!("Program {{id = {}, name = {}}} scheduled", program_index, program_name);
-                events::push_message(
-                    &open_sprinkler,
-                    &events::ProgramStartEvent::new(program_index, program_name, water_scale),
-                );
+                open_sprinkler.push_event(events::ProgramStartEvent::new(program_index, program_name, water_scale));
             }
         }
     }
@@ -250,7 +244,7 @@ pub fn manual_start_program(open_sprinkler: &mut OpenSprinkler, program_start: p
     };
 
     if let program::ProgramStart::User(index) = program_start {
-        events::push_message(open_sprinkler, &events::ProgramStartEvent::new(index, program.name,  water_scale));
+        open_sprinkler.push_event(events::ProgramStartEvent::new(index, program.name,  water_scale));
     }
 
     for station_index in 0..open_sprinkler.get_station_count() {

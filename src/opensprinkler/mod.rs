@@ -14,12 +14,12 @@ pub mod errors;
 #[cfg(feature = "mqtt")]
 mod mqtt;
 pub mod scheduler;
+pub mod state;
 #[cfg(target_os = "linux")]
 pub mod system;
-pub mod state;
 
 use std::cmp::max;
-use std::net::{ToSocketAddrs, self};
+use std::net::{self, ToSocketAddrs};
 use std::path::PathBuf;
 
 use self::http::request;
@@ -42,9 +42,7 @@ pub struct OpenSprinkler {
     pub config: config::Config,
     pub state: state::ControllerState,
     gpio: Option<gpio::Gpio>,
-
-    #[cfg(feature = "mqtt")]
-    pub mqtt: mqtt::Mqtt,
+    pub events: events::Events,
 }
 
 impl OpenSprinkler {
@@ -55,6 +53,7 @@ impl OpenSprinkler {
     pub fn with_config_path(config_path: PathBuf) -> Self {
         Self {
             config: config::Config::new(config_path),
+            events: events::Events::new().unwrap(),
             ..Self::default()
         }
     }
@@ -77,8 +76,7 @@ impl OpenSprinkler {
         #[cfg(not(feature = "demo"))]
         self.setup_gpio();
 
-        #[cfg(feature = "mqtt")]
-        self.mqtt.setup(&self.config.mqtt)?;
+        self.events.setup(&self.config);
 
         // Store the last reboot cause in memory and set the new cause
         self.config.last_reboot_cause = self.config.reboot_cause;
@@ -139,6 +137,20 @@ impl OpenSprinkler {
         }
     }
 
+    pub fn push_event<E: events::Event>(&self, event: E) {
+        if let Err(ref err) = self.events.push(&self.config, event) {
+            tracing::error!("MQTT Push Error: {:?}", err);
+        }
+    }
+
+    /// Starts the MQTT client if it is enabled, configured, and the network is connected.
+    #[cfg(feature = "mqtt")]
+    pub fn try_mqtt_connect(&self) {
+        if self.network_connected() && self.is_mqtt_enabled() && self.config.mqtt.uri().is_some() && !self.events.mqtt_client.is_connected() {
+            self.events.mqtt_client.connect(events::Events::mqtt_connect_options(&self.config.mqtt));
+        }
+    }
+
     // region: GETTERS
 
     /// Get the uptime of the system
@@ -155,11 +167,11 @@ impl OpenSprinkler {
     }
 
     pub fn is_mqtt_enabled(&self) -> bool {
-        #[cfg(feature = "mqtt")]
-        return self.config.mqtt.enabled;
-
-        #[cfg(not(feature = "mqtt"))]
-        return false;
+        if cfg!(feature = "mqtt") {
+            self.config.mqtt.enabled
+        } else {
+            false
+        }
     }
 
     pub fn is_remote_extension(&self) -> bool {
@@ -347,7 +359,7 @@ impl OpenSprinkler {
     /// Apply all station bits
     ///
     /// **This will actuate valves**
-    /// 
+    ///
     /// @todo verify original functionality
     pub fn apply_all_station_bits(&mut self) {
         #[cfg(not(feature = "demo"))]
@@ -450,7 +462,7 @@ impl OpenSprinkler {
                 let _ = log::write_log_message(&self, &log::message::SensorMessage::new(log::LogDataType::RainDelay, now_seconds), now_seconds);
             }
             tracing::trace!("Rain Delay state changed {}", self.state.rain_delay.active_now);
-            events::push_message(&self, &events::RainDelayEvent::new(self.state.rain_delay.active_now));
+            self.push_event(events::RainDelayEvent::new(self.state.rain_delay.active_now));
         }
     }
 
@@ -499,7 +511,7 @@ impl OpenSprinkler {
                     let message = log::message::SensorMessage::new(log::LogDataType::Sensor1, now_seconds);
                     let _ = log::write_log_message(&self, &message, now_seconds);
                 }
-                events::push_message(&self, &events::BinarySensorEvent::new(i, self.state.sensor.state(i)));
+                self.push_event(events::BinarySensorEvent::new(i, self.state.sensor.state(i)));
             }
             self.state.sensor.set_state_equal(i);
         }
@@ -675,7 +687,10 @@ impl OpenSprinkler {
 
         // @todo log request failures
         let client = request::build_client().unwrap();
-        let response = client.get(host).query(&http::request::RemoteStationRequestParametersV2_1_9::new(&self.config.device_key, data.station_index, value, timer)).send();
+        let response = client
+            .get(host)
+            .query(&http::request::RemoteStationRequestParametersV2_1_9::new(&self.config.device_key, data.station_index, value, timer))
+            .send();
 
         if let Err(error) = response {
             tracing::error!("[Remote Station] HTTP request error: {:?}", error);
@@ -850,7 +865,7 @@ impl OpenSprinkler {
     }
 
     pub fn get_external_ip(&mut self) -> Result<Option<net::IpAddr>, stunclient::Error> {
-        if let Some(stun_server) = "openrelay.metered.ca:80".to_socket_addrs()?.filter(|x|x.is_ipv4()).next() {
+        if let Some(stun_server) = "openrelay.metered.ca:80".to_socket_addrs()?.filter(|x| x.is_ipv4()).next() {
             let udp = net::UdpSocket::bind(net::SocketAddr::new(net::IpAddr::V4(net::Ipv4Addr::new(0, 0, 0, 0)), 0))?;
             let client = stunclient::StunClient::new(stun_server);
             return Ok(Some(client.query_external_address(&udp)?.ip()));
@@ -866,8 +881,18 @@ impl Default for OpenSprinkler {
             config: config::Config::default(),
             state: state::ControllerState::default(),
             gpio: None,
-            #[cfg(feature = "mqtt")]
-            mqtt: mqtt::Mqtt::new(),
+            events: events::Events::new().unwrap(),
+            /* #[cfg(feature = "mqtt")]
+            mqtt: mqtt::Mqtt::new(), */
         }
     }
 }
+
+/* impl Drop for OpenSprinkler {
+    fn drop(&mut self) {
+        #[cfg(feature = "mqtt")]
+        //if let Some(ref mqtt_client) = self.events.mqtt_client {
+        self.events.mqtt_client.disconnect(paho_mqtt::DisconnectOptionsBuilder::new().reason_code(paho_mqtt::ReasonCode::DisconnectWithWillMessage).finalize());
+        //}
+    }
+} */

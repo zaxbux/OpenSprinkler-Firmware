@@ -137,11 +137,12 @@ pub struct Config {
     pub sensors: [sensor::SensorConfig; sensor::MAX_SENSORS],
     /// Flow pulse rate (100x)
     pub flow_pulse_rate: u16,
-    /// Enabled IFTTT events
-    pub ifttt: ifttt::EventConfig,
+    /// Enabled events
+    #[cfg(feature = "ifttt")]
+    pub ifttt: ifttt::Config,
     /// MQTT config
     #[cfg(feature = "mqtt")]
-    pub mqtt: mqtt::MQTTConfig,
+    pub mqtt: mqtt::Config,
 
     /* Fields that are never serialized/deserialized */
     /// Config path
@@ -215,9 +216,9 @@ impl Default for Config {
             programs: Vec::new(),
             sensors: [sensor::SensorConfig::default(); sensor::MAX_SENSORS],
             flow_pulse_rate: 100,
-            ifttt: ifttt::EventConfig::default(),
+            ifttt: ifttt::Config::default(),
             #[cfg(feature = "mqtt")]
-            mqtt: mqtt::MQTTConfig::default(),
+            mqtt: mqtt::Config::default(),
 
             /* Fields that are never serialized/deserialized */
             path: PathBuf::from_str(CONFIG_FILE_PATH).unwrap(),

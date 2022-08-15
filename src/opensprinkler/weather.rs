@@ -373,7 +373,7 @@ fn parse_plain_response(open_sprinkler: &mut OpenSprinkler, params: HashMap<Stri
                     open_sprinkler.set_water_scale(scale);
                     open_sprinkler.config.write().unwrap();
 
-                    events::push_message(&open_sprinkler, &events::WeatherUpdateEvent::new(Some(scale), None));
+                    open_sprinkler.push_event(events::WeatherUpdateEvent::new(Some(scale), None));
 
                     tracing::trace!("Watering scale: {}", open_sprinkler.get_water_scale());
                 }
@@ -414,7 +414,7 @@ fn parse_plain_response(open_sprinkler: &mut OpenSprinkler, params: HashMap<Stri
                 // Only save if the value has changed
                 open_sprinkler.config.external_ip = Some(std::net::IpAddr::V4(eip));
                 save_nvdata = true;
-                events::push_message(&open_sprinkler, &events::WeatherUpdateEvent::new(Some(open_sprinkler.config.water_scale), None));
+                open_sprinkler.push_event(events::WeatherUpdateEvent::new(Some(open_sprinkler.config.water_scale), None));
 
                 tracing::trace!("External IP: {}", eip);
             }
@@ -484,7 +484,7 @@ fn parse_json_response(open_sprinkler: &mut OpenSprinkler, data: WeatherServiceR
             if scale <= WATER_SCALE_MAX && scale != open_sprinkler.get_water_scale() {
                 open_sprinkler.set_water_scale(scale);
 
-                events::push_message(open_sprinkler, &events::WeatherUpdateEvent::water_scale(scale));
+                open_sprinkler.push_event(events::WeatherUpdateEvent::water_scale(scale));
 
                 tracing::trace!("Watering scale: {}", open_sprinkler.get_water_scale());
             }
@@ -509,7 +509,7 @@ fn parse_json_response(open_sprinkler: &mut OpenSprinkler, data: WeatherServiceR
         if Some(external_ip) != open_sprinkler.config.external_ip {
             open_sprinkler.config.external_ip = Some(external_ip);
 
-            events::push_message(open_sprinkler, &events::WeatherUpdateEvent::external_ip(external_ip));
+            open_sprinkler.push_event(events::WeatherUpdateEvent::external_ip(external_ip));
 
             tracing::trace!("External IP: {}", open_sprinkler.config.external_ip.unwrap());
         }

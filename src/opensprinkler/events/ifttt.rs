@@ -1,40 +1,28 @@
-
-use crate::{utils::duration_to_hms, opensprinkler::program};
 use serde::{Deserialize, Serialize};
 
+use crate::{
+    opensprinkler::{http, program},
+    utils,
+};
+
 #[derive(Clone, Serialize, Deserialize)]
-pub struct EventConfig {
+pub struct Config {
     /// IFTTT Webhooks URL
     pub web_hooks_url: String,
 
     /// IFTTT Webhooks API key
-    pub web_hooks_key: Option<String>,
+    pub web_hooks_key: String,
 
-    pub program_start: bool,
-    pub sensor1: bool,
-    pub flow_sensor: bool,
-    pub weather_update: bool,
-    pub reboot: bool,
-    pub station_off: bool,
-    pub sensor2: bool,
-    pub rain_delay: bool,
-    pub station_on: bool,
+    /// Enabled events
+    pub events: super::EventsEnabled,
 }
 
-impl Default for EventConfig {
+impl Default for Config {
     fn default() -> Self {
-        EventConfig {
+        Self {
             web_hooks_url: String::from("https://maker.ifttt.com"),
-            web_hooks_key: None,
-            program_start: false,
-            sensor1: false,
-            flow_sensor: false,
-            weather_update: false,
-            reboot: false,
-            station_off: false,
-            sensor2: false,
-            rain_delay: false,
-            station_on: false,
+            web_hooks_key: String::from(""),
+            events: super::EventsEnabled::default(),
         }
     }
 }
@@ -44,33 +32,20 @@ pub struct WebHookPayload {
     value1: String,
 }
 
+impl WebHookPayload {
+    pub fn new(value1: String) -> Self {
+        Self { value1 }
+    }
+}
+
 pub trait WebHookEvent {
     fn ifttt_event(&self) -> String;
     fn ifttt_payload(&self) -> String;
 }
 
-pub trait WebHookEventPayload: WebHookEvent {
-    fn ifttt_url(&self, base: &str, key: &str) -> Result<reqwest::Url, url::ParseError>;
-    fn ifttt_payload_json(&self) -> serde_json::Result<String>;
-}
-
-impl<T> WebHookEventPayload for T
-where
-    T: WebHookEvent,
-{
-    fn ifttt_url(&self, base: &str, key: &str) -> Result<reqwest::Url, url::ParseError> {
-        Ok(reqwest::Url::parse(format!("{}/trigger/{}/with/key/{}", base, self.ifttt_event(), key).as_str())?)
-    }
-
-    fn ifttt_payload_json(&self) -> serde_json::Result<String> {
-        let payload = WebHookPayload { value1: self.ifttt_payload() };
-        serde_json::to_string(&payload)
-    }
-}
-
 impl WebHookEvent for super::ProgramStartEvent {
     fn ifttt_event(&self) -> String {
-        String::from("program")
+        "program".into()
     }
 
     fn ifttt_payload(&self) -> String {
@@ -159,7 +134,7 @@ impl WebHookEvent for super::StationEvent {
 
         if self.state == false && self.duration.is_some() {
             payload.push_str("It ran for ");
-            payload.push_str(duration_to_hms(self.duration.unwrap()).as_str());
+            payload.push_str(utils::duration_to_hms(self.duration.unwrap()).as_str());
         }
 
         if self.flow.is_some() {
@@ -180,5 +155,37 @@ impl WebHookEvent for super::RainDelayEvent {
             false => String::from("Rain delay deactivated."),
             true => String::from("Rain delay activated."),
         }
+    }
+}
+
+pub(super) trait SendIftttWebhook {
+    fn ifttt_webhook<E: super::Event>(&self, config: &Config, event: &E) -> super::result::Result<()>;
+}
+
+impl SendIftttWebhook for super::Events {
+    fn ifttt_webhook<E>(&self, config: &Config, event: &E) -> super::result::Result<()>
+    where
+        E: super::Event,
+    {
+        let body = serde_json::json!({
+            "value1": event.ifttt_payload(),
+        })
+        .to_string();
+
+        if let Ok(url) = reqwest::Url::parse(format!("{}/trigger/{}/with/key/{}", config.web_hooks_url, event.ifttt_event(), config.web_hooks_key).as_str()) {
+            let response = http::request::build_client()
+                .unwrap()
+                .post(url)
+                .header(reqwest::header::CONTENT_TYPE, reqwest::header::HeaderValue::from_static("application/json"))
+                .body(body)
+                .send();
+
+            if let Err(err) = response {
+                tracing::error!("Error making IFTTT Web Hook request: {:?}", err);
+                return Err(super::result::Error::IftttRequestError(err));
+            }
+        }
+
+        Ok(())
     }
 }

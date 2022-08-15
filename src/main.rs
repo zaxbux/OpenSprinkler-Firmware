@@ -15,6 +15,7 @@ use std::{
     thread,
 };
 use tracing_subscriber::FmtSubscriber;
+use tracing_log::LogTracer;
 
 use opensprinkler::{
     events,
@@ -48,13 +49,15 @@ struct Args {
 pub fn setup_tracing() {
     // a builder for `FmtSubscriber`.
     let subscriber = FmtSubscriber::builder()
-        // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
-        // will be written to stdout.
+        // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.) will be written to stdout.
         .with_max_level(tracing::Level::TRACE)
         // completes the builder.
         .finish();
 
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+
+    // Convert [log::Record] to [tracing::Event]
+    LogTracer::init().expect("Init log tracer failed");
 }
 
 fn main() {
@@ -111,8 +114,10 @@ fn main() {
         return;
     }
 
+    //open_sprinkler.events.setup(&open_sprinkler.config);
+
     // Push reboot notification on startup
-    events::push_message(&open_sprinkler, &events::RebootEvent::new(true));
+    open_sprinkler.push_event(events::RebootEvent::new(true));
 
     let open_sprinkler = Mutex::new(open_sprinkler);
     let open_sprinkler = Arc::new(open_sprinkler);
@@ -151,16 +156,11 @@ fn main() {
             last_seconds = now_seconds;
             now_minute = now_seconds / 60;
 
-            // Start MQTT when there is a network connection
             #[cfg(feature = "mqtt")]
-            if open_sprinkler.network_connected() && open_sprinkler.is_mqtt_enabled() && open_sprinkler.config.mqtt.uri().is_some() && !open_sprinkler.mqtt.is_connected() {
-                if let Some(token) = open_sprinkler.mqtt.connect() {
-                    tracing::debug!("MQTT connect response: {:?}", token.wait());
-                }
-            }
-
+            open_sprinkler.try_mqtt_connect();
             
             open_sprinkler.check_rain_delay_status(now_seconds);
+
             #[cfg(not(feature = "demo"))]
             {
                 open_sprinkler.check_binary_sensor_status(now_seconds);
@@ -218,9 +218,4 @@ fn main() {
     }
 
     tracing::info!("Got Ctrl-C, exiting...");
-    let open_sprinkler = open_sprinkler.lock().unwrap();
-    #[cfg(feature = "mqtt")]
-    if let Err(ref err) = open_sprinkler.mqtt.disconnect() {
-        tracing::error!("MQTT disconnect error: {:?}", err)
-    }
 }
