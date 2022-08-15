@@ -70,10 +70,12 @@ pub enum StationType {
     /// Standard station
     Standard = 0x00,
     /// RF station
+    #[cfg(feature = "station-rf")]
     RadioFrequency = 0x01,
     /// Remote OpenSprinkler station
     Remote = 0x02,
     /// GPIO station
+    #[cfg(feature = "station-gpio")]
     GPIO = 0x03,
     /// HTTP station
     HTTP = 0x04,
@@ -125,6 +127,7 @@ pub struct StationAttrib {
 
 /// RF station data structures
 #[derive(Clone, Serialize, Deserialize)]
+#[cfg(feature = "station-rf")]
 pub struct RFStationData {
     /// 24-bit value
     pub on: u32,
@@ -146,6 +149,7 @@ pub struct RemoteStationData {
 
 /// GPIO station data structures
 #[derive(Clone, Serialize, Deserialize)]
+#[cfg(feature = "station-gpio")]
 pub struct GPIOStationData {
     /// GPIO Pin (BCM #)
     pub pin: u8,
@@ -155,6 +159,7 @@ pub struct GPIOStationData {
     pub active: bool,
 }
 
+#[cfg(feature = "station-gpio")]
 impl GPIOStationData {
     pub fn active_level(&self) -> rppal::gpio::Level {
         match self.active {
@@ -174,12 +179,15 @@ pub struct HTTPStationData {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub enum SpecialStationData {
+    #[cfg(feature = "station-rf")]
     RF(RFStationData),
     REMOTE(RemoteStationData),
+    #[cfg(feature = "station-gpio")]
     GPIO(GPIOStationData),
     HTTP(HTTPStationData),
 }
 
+#[cfg(feature = "station-rf")]
 impl TryFrom<&SpecialStationData> for RFStationData {
     type Error = &'static str;
 
@@ -202,6 +210,7 @@ impl TryFrom<&SpecialStationData> for RemoteStationData {
     }
 }
 
+#[cfg(feature = "station-gpio")]
 impl TryFrom<&SpecialStationData> for GPIOStationData {
     type Error = &'static str;
 

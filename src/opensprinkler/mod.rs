@@ -4,6 +4,7 @@ pub mod gpio;
 mod http;
 pub mod log;
 pub mod program;
+#[cfg(feature = "station-rf")]
 mod rf;
 pub mod sensor;
 pub mod station;
@@ -645,6 +646,7 @@ impl OpenSprinkler {
     /// Switch Radio Frequency (RF) station
     ///
     /// This function takes an RF code, parses it into signals and timing, and sends it out through the RF transmitter.
+    #[cfg(feature = "station-rf")]
     fn switch_rf_station(&mut self, data: station::RFStationData, value: bool) {
         let code = if value { data.on } else { data.off };
 
@@ -656,6 +658,7 @@ impl OpenSprinkler {
     /// Switch GPIO station
     ///
     /// Special data for GPIO Station is three bytes of ascii decimal (not hex).
+    #[cfg(feature = "station-gpio")]
     fn switch_gpio_station(&self, data: station::GPIOStationData, value: bool) {
         tracing::trace!("[GPIO Station] pin: {} state: {}", data.pin, value);
 
@@ -720,8 +723,10 @@ impl OpenSprinkler {
     pub fn switch_special_station(&mut self, station_index: station::StationIndex, value: bool) {
         if let Some(station) = self.config.stations.get(station_index) {
             match station.station_type {
+                #[cfg(feature = "station-rf")]
                 station::StationType::RadioFrequency => self.switch_rf_station(station::RFStationData::try_from(station.sped.as_ref().unwrap()).unwrap(), value),
                 station::StationType::Remote => self.switch_remote_station(station::RemoteStationData::try_from(station.sped.as_ref().unwrap()).unwrap(), value),
+                #[cfg(feature = "station-gpio")]
                 station::StationType::GPIO => self.switch_gpio_station(station::GPIOStationData::try_from(station.sped.as_ref().unwrap()).unwrap(), value),
                 station::StationType::HTTP => self.switch_http_station(station::HTTPStationData::try_from(station.sped.as_ref().unwrap()).unwrap(), value),
                 _ => (), // Nothing to do for [StationType::Standard] and [StationType::Other]

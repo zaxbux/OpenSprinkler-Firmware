@@ -8,6 +8,8 @@ default = ["demo", "ifttt"]
 demo = []
 ifttt = []
 mqtt = ["paho-mqtt"]
+station-rf = []
+station-gpio = []
 
 [build]
 
