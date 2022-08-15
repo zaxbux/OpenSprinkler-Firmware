@@ -93,6 +93,12 @@ pub struct Station {
     pub sped: Option<SpecialStationData>,
 }
 
+impl Station {
+    pub fn is_sequential(&self) -> bool {
+        self.attrib.is_sequential
+    }
+}
+
 impl Default for Station {
     fn default() -> Self {
         Station {

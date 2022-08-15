@@ -114,8 +114,6 @@ fn main() {
         return;
     }
 
-    //open_sprinkler.events.setup(&open_sprinkler.config);
-
     // Push reboot notification on startup
     open_sprinkler.push_event(events::RebootEvent::new(true));
 
@@ -191,9 +189,8 @@ fn main() {
             if open_sprinkler.state.program.busy {
                 opensprinkler::scheduler::do_time_keeping(&mut open_sprinkler, now_seconds);
             }
-
-            opensprinkler::controller::activate_master_station(0, &mut open_sprinkler, now_seconds);
-            opensprinkler::controller::activate_master_station(1, &mut open_sprinkler, now_seconds);
+            
+            open_sprinkler.activate_master_stations(now_seconds);
 
             // Process dynamic events
             open_sprinkler.process_dynamic_events(now_seconds);

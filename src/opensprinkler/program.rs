@@ -9,7 +9,7 @@ use chrono::{Datelike, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
-use super::{log, station, OpenSprinkler};
+use super::{log, station};
 
 const SECS_PER_MIN: u32 = 60;
 const SECS_PER_HOUR: i64 = 3600;
@@ -83,12 +83,12 @@ impl Program {
     ///
     /// This also checks for programs that started the previous day and ran over night.
     /// @todo Test
-    pub fn check_match(&self, open_sprinkler: &OpenSprinkler, timestamp: i64) -> bool {
+    pub fn check_match(&self, sunrise_time: i16, sunset_time: i16, timestamp: i64) -> bool {
         if !self.enabled {
             return false;
         }
 
-        let start = self.start_time_decode(open_sprinkler, self.start_times[0]);
+        let start = self.start_time_decode(sunrise_time, sunset_time, self.start_times[0]);
         let repeat = self.start_times[1];
         let interval = self.start_times[2];
         let current_minute = i16::try_from((timestamp % 86400) / 60).unwrap();
@@ -98,7 +98,7 @@ impl Program {
             // t matches the program's start day
 
             for i in 0..MAX_NUM_START_TIMES {
-                if current_minute == self.start_time_decode(open_sprinkler, self.start_times[i]) {
+                if current_minute == self.start_time_decode(sunrise_time, sunset_time, self.start_times[i]) {
                     // if current_minute matches any of the given start times, return true
                     return true;
                 }
@@ -139,7 +139,7 @@ impl Program {
 
     /// Decode a sunrise/sunset start time to actual start time
     /// @todo Test
-    pub fn start_time_decode(&self, open_sprinkler: &OpenSprinkler, t: i16) -> i16 {
+    pub fn start_time_decode(&self, sunrise_time: i16, sunset_time: i16, t: i16) -> i16 {
         if (t >> 15) & 1 != 0 {
             return -1;
         }
@@ -152,10 +152,10 @@ impl Program {
 
         if (t >> START_TIME_SUNRISE_BIT) & 1 != 0 {
             // limit to 0
-            return max(0, open_sprinkler.get_sunrise_time() as i16 + offset);
+            return max(0, sunrise_time as i16 + offset);
         } else if (t >> START_TIME_SUNSET_BIT) & 1 != 0 {
             // limit to 1440
-            return min(1440, open_sprinkler.get_sunset_time() as i16 + offset);
+            return min(1440, sunset_time as i16 + offset);
         }
 
         return t;

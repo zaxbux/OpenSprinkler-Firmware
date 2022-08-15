@@ -23,7 +23,10 @@ use std::cmp::max;
 use std::net::{self, ToSocketAddrs};
 use std::path::PathBuf;
 
+use crate::utils;
+
 use self::http::request;
+use self::station::MAX_MASTER_STATIONS;
 
 /// Default reboot timer (seconds)
 pub const REBOOT_DELAY: i64 = 65;
@@ -47,15 +50,16 @@ pub struct OpenSprinkler {
 }
 
 impl OpenSprinkler {
-    pub fn new() -> OpenSprinkler {
+    pub fn new() -> Self {
         Self::default()
     }
 
     pub fn with_config_path(config_path: PathBuf) -> Self {
         Self {
             config: config::Config::new(config_path),
+            state: state::ControllerState::default(),
             events: events::Events::new().unwrap(),
-            ..Self::default()
+            gpio: None,
         }
     }
 
@@ -152,6 +156,14 @@ impl OpenSprinkler {
         }
     }
 
+    pub fn write_log_message<T: log::message::Message>(&self, message: T, now_seconds: i64) {
+        if self.is_logging_enabled() {
+            if let Err(ref err) = log::write_log_message(message, now_seconds) {
+                tracing::error!("Error writing log message: {:?}", err);
+            }
+        }
+    }
+
     // region: GETTERS
 
     /// Get the uptime of the system
@@ -239,16 +251,19 @@ impl OpenSprinkler {
         self.config.flow_pulse_rate
     }
 
-    /// Returns the index (0-indexed) of a master station
+    /// Returns a master station
+    /// @todo move into [config::Config]
     pub fn get_master_station(&self, i: usize) -> station::MasterStationConfig {
         self.config.master_stations[i]
     }
 
     /// Returns the index (0-indexed) of a master station
+    /// @todo move into [config::Config]
     pub fn get_master_station_index(&self, i: usize) -> Option<station::StationIndex> {
         self.config.master_stations[i].station
     }
 
+    /// @todo move into [config::Config]
     pub fn is_master_station(&self, station_index: station::StationIndex) -> bool {
         self.get_master_station_index(0) == Some(station_index) || self.get_master_station_index(1) == Some(station_index)
     }
@@ -262,14 +277,11 @@ impl OpenSprinkler {
         self.state.weather.checkwt_success_lasttime = Some(chrono::Utc::now().timestamp());
     }
 
-    pub fn start_flow_log_count(&mut self) {
-        self.state.flow.count_log_start = self.state.flow.get_flow_count();
-    }
-
     pub fn get_flow_log_count(&self) -> i64 {
         self.state.flow.get_flow_count() - self.state.flow.count_log_start
     }
 
+    /// @todo move into [config::Config]
     pub fn is_flow_sensor_enabled(&self) -> bool {
         self.get_sensor_type(0) == Some(sensor::SensorType::Flow)
     }
@@ -295,7 +307,7 @@ impl OpenSprinkler {
 
     fn program_pending_soon(&self, timestamp: i64) -> bool {
         for program in self.config.programs.iter() {
-            if program.check_match(self, timestamp) {
+            if program.check_match(self.get_sunrise_time() as i16, self.get_sunset_time() as i16, timestamp) {
                 return true;
             }
         }
@@ -310,14 +322,11 @@ impl OpenSprinkler {
 
     /// @todo Define primary interface e.g. `eth0` and check status (IFF_UP).
     pub fn network_connected(&self) -> bool {
-        if cfg!(feature = "demo") {
-            return true;
+        if cfg!(not(feature = "demo")) {
+            #[cfg(target_os = "linux")]
+            return system::is_interface_online("eth0");
         }
 
-        #[cfg(target_os = "linux")]
-        return system::is_interface_online("eth0");
-
-        // @hack default case
         return true;
     }
 
@@ -353,6 +362,127 @@ impl OpenSprinkler {
             } else if let Ok(pin) = sensor1_pin {
                 // Perform calculations using the current state of the sensor
                 self.state.flow.poll(pin.read());
+            }
+        }
+    }
+
+    /// This function loops through the queue and schedules the start time of each station
+    pub fn schedule_all_stations(&mut self, now_seconds: i64) {
+        tracing::trace!("Scheduling all stations");
+        let mut start_time_concurrent = now_seconds + 1; // concurrent start time
+        let mut start_time_sequential = start_time_concurrent; // sequential start time
+
+        let station_delay: i64 = utils::water_time_decode_signed(self.config.station_delay_time).into();
+
+        // if the sequential queue has stations running
+        if self.state.program.queue.last_seq_stop_time.unwrap_or(0) > now_seconds {
+            start_time_sequential = self.state.program.queue.last_seq_stop_time.unwrap_or(0) + station_delay;
+        }
+
+        /*for qi in 0..open_sprinkler.state.program.queue.queue.len() {
+        let mut q = &mut open_sprinkler.state.program.queue.queue[qi];*/
+        for q in self.state.program.queue.queue.iter_mut() {
+            // Skip if
+            // - this queue element has already been scheduled; or
+            // - if the element has been marked to reset
+            if q.start_time > 0 || q.water_time == 0 {
+                continue;
+            }
+
+            // if this is a sequential station and the controller is not in remote extension mode, use sequential scheduling. station delay time apples
+            if self.config.stations[q.station_index].is_sequential() && self.config.enable_remote_ext_mode
+            /* !open_sprinkler.is_remote_extension() */
+            {
+                // sequential scheduling
+                q.start_time = start_time_sequential;
+                // Update sequential start time for next station
+                start_time_sequential += q.water_time + station_delay;
+            } else {
+                // otherwise, concurrent scheduling
+                q.start_time = start_time_concurrent;
+                // stagger concurrent stations by 1 second
+                start_time_concurrent += 1;
+            }
+
+            if !self.state.program.busy {
+                self.state.program.busy = true;
+
+                // start flow count
+                //if open_sprinkler.is_flow_sensor_enabled() {
+                if self.config.sensors[0].sensor_type == Some(sensor::SensorType::Flow) { // if flow sensor is connected
+                    //self.start_flow_log_count();
+                    self.state.flow.count_log_start = self.state.flow.get_flow_count();
+                    self.state.sensor.set_timestamp_activated(0, Some(now_seconds));
+                }
+            }
+        }
+    }
+
+    /// Turn on a station
+    pub fn turn_on_station(&mut self, station_index: station::StationIndex) {
+        // RAH implementation of flow sensor
+        self.state.flow.reset();
+
+        if self.state.station.set_active(station_index, true) == state::StationChange::Change(true) {
+            let station_name = self.config.stations.get(station_index).unwrap().name.to_string();
+            self.push_event(events::StationEvent {
+                station_index,
+                station_name,
+                state: true,
+                duration: None,
+                flow: None,
+            });
+        }
+    }
+
+    /// Turn off a station
+    ///
+    /// Turns off a scheduled station, writes a log record, and pushes a notification event.
+    pub fn turn_off_station(&mut self, now_seconds: i64, station_index: station::StationIndex) {
+        //open_sprinkler.set_station_bit(station_index, false);
+        self.state.station.set_active(station_index, false);
+
+        if let Some(qid) = self.state.program.queue.station_qid[station_index] {
+            // ignore if we are turning off a station that is not running or is not scheduled to run
+            if let Some(q) = self.state.program.queue.queue.get(qid) {
+                // RAH implementation of flow sensor
+                let flow_volume = self.state.flow.measure();
+
+                // check if the current time is past the scheduled start time,
+                // because we may be turning off a station that hasn't started yet
+                if now_seconds > q.start_time {
+                    // record lastrun log (only for non-master stations)
+                    if !self.is_master_station(station_index) {
+                        let duration = now_seconds - q.start_time;
+
+                        // log station run
+                        let mut message = log::message::StationMessage::new(
+                            q.program_index,
+                            station_index,
+                            duration, // Maximum duration is 18 hours (64800 seconds), which fits into a [u16]
+                            now_seconds,
+                        );
+
+                        // Keep a copy for web
+                        self.state.program.queue.last_run = Some(message);
+
+                        if self.is_flow_sensor_enabled() {
+                            message.with_flow(flow_volume);
+                        }
+                        self.write_log_message(message, now_seconds);
+                        self.push_event(events::StationEvent::new(
+                            station_index,
+                            self.config.stations[station_index].name.clone(),
+                            false,
+                            Some(duration.into()),
+                            if self.is_flow_sensor_enabled() { Some(flow_volume) } else { None },
+                        ));
+                    }
+                }
+
+                // dequeue the element
+                self.state.program.queue.dequeue(qid);
+                self.state.program.queue.station_qid[station_index] = None;
             }
         }
     }
@@ -460,7 +590,7 @@ impl OpenSprinkler {
                 self.state.rain_delay.timestamp_active_last = Some(now_seconds);
             } else {
                 // rain delay stopped, write log
-                let _ = log::write_log_message(&self, &log::message::SensorMessage::new(log::LogDataType::RainDelay, now_seconds), now_seconds);
+                self.write_log_message(log::message::SensorMessage::new(log::LogDataType::RainDelay, now_seconds), now_seconds);
             }
             tracing::trace!("Rain Delay state changed {}", self.state.rain_delay.active_now);
             self.push_event(events::RainDelayEvent::new(self.state.rain_delay.active_now));
@@ -510,7 +640,7 @@ impl OpenSprinkler {
                     self.state.sensor.set_timestamp_activated(i, Some(now_seconds));
                 } else {
                     let message = log::message::SensorMessage::new(log::LogDataType::Sensor1, now_seconds);
-                    let _ = log::write_log_message(&self, &message, now_seconds);
+                    self.write_log_message(message, now_seconds);
                 }
                 self.push_event(events::BinarySensorEvent::new(i, self.state.sensor.state(i)));
             }
@@ -529,7 +659,7 @@ impl OpenSprinkler {
         for i in 0..sensor::MAX_SENSORS {
             if self.config.programs.len() > i {
                 // Program switch sensors start the same program index
-                scheduler::manual_start_program(self, program::ProgramStart::User(i), false);
+                self.manual_start_program(self, program::ProgramStart::User(i), false);
             }
         }
     }
@@ -643,6 +773,51 @@ impl OpenSprinkler {
         self.state.sensor.reset(None);
     }
 
+    pub fn activate_master_stations(&mut self, now_seconds: i64) {
+        for i in 0..MAX_MASTER_STATIONS {
+            self.activate_master_station(i, now_seconds);
+        }
+    }
+
+    /// Actuate master stations based on need
+    ///
+    /// This function iterates over all stations and activates the necessary "master" station.
+    fn activate_master_station(&mut self, master_station: usize, now_seconds: i64) {
+        let config = self.get_master_station(master_station);
+
+        if let Some(station_index_master) = config.station {
+            let adjusted_on = config.get_adjusted_on_time();
+            let adjusted_off = config.get_adjusted_off_time();
+
+            for station_index in 0..self.get_station_count() {
+                // skip if this is the master station
+                if station_index_master == station_index {
+                    continue;
+                }
+
+                // if this station is running and is set to activate master
+                if self.is_station_running(station_index) && self.config.stations[station_index].attrib.use_master[master_station] {
+                    if let Some(qid) = self.state.program.queue.station_qid[station_index] {
+                        if let Some(q) = self.state.program.queue.queue.get(qid) {
+                            // check if timing is within the acceptable range
+                            let start_time = q.start_time + adjusted_on;
+                            let stop_time = q.start_time + q.water_time + adjusted_off;
+                            if now_seconds >= start_time && now_seconds <= stop_time {
+                                self.state.station.set_active(station_index_master, true);
+                                return;
+                            }
+                        } else {
+                            panic!("This should not happen");
+                        }
+                    } else {
+                        panic!("This should not happen");
+                    }
+                }
+            }
+            self.state.station.set_active(station_index_master, false);
+        }
+    }
+
     /// Switch Radio Frequency (RF) station
     ///
     /// This function takes an RF code, parses it into signals and timing, and sends it out through the RF transmitter.
@@ -650,7 +825,7 @@ impl OpenSprinkler {
     fn switch_rf_station(&mut self, data: station::RFStationData, value: bool) {
         let code = if value { data.on } else { data.off };
 
-        if let Err(ref error) = rf::send_rf_signal(self, code.into(), data.timing.into()) {
+        if let Err(ref error) = rf::send_rf_signal(self.gpio.as_ref(), code.into(), data.timing.into()) {
             tracing::error!("[RF Station] Error: {:?}", error);
         }
     }
@@ -851,21 +1026,66 @@ impl OpenSprinkler {
 
                     // If system is disabled, turn off zone
                     if !self.config.enable_controller {
-                        controller::turn_off_station(self, now_seconds, station_index);
+                        self.turn_off_station(now_seconds, station_index);
                     }
 
                     // if rain delay is on and zone does not ignore rain delay, turn it off
                     if self.state.rain_delay.active_now && !self.config.stations[station_index].attrib.ignore_rain_delay {
-                        controller::turn_off_station(self, now_seconds, station_index);
+                        self.turn_off_station(now_seconds, station_index);
                     }
 
                     for i in 0..sensor::MAX_SENSORS {
                         if sn[i] && !self.config.stations[station_index].attrib.ignore_sensor[i] {
-                            controller::turn_off_station(self, now_seconds, station_index);
+                            self.turn_off_station(now_seconds, station_index);
                         }
                     }
                 }
             }
+        }
+    }
+
+    /// Manually start a program
+    pub fn manual_start_program(&mut self, program_start: program::ProgramStart, use_water_scale: bool) {
+        let mut match_found = false;
+        self.reset_all_stations_immediate();
+
+        let program = match program_start {
+            program::ProgramStart::Test => program::Program::test_program(60),
+            program::ProgramStart::TestShort => program::Program::test_program(2),
+            program::ProgramStart::RunOnce => todo!(),
+            program::ProgramStart::User(index) => self.config.programs[index].clone(),
+        };
+
+        let water_scale = if use_water_scale { self.config.water_scale } else { 1.0 };
+
+        if let program::ProgramStart::User(index) = program_start {
+            self.push_event(events::ProgramStartEvent::new(index, program.name, water_scale));
+        }
+
+        for station_index in 0..self.get_station_count() {
+            // skip if the station is a master station (because master cannot be scheduled independently
+            if self.is_master_station(station_index) {
+                continue;
+            }
+
+            let water_time = water_scale
+                * match program_start {
+                    program::ProgramStart::Test => 60.0,
+                    program::ProgramStart::TestShort => 2.0,
+                    program::ProgramStart::RunOnce => todo!(),
+                    program::ProgramStart::User(_) => utils::water_time_resolve(program.durations[station_index], self.get_sunrise_time(), self.get_sunset_time()),
+                };
+
+            //water_time = water_time * water_scale;
+
+            if water_time > 0.0 && !self.config.stations.get(station_index).unwrap().attrib.is_disabled {
+                if self.state.program.queue.enqueue(program::QueueElement::new(0, water_time as i64, station_index, program::ProgramStart::Test)).is_ok() {
+                    match_found = true;
+                }
+            }
+        }
+        if match_found {
+            self.schedule_all_stations(chrono::Utc::now().timestamp());
         }
     }
 
@@ -885,19 +1105,19 @@ impl Default for OpenSprinkler {
         Self {
             config: config::Config::default(),
             state: state::ControllerState::default(),
-            gpio: None,
             events: events::Events::new().unwrap(),
-            /* #[cfg(feature = "mqtt")]
-            mqtt: mqtt::Mqtt::new(), */
+            gpio: None,
         }
     }
 }
 
-/* impl Drop for OpenSprinkler {
+impl Drop for OpenSprinkler {
     fn drop(&mut self) {
         #[cfg(feature = "mqtt")]
-        //if let Some(ref mqtt_client) = self.events.mqtt_client {
-        self.events.mqtt_client.disconnect(paho_mqtt::DisconnectOptionsBuilder::new().reason_code(paho_mqtt::ReasonCode::DisconnectWithWillMessage).finalize());
-        //}
+        if self.events.mqtt_client.is_connected() {
+            self.events
+                .mqtt_client
+                .disconnect(paho_mqtt::DisconnectOptionsBuilder::new().reason_code(paho_mqtt::ReasonCode::DisconnectWithWillMessage).finalize());
+        }
     }
-} */
+}

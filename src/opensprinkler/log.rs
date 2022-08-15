@@ -7,8 +7,6 @@ use std::{
     path::PathBuf,
 };
 
-use super::OpenSprinkler;
-
 #[derive(PartialEq)]
 #[repr(u8)]
 pub enum LogDataType {
@@ -81,26 +79,12 @@ fn get_writer(timestamp: i64) -> Result<io::BufWriter<std::fs::File>, std::io::E
 }
 
 pub mod message {
-    use std::io::Write;
     use crate::opensprinkler::{station, program};
 
-    use super::{get_log_type_name, LogDataType, OpenSprinkler};
+    use super::{get_log_type_name, LogDataType};
 
     pub trait Message {
         fn to_string(&self) -> String;
-    }
-
-    pub trait Writable {
-        fn write(&self, open_sprinkler: &OpenSprinkler, curr_time: i64) -> Option<Result<usize, std::io::Error>>;
-    }
-
-    impl<T> Writable for T
-    where
-        T: Message,
-    {
-        fn write(&self, open_sprinkler: &OpenSprinkler, curr_time: i64) -> Option<Result<usize, std::io::Error>> {
-            open_sprinkler.is_logging_enabled().then(|| super::get_writer(curr_time)?.write(self.to_string().as_bytes()))
-        }
     }
 
     #[derive(Copy, Clone)]
@@ -203,8 +187,6 @@ pub mod message {
     }
 }
 
-pub fn write_log_message(open_sprinkler: &OpenSprinkler, message: &dyn message::Message, timestamp: i64) -> Result<(), std::io::Error> {
-    open_sprinkler.is_logging_enabled().then(|| get_writer(timestamp)?.write(message.to_string().as_bytes()));
-
-    Ok(())
+pub fn write_log_message<T: message::Message>(message: T, timestamp: i64) -> Result<usize, std::io::Error> {
+    get_writer(timestamp)?.write(&message.to_string().as_bytes())
 }

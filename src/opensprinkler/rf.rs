@@ -1,9 +1,6 @@
-#![allow(unused_variables)]
-
 use rppal::gpio;
 
 use crate::{
-    opensprinkler::OpenSprinkler,
     timer,
 };
 
@@ -17,11 +14,11 @@ fn transmit_rf_bit(pin: &mut gpio::OutputPin, len_h: u64, len_l: u64) {
 }
 
 /// Transmit RF signal
-pub fn send_rf_signal(open_sprinkler: &mut OpenSprinkler, code: u64, length: u64) -> gpio::Result<()> {
+pub fn send_rf_signal(gpio: Option<&gpio::Gpio>, code: u64, length: u64) -> gpio::Result<()> {
     let len3 = length * 3;
     let len31 = length * 31;
 
-    if let Some(ref gpio) = open_sprinkler.gpio {
+    if let Some(gpio) = gpio {
         let mut rf_tx = gpio.get(super::gpio::RF_TX).and_then(|pin| Ok(pin.into_output()))?;
 
         for _ in 0..15 {
