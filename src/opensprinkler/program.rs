@@ -9,7 +9,7 @@ use chrono::{Datelike, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
-use super::{log, station};
+use super::{data_log, station};
 
 const SECS_PER_MIN: u32 = 60;
 const SECS_PER_HOUR: i64 = 3600;
@@ -281,7 +281,7 @@ pub struct ProgramQueue {
     /// this array stores the queue element index for each scheduled station
     pub station_qid: [Option<usize>; station::MAX_NUM_STATIONS],
     /// Number of programs
-    pub last_run: Option<log::message::StationMessage>,
+    pub last_run: Option<data_log::StationData>,
     // the last stop time of a sequential station
     pub last_seq_stop_time: Option<i64>,
 }

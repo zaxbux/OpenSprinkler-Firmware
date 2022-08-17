@@ -2,7 +2,7 @@ pub mod config;
 pub mod events;
 pub mod gpio;
 mod http;
-pub mod log;
+pub mod data_log;
 pub mod program;
 #[cfg(feature = "station-rf")]
 mod rf;
@@ -46,6 +46,7 @@ pub struct OpenSprinkler {
     pub state: state::ControllerState,
     gpio: Option<gpio::Gpio>,
     pub events: events::Events,
+    data_logger: data_log::DataLogger,
 }
 
 impl OpenSprinkler {
@@ -59,6 +60,7 @@ impl OpenSprinkler {
             state: state::ControllerState::default(),
             events: events::Events::new().unwrap(),
             gpio: None,
+            data_logger: data_log::DataLogger::new("./logs"),
         }
     }
 
@@ -155,9 +157,9 @@ impl OpenSprinkler {
         }
     }
 
-    pub fn write_log_message<T: log::message::Message>(&self, message: T) {
+    pub fn write_log_message<T: data_log::LogData>(&self, message: T) {
         if self.is_logging_enabled() {
-            if let Err(ref err) = log::write_log_message(message) {
+            if let Err(ref err) = self.data_logger.write(message) {
                 tracing::error!("Error writing log message: {:?}", err);
             }
         }
@@ -455,7 +457,7 @@ impl OpenSprinkler {
                         let duration = now_seconds - q.start_time;
 
                         // log station run
-                        let mut message = log::message::StationMessage::new(
+                        let message = data_log::StationData::new(
                             q.program_index,
                             station_index,
                             duration, // Maximum duration is 18 hours (64800 seconds), which fits into a [u16]
@@ -466,7 +468,7 @@ impl OpenSprinkler {
                         self.state.program.queue.last_run = Some(message);
 
                         if self.is_flow_sensor_enabled() {
-                            message.with_flow(flow_volume);
+                            message.flow(flow_volume);
                         }
                         self.write_log_message(message);
                         self.push_event(events::StationEvent::new(
@@ -589,7 +591,7 @@ impl OpenSprinkler {
                 self.state.rain_delay.timestamp_active_last = Some(now_seconds);
             } else {
                 // rain delay stopped, write log
-                self.write_log_message(log::message::SensorMessage::new(log::LogDataType::RainDelay, now_seconds));
+                self.write_log_message(data_log::RainDelayData::new(now_seconds));
             }
             tracing::trace!("Rain Delay state changed {}", self.state.rain_delay.active_now);
             self.push_event(events::RainDelayEvent::new(self.state.rain_delay.active_now));
@@ -638,7 +640,7 @@ impl OpenSprinkler {
                 if self.state.sensor.state(i) {
                     self.state.sensor.set_timestamp_activated(i, Some(now_seconds));
                 } else {
-                    let message = log::message::SensorMessage::new(log::LogDataType::Sensor1, now_seconds);
+                    let message = data_log::SensorData::new(i, now_seconds);
                     self.write_log_message(message, now_seconds);
                 }
                 self.push_event(events::BinarySensorEvent::new(i, self.state.sensor.state(i)));
@@ -1106,6 +1108,7 @@ impl Default for OpenSprinkler {
             state: state::ControllerState::default(),
             events: events::Events::new().unwrap(),
             gpio: None,
+            data_logger: data_log::DataLogger::default(),
         }
     }
 }

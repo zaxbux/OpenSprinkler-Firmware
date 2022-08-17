@@ -2,7 +2,7 @@ pub mod algorithm;
 
 use crate::opensprinkler::{events, http::request};
 
-use super::{log, OpenSprinkler};
+use super::{data_log, OpenSprinkler};
 use core::fmt;
 use reqwest::{
     header::{HeaderValue, ACCEPT, CONTENT_TYPE},
@@ -463,7 +463,7 @@ fn parse_plain_response(open_sprinkler: &mut OpenSprinkler, params: HashMap<Stri
         open_sprinkler.config.write().unwrap();
     }
 
-    open_sprinkler.write_log_message(log::message::WaterLevelMessage::new(open_sprinkler.get_water_scale(), open_sprinkler.state.weather.checkwt_success_lasttime.unwrap_or(0)));
+    open_sprinkler.write_log_message(data_log::WaterScaleData::new(open_sprinkler.get_water_scale(), open_sprinkler.state.weather.checkwt_success_lasttime.unwrap_or(0)));
 }
 
 fn parse_json_response(open_sprinkler: &mut OpenSprinkler, data: WeatherServiceResponse) {
@@ -535,7 +535,7 @@ fn parse_json_response(open_sprinkler: &mut OpenSprinkler, data: WeatherServiceR
 
     open_sprinkler.config.write().unwrap();
 
-    open_sprinkler.write_log_message(log::message::WaterLevelMessage::new(open_sprinkler.get_water_scale(), open_sprinkler.state.weather.checkwt_success_lasttime.unwrap()));
+    open_sprinkler.write_log_message(data_log::WaterScaleData::new(open_sprinkler.get_water_scale(), open_sprinkler.state.weather.checkwt_success_lasttime.unwrap()));
 }
 
 #[cfg(test)]
