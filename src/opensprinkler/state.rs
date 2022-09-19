@@ -258,11 +258,11 @@ impl SensorStateVec {
 #[derive(Debug)]
 pub struct FlowState {
     /// Flow count (initial)
-    pub count_log_start: i64,
+    pub count_log_start: i32,
     /// Flow count
-    pub count_realtime_now: i64,
+    pub count_realtime_now: i32,
     /// Flow count
-    pub count_realtime_start: i64,
+    pub count_realtime_start: i32,
 
     /* Flow Rate */
     /// time when valve turns on
@@ -275,7 +275,7 @@ pub struct FlowState {
     volume: u64,
 
     /// current flow count
-    flow_count: i64,
+    flow_count: i32,
 
     previous_logic_level: Option<gpio::Level>,
 }
@@ -339,7 +339,7 @@ impl FlowState {
         return 0.0;
     }
 
-    pub fn get_flow_count(&self) -> i64 {
+    pub fn get_flow_count(&self) -> i32 {
         self.flow_count
     }
 
