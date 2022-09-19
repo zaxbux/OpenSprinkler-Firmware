@@ -50,6 +50,18 @@ pub fn water_time_resolve(water_time: u16, sunrise_time: u16, sunset_time: u16) 
     }
 }
 
+pub fn apply_bit_flag(flag: u8, position: usize, value: u8) -> u8 {
+    flag + (value << position)
+}
+
+pub fn get_bit_flag(flag: u8, position: usize, mask: u8) -> u8 {
+    (flag >> position) & mask
+}
+
+pub fn get_bit_flag_bool(flag: u8, position: usize) -> bool {
+    get_bit_flag(flag, position, 0x01) != 0
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
