@@ -15,7 +15,7 @@ pub fn set(config_set: Vec<String>, open_sprinkler: &mut OpenSprinkler) -> Resul
 			println!("Set weather.algorithm: {:?}", open_sprinkler.config.weather.algorithm);
 			Ok(())
 		},
-		#[cfg(feature = "mqtt")]
+		
 		"mqtt.enabled" => {
 			open_sprinkler.config.mqtt.enabled = match value.parse::<i32>().unwrap_or(0) {
 				0 => false,

@@ -1,4 +1,4 @@
-use super::events::{self, mqtt::Config};
+use super::events::{mqtt::Config, Event};
 
 extern crate paho_mqtt as mqtt;
 
@@ -105,13 +105,11 @@ impl Mqtt {
         Ok(None)
     }
 
-    pub fn publish<E>(&self, event: &E) -> Result<Option<mqtt::DeliveryToken>, mqtt::Error>
-    where
-        E: events::Event,
+    pub fn publish(&self, event: &dyn Event) -> Result<Option<mqtt::DeliveryToken>, mqtt::Error>
     {
         if let Some(ref client) = self.client {
-            if let Ok(payload) = event.mqtt_payload() {
-                let tok = client.publish(mqtt::Message::new(self.resolve_topic(&event.mqtt_topic()), payload, 0));
+            if let Ok(payload) = super::events::mqtt::MqttEvent::payload(event) {
+                let tok = client.publish(mqtt::Message::new(self.resolve_topic(&super::events::mqtt::MqttEvent::topic(event)), payload, 0));
                 return Ok(Some(tok));
             }
         }

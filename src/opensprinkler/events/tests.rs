@@ -20,7 +20,7 @@ fn test_ifttt_webhook() {
     config.ifttt.web_hooks_key = String::from("abc");
 	config.ifttt.events.sensor1 = true;
 
-    assert!(events.push(&config, super::BinarySensorEvent::new(0, true)).is_ok());
+    assert!(events.push(&config, &super::BinarySensorEvent::new(0, true, 0, None)).is_ok());
 
     _m.assert();
 }

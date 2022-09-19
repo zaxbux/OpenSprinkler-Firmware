@@ -1,6 +1,6 @@
 pub mod cli;
 
-use super::{program, sensor, station, weather};
+use super::{program, sensor, station, weather, events};
 use serde::{Deserialize, Serialize};
 use std::{
     fmt,
@@ -11,13 +11,10 @@ use std::{
     str::FromStr,
 };
 
-#[cfg(feature = "mqtt")]
-use crate::opensprinkler::events::mqtt;
-
-use crate::opensprinkler::events::ifttt;
+use crate::opensprinkler::events::{mqtt, ifttt};
 
 #[cfg(unix)]
-const CONFIG_FILE_PATH: &'static str = "/etc/opt/config.dat";
+const CONFIG_FILE_PATH: &'static str = "/etc/opt/opensprinkler/config.dat";
 
 #[cfg(not(unix))]
 const CONFIG_FILE_PATH: &'static str = "./config.dat";
@@ -31,6 +28,7 @@ pub enum HardwareVersionBase {
 }
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
+#[repr(u8)]
 pub enum RebootCause {
     /// None
     None = 0,
@@ -65,6 +63,21 @@ impl Location {
     }
 }
 
+impl TryFrom<&str> for Location {
+    type Error = result::ParseLocationError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        if let Some((lat, lng)) = value.split_once(',') {
+            return Ok(Location {
+                lat: f32::from_str(lat)?,
+                lng: f32::from_str(lng)?,
+            });
+        }
+
+        Err(result::ParseLocationError::Invalid)
+    }
+}
+
 impl TryFrom<String> for Location {
     type Error = result::ParseLocationError;
 
@@ -87,6 +100,19 @@ impl fmt::Display for Location {
     }
 }
 
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct EventsEnabled {
+    pub program_start: bool,
+    pub sensor1: bool,
+    pub flow_sensor: bool,
+    pub weather_update: bool,
+    pub reboot: bool,
+    pub station_off: bool,
+    pub sensor2: bool,
+    pub rain_delay: bool,
+    pub station_on: bool,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Config {
     /// firmware version
@@ -101,11 +127,15 @@ pub struct Config {
     pub enable_remote_ext_mode: bool,
     /// Enable logging
     pub enable_log: bool,
+    /// Event logging config
+    pub event_log: events::log::Config,
     /// Reboot Cause
     pub reboot_cause: RebootCause,
     /// Device key AKA password
     pub device_key: String,
     /// External IP Address
+    /// 
+    /// @todo move into state?
     pub external_ip: Option<IpAddr>,
     /// Javascript URL for the web app
     pub js_url: String,
@@ -137,11 +167,9 @@ pub struct Config {
     pub sensors: [sensor::SensorConfig; sensor::MAX_SENSORS],
     /// Flow pulse rate (100x)
     pub flow_pulse_rate: u16,
-    /// Enabled events
-    #[cfg(feature = "ifttt")]
+    /// IFTTT config
     pub ifttt: ifttt::Config,
     /// MQTT config
-    #[cfg(feature = "mqtt")]
     pub mqtt: mqtt::Config,
 
     /* Fields that are never serialized/deserialized */
@@ -177,15 +205,19 @@ impl Config {
     }
 
     pub fn write(&self) -> result::Result<()> {
-        tracing::debug!("Write: {:?}", self.path.canonicalize().unwrap_or(self.path.clone()));
+        let path = self.path.canonicalize().unwrap_or(self.path.clone());
+
+        tracing::debug!("write({:?}): {}", path, serde_json::to_string(self).unwrap());
         let buf = bson::to_vec(&self)?;
-        Ok(io::BufWriter::new(OpenOptions::new().write(true).create(true).open(&self.path)?).write_all(&buf)?)
+        Ok(io::BufWriter::new(OpenOptions::new().write(true).create(true).open(&path)?).write_all(&buf)?)
     }
 
     pub fn write_default(&self) -> result::Result<()> {
-        tracing::debug!("Write default: {:?}", self.path.canonicalize().unwrap_or(self.path.clone()));
+        let path = self.path.canonicalize().unwrap_or(self.path.clone());
+
+        tracing::debug!("Write default: {:?}", path);
         let buf = bson::to_vec(&Self::default())?;
-        Ok(io::BufWriter::new(OpenOptions::new().write(true).create(true).open(&self.path)?).write_all(&buf)?)
+        Ok(io::BufWriter::new(OpenOptions::new().write(true).create(true).truncate(true).open(&path)?).write_all(&buf)?)
     }
 }
 
@@ -198,10 +230,11 @@ impl Default for Config {
             enable_controller: true,
             enable_remote_ext_mode: false,
             enable_log: true,
+            event_log: events::log::Config::default(),
             reboot_cause: RebootCause::Reset,                              // If the config file does not exist, these defaults will be used. Therefore, this is the relevant reason.
             device_key: format!("{:x}", md5::compute(b"opendoor")).into(), // @todo Use modern hash like Argon2
             external_ip: None,
-            js_url: core::option_env!("JAVASCRIPT_URL").unwrap_or("https://ui.opensprinkler.com").into(),
+            js_url: core::option_env!("JAVASCRIPT_URL").unwrap_or("https://ui.opensprinkler.com/js").into(),
             location: Location::default(),
             timezone: 48, // UTC
             weather: weather::WeatherConfig::default(),
@@ -217,7 +250,6 @@ impl Default for Config {
             sensors: [sensor::SensorConfig::default(); sensor::MAX_SENSORS],
             flow_pulse_rate: 100,
             ifttt: ifttt::Config::default(),
-            #[cfg(feature = "mqtt")]
             mqtt: mqtt::Config::default(),
 
             /* Fields that are never serialized/deserialized */
@@ -249,6 +281,16 @@ pub mod result {
 
         #[non_exhaustive]
         DeserializationError(Arc<bson::de::Error>),
+    }
+
+    impl fmt::Display for Error {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                Error::Io(ref err) => write!(f, "IO Error: {:?}", err),
+                Error::SerializationError(ref err) => write!(f, "BSON Serialization Error: {:?}", err),
+                Error::DeserializationError(ref err) => write!(f, "BSON Deserialization Error: {:?}", err),
+            }
+        }
     }
 
     impl From<bson::ser::Error> for Error {

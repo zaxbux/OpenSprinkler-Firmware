@@ -2,7 +2,6 @@ pub mod config;
 pub mod events;
 pub mod gpio;
 mod http;
-pub mod data_log;
 pub mod program;
 #[cfg(feature = "station-rf")]
 mod rf;
@@ -11,7 +10,7 @@ pub mod station;
 pub mod weather;
 
 pub mod errors;
-#[cfg(feature = "mqtt")]
+
 mod mqtt;
 pub mod scheduler;
 pub mod state;
@@ -46,7 +45,6 @@ pub struct OpenSprinkler {
     pub state: state::ControllerState,
     gpio: Option<gpio::Gpio>,
     pub events: events::Events,
-    data_logger: data_log::DataLogger,
 }
 
 impl OpenSprinkler {
@@ -143,25 +141,17 @@ impl OpenSprinkler {
         }
     }
 
-    pub fn push_event<E: events::Event>(&self, event: E) {
+    pub fn push_event(&self, event: &dyn events::Event) {
         if let Err(ref err) = self.events.push(&self.config, event) {
             tracing::error!("MQTT Push Error: {:?}", err);
         }
     }
 
     /// Starts the MQTT client if it is enabled, configured, and the network is connected.
-    #[cfg(feature = "mqtt")]
+
     pub fn try_mqtt_connect(&self) {
         if self.network_connected() && self.is_mqtt_enabled() && self.config.mqtt.uri().is_some() && !self.events.mqtt_client.is_connected() {
             self.events.mqtt_client.connect(events::Events::mqtt_connect_options(&self.config.mqtt));
-        }
-    }
-
-    pub fn write_log_message<T: data_log::LogData>(&self, message: T) {
-        if self.is_logging_enabled() {
-            if let Err(ref err) = self.data_logger.write(message) {
-                tracing::error!("Error writing log message: {:?}", err);
-            }
         }
     }
 
@@ -181,11 +171,7 @@ impl OpenSprinkler {
     }
 
     pub fn is_mqtt_enabled(&self) -> bool {
-        if cfg!(feature = "mqtt") {
-            self.config.mqtt.enabled
-        } else {
-            false
-        }
+        self.config.mqtt.enabled
     }
 
     pub fn is_remote_extension(&self) -> bool {
@@ -426,13 +412,7 @@ impl OpenSprinkler {
 
         if self.state.station.set_active(station_index, true) == state::StationChange::Change(true) {
             let station_name = self.config.stations.get(station_index).unwrap().name.to_string();
-            self.push_event(events::StationEvent {
-                station_index,
-                station_name,
-                state: true,
-                duration: None,
-                flow: None,
-            });
+            self.push_event(&events::StationEvent::new(true, station_index, &station_name));
         }
     }
 
@@ -447,7 +427,7 @@ impl OpenSprinkler {
             // ignore if we are turning off a station that is not running or is not scheduled to run
             if let Some(q) = self.state.program.queue.queue.get(qid) {
                 // RAH implementation of flow sensor
-                let flow_volume = self.state.flow.measure();
+                let flow_volume = if self.is_flow_sensor_enabled() { Some(self.state.flow.measure()) } else { None };
 
                 // check if the current time is past the scheduled start time,
                 // because we may be turning off a station that hasn't started yet
@@ -456,28 +436,29 @@ impl OpenSprinkler {
                     if !self.is_master_station(station_index) {
                         let duration = now_seconds - q.start_time;
 
-                        // log station run
+                        /* // log station run
                         let message = data_log::StationData::new(
                             q.program_index,
                             station_index,
                             duration, // Maximum duration is 18 hours (64800 seconds), which fits into a [u16]
                             now_seconds,
-                        );
+                        ); */
+                        let event = events::StationEvent::new(false, station_index, &self.config.stations[station_index].name)
+                            .end_time(now_seconds)
+                            .duration(duration)
+                            .flow_volume(flow_volume)
+                            .program_index(q.program_index)
+                            .program_type(q.program_start_type);
 
                         // Keep a copy for web
-                        self.state.program.queue.last_run = Some(message);
+                        //self.state.program.queue.last_run = Some(message);
+                        self.state.program.queue.last_run = Some(event.clone());
 
-                        if self.is_flow_sensor_enabled() {
-                            message.flow(flow_volume);
+                        /* if self.is_flow_sensor_enabled() {
+                            message.flow(flow_volume.unwrap());
                         }
-                        self.write_log_message(message);
-                        self.push_event(events::StationEvent::new(
-                            station_index,
-                            self.config.stations[station_index].name.clone(),
-                            false,
-                            Some(duration.into()),
-                            if self.is_flow_sensor_enabled() { Some(flow_volume) } else { None },
-                        ));
+                        self.write_log_message(message); */
+                        self.push_event(&event);
                     }
                 }
 
@@ -589,12 +570,12 @@ impl OpenSprinkler {
             if self.state.rain_delay.active_now {
                 // rain delay started, record time
                 self.state.rain_delay.timestamp_active_last = Some(now_seconds);
-            } else {
-                // rain delay stopped, write log
-                self.write_log_message(data_log::RainDelayData::new(now_seconds));
-            }
+            } /*  else {
+                  // rain delay stopped, write log
+                  self.write_log_message(data_log::RainDelayData::new(now_seconds));
+              } */
             tracing::trace!("Rain Delay state changed {}", self.state.rain_delay.active_now);
-            self.push_event(events::RainDelayEvent::new(self.state.rain_delay.active_now));
+            self.push_event(&events::RainDelayEvent::new(self.state.rain_delay.active_now, now_seconds, self.state.rain_delay.timestamp_active_last));
         }
     }
 
@@ -640,10 +621,10 @@ impl OpenSprinkler {
                 if self.state.sensor.state(i) {
                     self.state.sensor.set_timestamp_activated(i, Some(now_seconds));
                 } else {
-                    let message = data_log::SensorData::new(i, now_seconds);
-                    self.write_log_message(message, now_seconds);
+                    /*let message = data_log::SensorData::new(i, now_seconds);
+                    self.write_log_message(message, now_seconds);*/
                 }
-                self.push_event(events::BinarySensorEvent::new(i, self.state.sensor.state(i)));
+                self.push_event(events::BinarySensorEvent::new(i, self.state.sensor.state(i), now_seconds, self.state.sensor.timestamp_activated(i)));
             }
             self.state.sensor.set_state_equal(i);
         }
@@ -1108,14 +1089,12 @@ impl Default for OpenSprinkler {
             state: state::ControllerState::default(),
             events: events::Events::new().unwrap(),
             gpio: None,
-            data_logger: data_log::DataLogger::default(),
         }
     }
 }
 
 impl Drop for OpenSprinkler {
     fn drop(&mut self) {
-        #[cfg(feature = "mqtt")]
         if self.events.mqtt_client.is_connected() {
             self.events
                 .mqtt_client

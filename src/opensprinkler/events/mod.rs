@@ -1,288 +1,312 @@
-use serde::{Deserialize, Serialize};
-use std::{
-    net::IpAddr
-};
+use super::{config, program, station};
+use std::any::Any;
+use std::fs;
+use std::io;
+use std::net;
 
-use super::{config, station};
-
-#[cfg(feature = "ifttt")]
+pub mod result;
 pub mod ifttt;
-#[cfg(feature = "ifttt")]
-use ifttt::SendIftttWebhook;
-
-#[cfg(feature = "mqtt")]
 pub mod mqtt;
-#[cfg(feature = "mqtt")]
-use mqtt::PublishMqttMessage;
+
+pub mod legacy;
+pub mod log;
+use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 mod tests;
 
-#[repr(u16)]
-#[derive(Copy, Clone)]
-pub enum EventType {
-    ProgramStart = 0x0001,
-    Sensor1 = 0x0002,
-    FlowSensor = 0x0004,
-    WeatherUpdate = 0x0008,
-    Reboot = 0x0010,
-    StationOff = 0x0020,
-    Sensor2 = 0x0040,
-    RainDelay = 0x0080,
-    StationOn = 0x0100,
-}
+pub type Timestamp = chrono::DateTime<chrono::Utc>;
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
-pub struct EventsEnabled {
-    pub program_start: bool,
-    pub sensor1: bool,
-    pub flow_sensor: bool,
-    pub weather_update: bool,
-    pub reboot: bool,
-    pub station_off: bool,
-    pub sensor2: bool,
-    pub rain_delay: bool,
-    pub station_on: bool,
-}
+pub trait Event: legacy::LogEvent + ifttt::WebHookEvent + mqtt::MqttEvent + Any {}
 
-impl EventsEnabled {
-    pub fn is_enabled<E>(&self, event: &E) -> bool
-    where
-        E: Event,
-    {
-        match event.event_type() {
-            EventType::ProgramStart => self.program_start,
-            EventType::Sensor1 => self.sensor1,
-            EventType::FlowSensor => self.flow_sensor,
-            EventType::WeatherUpdate => self.weather_update,
-            EventType::Reboot => self.reboot,
-            EventType::StationOff => self.station_off,
-            EventType::Sensor2 => self.sensor2,
-            EventType::RainDelay => self.rain_delay,
-            EventType::StationOn => self.station_on,
-        }
-    }
-}
-
-#[cfg(not(any(feature = "ifttt", feature = "mqtt")))]
-pub trait Event: Send {
-    fn event_type(&self) -> EventType;
-}
-
-#[cfg(all(feature = "ifttt", not(feature = "mqtt")))]
-pub trait Event: Send + ifttt::WebHookEvent {
-    fn event_type(&self) -> EventType;
-}
-
-#[cfg(all(feature = "mqtt", not(feature = "ifttt")))]
-pub trait Event: Send + mqtt::MqttEvent {
-    fn event_type(&self) -> EventType;
-}
-
-#[cfg(all(feature = "mqtt", feature = "ifttt"))]
-pub trait Event: Send + mqtt::MqttEvent + ifttt::WebHookEvent {
-    fn event_type(&self) -> EventType;
-}
-
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProgramStartEvent {
-    pub program_index: usize,
-    pub program_name: String,
-    /* pub manual: bool, */
-    pub water_scale: f32,
+    pub program_index: Option<usize>,
+    pub program_name: Option<String>,
+    pub water_scale: Option<f32>,
 }
 
 impl ProgramStartEvent {
-    pub fn new(program_index: usize, program_name: String, /*manual: bool,*/ water_scale: f32) -> ProgramStartEvent {
+    pub fn new(program_index: usize, program_name: String, water_scale: f32) -> ProgramStartEvent {
         ProgramStartEvent {
-            program_index,
-            program_name,
-            /*manual,*/
-            water_scale,
+            program_index: Some(program_index),
+            program_name: Some(program_name),
+            water_scale: Some(water_scale),
         }
     }
 }
 
-impl Event for ProgramStartEvent {
-    fn event_type(&self) -> EventType {
-        EventType::ProgramStart
-    }
-}
+impl Event for ProgramStartEvent {}
 
+#[serde_with::serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BinarySensorEvent {
-    index: usize,
+    #[serde_as(as = "Option<serde_with::DurationSeconds<i64>>")]
+    pub duration: Option<chrono::Duration>,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    pub index: usize,
     pub state: bool,
 }
 
 impl BinarySensorEvent {
-    pub fn new(index: usize, state: bool) -> BinarySensorEvent {
-        BinarySensorEvent { index, state }
-    }
-}
-
-impl Event for BinarySensorEvent {
-    fn event_type(&self) -> EventType {
-        match self.index {
-            0 => EventType::Sensor1,
-            1 => EventType::Sensor2,
-            _ => unimplemented!(),
+    pub fn new(index: usize, state: bool, timestamp_now: i64, timestamp_last: Option<i64>) -> Self {
+        Self {
+            duration: timestamp_last.map(|t| chrono::Duration::seconds(timestamp_now - t)),
+            timestamp: chrono::DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(timestamp_now, 0), chrono::Utc),
+            index,
+            state,
         }
     }
+
+    pub fn duration(mut self, duration: chrono::Duration) -> Self {
+        self.duration = Some(duration);
+        self
+    }
 }
 
+impl Event for BinarySensorEvent {}
+
+#[serde_with::serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FlowSensorEvent {
-    pub count: i64,
+    #[serde_as(as = "Option<serde_with::DurationSeconds<i64>>")]
+    pub duration: Option<chrono::Duration>,
+    pub end: chrono::DateTime<chrono::Utc>,
+    pub count: i32,
     pub volume: f64,
 }
 
 impl FlowSensorEvent {
-    pub fn new(count: i64, pulse_rate: u16) -> FlowSensorEvent {
-        FlowSensorEvent {
+    pub fn new(count: i32, pulse_rate: u16) -> Self {
+        Self {
+            duration: None,
+            end: chrono::Utc::now(),
             count,
-            volume: count as f64 * f64::from(pulse_rate),
+            volume: f64::from(count * pulse_rate as i32),
         }
     }
-}
 
-impl Event for FlowSensorEvent {
-    fn event_type(&self) -> EventType {
-        EventType::FlowSensor
+    pub fn duration(&mut self, duration: chrono::Duration) -> &mut Self {
+        self.duration = Some(duration);
+        self
+    }
+
+    pub fn end(&mut self, end: chrono::DateTime<chrono::Utc>) -> &mut Self {
+        self.end = end;
+        self
     }
 }
 
-pub struct WeatherUpdateEvent {
-    pub scale: Option<f32>,
-    pub external_ip: Option<IpAddr>,
+impl Event for FlowSensorEvent {}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WaterScaleChangeEvent {
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    pub scale: f32,
 }
 
-impl WeatherUpdateEvent {
-    pub fn new(scale: Option<f32>, external_ip: Option<IpAddr>) -> WeatherUpdateEvent {
-        WeatherUpdateEvent { scale, external_ip }
-    }
-
-    pub fn water_scale(scale: f32) -> Self {
-        WeatherUpdateEvent { scale: Some(scale), external_ip: None }
-    }
-
-    pub fn external_ip(external_ip: IpAddr) -> Self {
-        WeatherUpdateEvent { scale: None, external_ip: Some(external_ip) }
+impl WaterScaleChangeEvent {
+    pub fn new(scale: f32, timestamp: chrono::DateTime<chrono::Utc>) -> Self {
+        Self { timestamp, scale }
     }
 }
 
-impl Event for WeatherUpdateEvent {
-    fn event_type(&self) -> EventType {
-        EventType::WeatherUpdate
+impl Event for WaterScaleChangeEvent {}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IpAddrChangeEvent {
+    pub addr: net::IpAddr,
+}
+
+impl IpAddrChangeEvent {
+    pub fn new(addr: net::IpAddr) -> Self {
+        Self { addr }
     }
 }
 
+impl Event for IpAddrChangeEvent {}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RebootEvent {
     pub state: bool,
 }
 
 impl RebootEvent {
-    pub fn new(state: bool) -> RebootEvent {
-        RebootEvent { state }
+    pub fn new(state: bool) -> Self {
+        Self { state }
     }
 }
 
-impl Event for RebootEvent {
-    fn event_type(&self) -> EventType {
-        EventType::Reboot
-    }
-}
+impl Event for RebootEvent {}
 
+#[serde_with::serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StationEvent {
+    #[serde_as(as = "Option<serde_with::DurationSeconds<i64>>")]
+    pub duration: Option<chrono::Duration>,
+    pub state: bool,
+    pub flow_volume: Option<f64>,
     pub station_index: station::StationIndex,
     pub station_name: String,
-    pub state: bool,
-    pub duration: Option<i64>,
-    pub flow: Option<f64>,
+    pub program_type: Option<program::ProgramStartType>,
+    pub program_index: Option<usize>,
+    pub program_name: Option<String>,
+    pub end_time: Option<i64>,
 }
 
 impl StationEvent {
-    pub fn new(station_index: station::StationIndex, station_name: String, state: bool, duration: Option<i64>, flow: Option<f64>) -> StationEvent {
-        StationEvent {
-            station_index,
-            station_name,
+    pub fn new(state: bool, station_index: station::StationIndex, station_name: &str) -> Self {
+        Self {
+            duration: None,
             state,
-            duration,
-            flow,
+            flow_volume: None,
+            station_index,
+            station_name: station_name.into(),
+            program_type: None,
+            program_index: None,
+            program_name: None,
+            end_time: None,
         }
+    }
+
+    pub fn duration(mut self, duration: i64) -> Self {
+        self.duration = Some(chrono::Duration::seconds(duration));
+        self
+    }
+
+    pub fn flow_volume(mut self, flow_volume: Option<f64>) -> Self {
+        self.flow_volume = flow_volume;
+        self
+    }
+
+    pub fn program_type(mut self, program_type: program::ProgramStartType) -> Self {
+        self.program_type = Some(program_type);
+        self
+    }
+
+    pub fn program_index(mut self, program_index: Option<usize>) -> Self {
+        self.program_index = program_index;
+        self
+    }
+
+    pub fn program_name(mut self, program_name: String) -> Self {
+        self.program_name = Some(program_name);
+        self
+    }
+
+    pub fn end_time(mut self, end_time: i64) -> Self {
+        self.end_time = Some(end_time);
+        self
     }
 }
 
-impl Event for StationEvent {
-    fn event_type(&self) -> EventType {
-        if self.state {
-            EventType::StationOn
-        } else {
-            EventType::StationOff
-        }
-    }
-}
+impl Event for StationEvent {}
 
+#[serde_with::serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RainDelayEvent {
+    #[serde_as(as = "Option<serde_with::DurationSeconds<i64>>")]
+    pub duration: Option<chrono::Duration>,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
     pub state: bool,
 }
 
 impl RainDelayEvent {
-    pub fn new(state: bool) -> RainDelayEvent {
-        RainDelayEvent { state }
+    pub fn new(state: bool, timestamp_now: i64, timestamp_last: Option<i64>) -> Self {
+
+        Self {
+            duration: timestamp_last.map(|t| chrono::Duration::seconds(timestamp_now - t)),
+            timestamp: chrono::DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(timestamp_now, 0), chrono::Utc),
+            state,
+        }
     }
 }
 
-impl Event for RainDelayEvent {
-    fn event_type(&self) -> EventType {
-        EventType::RainDelay
-    }
-}
+impl Event for RainDelayEvent {}
 
 pub struct Events {
-    #[cfg(feature = "mqtt")]
     pub mqtt_client: paho_mqtt::AsyncClient,
 }
 
 impl Events {
     pub fn new() -> result::Result<Self> {
         Ok(Self {
-            #[cfg(feature = "mqtt")]
             // The default options use an empty client ID (therefore, the persistence type is None).
             mqtt_client: paho_mqtt::AsyncClient::new(paho_mqtt::CreateOptionsBuilder::new().finalize())?,
         })
     }
 
     pub fn setup(&mut self, config: &config::Config) {
-
-        #[cfg(feature = "mqtt")]
-        {
-            let msg = paho_mqtt::MessageBuilder::new()
-                .retained(true)
-                .topic(format!("{}/{}", config.mqtt.root_topic, config.mqtt.availability_topic))
-                .payload(config.mqtt.online_payload.as_bytes())
-                .finalize();
-            self.mqtt_client.set_connected_callback::<Box<paho_mqtt::ConnectedCallback>>(Box::new(move |client| {
-                client.publish(msg.clone());
-            }));
-        }
+        let msg = paho_mqtt::MessageBuilder::new()
+            .retained(true)
+            .topic(format!("{}/{}", config.mqtt.root_topic, config.mqtt.availability_topic))
+            .payload(config.mqtt.online_payload.as_bytes())
+            .finalize();
+        self.mqtt_client.set_connected_callback::<Box<paho_mqtt::ConnectedCallback>>(Box::new(move |client| {
+            client.publish(msg.clone());
+        }));
     }
 
-    pub fn push<E>(&self, config: &config::Config, event: E) -> result::Result<()>
-    where
-        E: Event,
-    {
-        #[cfg(feature = "ifttt")]
-        if config.ifttt.events.is_enabled(&event) {
-            self.ifttt_webhook(&config.ifttt, &event)?;
+    pub fn push(&self, config: &config::Config, event: &dyn Event) -> result::Result<()> {
+        if self.is_ifttt_event_enabled(config, event) {
+            self.ifttt_webhook(&config.ifttt, event)?;
         }
 
-        #[cfg(feature = "mqtt")]
-        if config.mqtt.events.is_enabled(&event) {
-            self.mqtt_publish(&config.mqtt, &event)?;
-        }
+        self.mqtt_publish(&config.mqtt, event)?;
+
+        self.log_write(&config.event_log, event)?;
 
         Ok(())
     }
 
-    #[cfg(feature = "mqtt")]
+    fn is_ifttt_event_enabled(&self, _config: &config::Config, _event: &dyn Event) -> bool {
+        /* return if let Some(_) = (event as &dyn Any).downcast_ref::<ProgramStartEvent>() {
+            config.ifttt.events.program_start
+        } else if let Some(event) = (event as &dyn Any).downcast_ref::<BinarySensorEvent>() {
+            (config.ifttt.events.sensor1 && event.index == 0) || (config.ifttt.events.sensor2 && event.index == 1)
+        } else if let Some(_) = (event as &dyn Any).downcast_ref::<FlowSensorEvent>() {
+            config.ifttt.events.flow_sensor
+        } else if let Some(_) = (event as &dyn Any).downcast_ref::<WaterScaleChangeEvent>() {
+            config.ifttt.events.weather_update
+        } else if let Some(_) = (event as &dyn Any).downcast_ref::<IpAddrChangeEvent>() {
+            config.ifttt.events.weather_update
+        } else if let Some(_) = (event as &dyn Any).downcast_ref::<RebootEvent>() {
+            config.ifttt.events.reboot
+        } else if let Some(event) = (event as &dyn Any).downcast_ref::<StationEvent>() {
+            config.ifttt.events.station_off && event.state == false
+        } else if let Some(_) = (event as &dyn Any).downcast_ref::<RainDelayEvent>() {
+            config.ifttt.events.rain_delay
+        } else {
+            false
+        } */
+        false
+    }
+
+    fn log_write(&self, config: &log::Config, event: &dyn Event) -> result::Result<()> {
+        let mut path = config.path.clone();
+
+        // Create dir if necessary
+        if !path.exists() {
+            fs::create_dir_all(&path)?;
+        } else {
+            if !path.is_dir() {
+                return Err(result::Error::IoError(io::Error::new(io::ErrorKind::AlreadyExists, "Log path is not a directory.")));
+            }
+        }
+
+        // Filename
+        path.push(chrono::Utc::now().format("%Y%m%d").to_string());
+        path.set_extension("bin");
+
+        let file = fs::OpenOptions::new().read(true).write(true).create(true).open(path)?;
+
+        //todo!();
+
+        /* let encoded = rmp_serde::encode::to_vec_named(&data).unwrap();
+        log::append(file, encoded.as_slice()) */
+        Ok(())
+    }
+
     pub fn mqtt_connect_options(config: &mqtt::Config) -> paho_mqtt::connect_options::ConnectOptions {
         let will = paho_mqtt::MessageBuilder::new()
             .topic(format!("{}/{}", config.root_topic, config.availability_topic))
@@ -306,47 +330,36 @@ impl Events {
 
         builder.finalize()
     }
-}
 
-pub mod result {
-    use core::fmt;
+    fn mqtt_publish(&self, config: &mqtt::Config, event: &dyn Event) -> Result<(), serde_json::Error> {
+        self.mqtt_client
+            .publish(paho_mqtt::MessageBuilder::new().topic(format!("{}/{}", config.root_topic, event.topic())).payload(mqtt::MqttEvent::payload(event)?).finalize());
 
-    pub type Result<T> = std::result::Result<T, Error>;
-
-    #[derive(Debug)]
-    pub enum Error {
-        SerdeError(serde_json::Error),
-        MqttError(paho_mqtt::Error),
-        IftttRequestError(reqwest::Error),
+        Ok(())
     }
 
-    impl std::error::Error for Error {}
+    fn ifttt_webhook(&self, config: &ifttt::Config, event: &dyn Event) -> result::Result<()> {
+        use super::http;
 
-    impl fmt::Display for Error {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            match *self {
-                Self::SerdeError(ref err) => write!(f, "Serde Error: {:?}", err),
-                Self::MqttError(ref err) => write!(f, "MQTT Error: {:?}", err),
-                Self::IftttRequestError(ref err) => write!(f, "IFTTT Webhook Error: {:?}", err),
+        let body = serde_json::json!({
+            "value1": ifttt::WebHookEvent::payload(event),
+        })
+        .to_string();
+
+        if let Ok(url) = reqwest::Url::parse(format!("{}/trigger/{}/with/key/{}", config.web_hooks_url, event.ifttt_event(), config.web_hooks_key).as_str()) {
+            let response = http::request::build_client()
+                .unwrap()
+                .post(url)
+                .header(reqwest::header::CONTENT_TYPE, reqwest::header::HeaderValue::from_static("application/json"))
+                .body(body)
+                .send();
+
+            if let Err(err) = response {
+                tracing::error!("Error making IFTTT Web Hook request: {:?}", err);
+                return Err(result::Error::IftttRequestError(err));
             }
         }
-    }
 
-    impl From<serde_json::Error> for Error {
-        fn from(err: serde_json::Error) -> Self {
-            Self::SerdeError(err)
-        }
-    }
-
-    impl From<paho_mqtt::Error> for Error {
-        fn from(err: paho_mqtt::Error) -> Self {
-            Self::MqttError(err)
-        }
-    }
-
-    impl From<reqwest::Error> for Error {
-        fn from(err: reqwest::Error) -> Self {
-            Self::IftttRequestError(err)
-        }
+        Ok(())
     }
 }

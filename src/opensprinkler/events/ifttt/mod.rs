@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    opensprinkler::{http, program},
+    opensprinkler::{program, config},
     utils,
 };
 
@@ -14,7 +14,7 @@ pub struct Config {
     pub web_hooks_key: String,
 
     /// Enabled events
-    pub events: super::EventsEnabled,
+    pub events: config::EventsEnabled,
 }
 
 impl Default for Config {
@@ -22,7 +22,7 @@ impl Default for Config {
         Self {
             web_hooks_url: String::from("https://maker.ifttt.com"),
             web_hooks_key: String::from(""),
-            events: super::EventsEnabled::default(),
+            events: config::EventsEnabled::default(),
         }
     }
 }
@@ -40,7 +40,8 @@ impl WebHookPayload {
 
 pub trait WebHookEvent {
     fn ifttt_event(&self) -> String;
-    fn ifttt_payload(&self) -> String;
+    fn payload(&self) -> String;
+
 }
 
 impl WebHookEvent for super::ProgramStartEvent {
@@ -48,18 +49,18 @@ impl WebHookEvent for super::ProgramStartEvent {
         "program".into()
     }
 
-    fn ifttt_payload(&self) -> String {
+    fn payload(&self) -> String {
         let mut payload = String::new();
 
         // Program that was manually started
-        if self.program_index == program::MANUAL_PROGRAM_ID {
+        if self.program_index == Some(program::MANUAL_PROGRAM_ID) {
             payload.push_str("Manually started ");
         } else {
             payload.push_str("Automatically scheduled ");
         }
         payload.push_str("Program ");
-        payload.push_str(&self.program_name);
-        payload.push_str(format!(" with {}% water level.", self.water_scale).as_str());
+        payload.push_str(self.program_name.as_ref().unwrap_or(&String::from("")));
+        payload.push_str(format!(" with {}% water level.", self.water_scale.unwrap_or(1.0)).as_str());
 
         payload
     }
@@ -70,7 +71,7 @@ impl WebHookEvent for super::BinarySensorEvent {
         format!("sensor{}", self.index)
     }
 
-    fn ifttt_payload(&self) -> String {
+    fn payload(&self) -> String {
         match self.state {
             false => format!("Sensor {} deactivated", self.index + 1),
             true => format!("Sensor {} activated", self.index + 1),
@@ -83,29 +84,8 @@ impl WebHookEvent for super::FlowSensorEvent {
         String::from("flow")
     }
 
-    fn ifttt_payload(&self) -> String {
+    fn payload(&self) -> String {
         format!("Flow count: {:.0}, volume: {:.2}", self.count, self.volume)
-    }
-}
-
-impl WebHookEvent for super::WeatherUpdateEvent {
-    fn ifttt_event(&self) -> String {
-        String::from("weather")
-    }
-
-    fn ifttt_payload(&self) -> String {
-        let mut payload = String::new();
-
-        if self.external_ip.is_some() {
-            payload.push_str("External IP updated: {} ");
-            payload.push_str(self.external_ip.unwrap().to_string().as_str());
-        }
-
-        if self.scale.is_some() {
-            payload.push_str(format!("Water level updated: {}%", self.scale.unwrap()).as_str());
-        }
-
-        payload
     }
 }
 
@@ -114,7 +94,7 @@ impl WebHookEvent for super::RebootEvent {
         String::from("reboot")
     }
 
-    fn ifttt_payload(&self) -> String {
+    fn payload(&self) -> String {
         match self.state {
             false => String::from("Controller stopping."),
             true => String::from("Controller started."),
@@ -127,18 +107,18 @@ impl WebHookEvent for super::StationEvent {
         String::from("station")
     }
 
-    fn ifttt_payload(&self) -> String {
+    fn payload(&self) -> String {
         let mut payload = String::new();
         payload.push_str(format!("Station {} ", self.station_name).as_str());
         payload.push_str(if self.state { "opened. " } else { "closed. " });
 
         if self.state == false && self.duration.is_some() {
             payload.push_str("It ran for ");
-            payload.push_str(utils::duration_to_hms(self.duration.unwrap()).as_str());
+            payload.push_str(utils::duration_to_hms(self.duration.unwrap().num_seconds()).as_str());
         }
 
-        if self.flow.is_some() {
-            payload.push_str(format!("Flow rate: {:.2}", self.flow.unwrap()).as_str());
+        if self.flow_volume.is_some() {
+            payload.push_str(format!("Flow rate: {:.2}", self.flow_volume.unwrap()).as_str());
         }
 
         payload
@@ -150,7 +130,7 @@ impl WebHookEvent for super::RainDelayEvent {
         String::from("rain_delay")
     }
 
-    fn ifttt_payload(&self) -> String {
+    fn payload(&self) -> String {
         match self.state {
             false => String::from("Rain delay deactivated."),
             true => String::from("Rain delay activated."),
@@ -158,34 +138,24 @@ impl WebHookEvent for super::RainDelayEvent {
     }
 }
 
-pub(super) trait SendIftttWebhook {
-    fn ifttt_webhook<E: super::Event>(&self, config: &Config, event: &E) -> super::result::Result<()>;
-}
+impl WebHookEvent for super::WaterScaleChangeEvent {
+    fn ifttt_event(&self) -> String {
+        "water_scale".into()
+    }
 
-impl SendIftttWebhook for super::Events {
-    fn ifttt_webhook<E>(&self, config: &Config, event: &E) -> super::result::Result<()>
-    where
-        E: super::Event,
-    {
-        let body = serde_json::json!({
-            "value1": event.ifttt_payload(),
-        })
-        .to_string();
-
-        if let Ok(url) = reqwest::Url::parse(format!("{}/trigger/{}/with/key/{}", config.web_hooks_url, event.ifttt_event(), config.web_hooks_key).as_str()) {
-            let response = http::request::build_client()
-                .unwrap()
-                .post(url)
-                .header(reqwest::header::CONTENT_TYPE, reqwest::header::HeaderValue::from_static("application/json"))
-                .body(body)
-                .send();
-
-            if let Err(err) = response {
-                tracing::error!("Error making IFTTT Web Hook request: {:?}", err);
-                return Err(super::result::Error::IftttRequestError(err));
-            }
-        }
-
-        Ok(())
+    fn payload(&self) -> String {
+        self.scale.to_string()
     }
 }
+
+impl WebHookEvent for super::IpAddrChangeEvent {
+    fn ifttt_event(&self) -> String {
+        "ip_address".into()
+    }
+
+    fn payload(&self) -> String {
+        self.addr.to_string()
+    }
+}
+
+

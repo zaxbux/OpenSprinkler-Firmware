@@ -2,7 +2,7 @@ pub mod algorithm;
 
 use crate::opensprinkler::{events, http::request};
 
-use super::{data_log, OpenSprinkler};
+use super::OpenSprinkler;
 use core::fmt;
 use reqwest::{
     header::{HeaderValue, ACCEPT, CONTENT_TYPE},
@@ -166,7 +166,7 @@ pub enum WeatherUpdateFlag {
     RD = 0x20,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ErrorCode {
     Success,
     // @todo unify error codes between Firmware, Weather, and GUI.
@@ -178,6 +178,15 @@ impl fmt::Display for ErrorCode {
         match *self {
             Self::Success => write!(f, "Success"),
             ErrorCode::Unknown(ref code) => write!(f, "Unknown weather service error: {}", code),
+        }
+    }
+}
+
+impl Into<i8> for ErrorCode {
+    fn into(self) -> i8 {
+        match self {
+            ErrorCode::Success => 0,
+            ErrorCode::Unknown(code) => code,
         }
     }
 }
@@ -373,7 +382,7 @@ fn parse_plain_response(open_sprinkler: &mut OpenSprinkler, params: HashMap<Stri
                     open_sprinkler.set_water_scale(scale);
                     open_sprinkler.config.write().unwrap();
 
-                    open_sprinkler.push_event(events::WeatherUpdateEvent::new(Some(scale), None));
+                    open_sprinkler.push_event(&events::WaterScaleChangeEvent::new(scale, chrono::Utc::now()));
 
                     tracing::trace!("Watering scale: {}", open_sprinkler.get_water_scale());
                 }
@@ -414,7 +423,7 @@ fn parse_plain_response(open_sprinkler: &mut OpenSprinkler, params: HashMap<Stri
                 // Only save if the value has changed
                 open_sprinkler.config.external_ip = Some(std::net::IpAddr::V4(eip));
                 save_nvdata = true;
-                open_sprinkler.push_event(events::WeatherUpdateEvent::new(Some(open_sprinkler.config.water_scale), None));
+                open_sprinkler.push_event(&events::IpAddrChangeEvent::new(open_sprinkler.config.external_ip.unwrap()));
 
                 tracing::trace!("External IP: {}", eip);
             }
@@ -439,8 +448,7 @@ fn parse_plain_response(open_sprinkler: &mut OpenSprinkler, params: HashMap<Stri
             let rd = rd.unwrap();
 
             if rd > 0 {
-                open_sprinkler.config.rain_delay_stop_time = Some((chrono::Utc::now() + chrono::Duration::hours(rd)).timestamp());
-                open_sprinkler.rain_delay_start();
+                open_sprinkler.rain_delay_start(chrono::Utc::now() + chrono::Duration::hours(rd));
                 tracing::trace!("Starting rain delay for: {}h", rd);
             } else if rd == 0 {
                 open_sprinkler.rain_delay_stop();
@@ -463,7 +471,11 @@ fn parse_plain_response(open_sprinkler: &mut OpenSprinkler, params: HashMap<Stri
         open_sprinkler.config.write().unwrap();
     }
 
-    open_sprinkler.write_log_message(data_log::WaterScaleData::new(open_sprinkler.get_water_scale(), open_sprinkler.state.weather.checkwt_success_lasttime.unwrap_or(0)));
+    //open_sprinkler.write_log_message(data_log::WaterScaleData::new(open_sprinkler.get_water_scale(), open_sprinkler.state.weather.checkwt_success_lasttime.unwrap_or(0)));
+    //if let Some(timestamp) = open_sprinkler.state.weather.checkwt_success_lasttime {
+    //    let timestamp = chrono::DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(timestamp, 0), chrono::Utc);
+        open_sprinkler.push_event(&events::WaterScaleChangeEvent::new(open_sprinkler.get_water_scale(), chrono::Utc::now()));
+    //}
 }
 
 fn parse_json_response(open_sprinkler: &mut OpenSprinkler, data: WeatherServiceResponse) {
@@ -480,7 +492,7 @@ fn parse_json_response(open_sprinkler: &mut OpenSprinkler, data: WeatherServiceR
             if scale <= WATER_SCALE_MAX && scale != open_sprinkler.get_water_scale() {
                 open_sprinkler.set_water_scale(scale);
 
-                open_sprinkler.push_event(events::WeatherUpdateEvent::water_scale(scale));
+                open_sprinkler.push_event(&events::WaterScaleChangeEvent::new(scale, chrono::Utc::now()));
 
                 tracing::trace!("Watering scale: {}", open_sprinkler.get_water_scale());
             }
@@ -505,7 +517,7 @@ fn parse_json_response(open_sprinkler: &mut OpenSprinkler, data: WeatherServiceR
         if Some(external_ip) != open_sprinkler.config.external_ip {
             open_sprinkler.config.external_ip = Some(external_ip);
 
-            open_sprinkler.push_event(events::WeatherUpdateEvent::external_ip(external_ip));
+            open_sprinkler.push_event(&events::IpAddrChangeEvent::new(external_ip));
 
             tracing::trace!("External IP: {}", open_sprinkler.config.external_ip.unwrap());
         }
@@ -520,8 +532,7 @@ fn parse_json_response(open_sprinkler: &mut OpenSprinkler, data: WeatherServiceR
 
     if let Some(rain_delay) = data.rain_delay {
         if rain_delay > 0 {
-            open_sprinkler.config.rain_delay_stop_time = Some((chrono::Utc::now() + chrono::Duration::hours(i64::from(rain_delay))).timestamp());
-            open_sprinkler.rain_delay_start();
+            open_sprinkler.rain_delay_start(chrono::Utc::now() + chrono::Duration::hours(i64::from(rain_delay)));
             tracing::trace!("Starting rain delay for: {}h", rain_delay);
         } else if rain_delay == 0 {
             open_sprinkler.rain_delay_stop();
@@ -535,7 +546,11 @@ fn parse_json_response(open_sprinkler: &mut OpenSprinkler, data: WeatherServiceR
 
     open_sprinkler.config.write().unwrap();
 
-    open_sprinkler.write_log_message(data_log::WaterScaleData::new(open_sprinkler.get_water_scale(), open_sprinkler.state.weather.checkwt_success_lasttime.unwrap()));
+    //open_sprinkler.write_log_message(data_log::WaterScaleData::new(open_sprinkler.get_water_scale(), open_sprinkler.state.weather.checkwt_success_lasttime.unwrap()));
+    //if let Some(timestamp) = open_sprinkler.state.weather.checkwt_success_lasttime {
+    //    let timestamp = chrono::DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(timestamp, 0), chrono::Utc);
+        open_sprinkler.push_event(&events::WaterScaleChangeEvent::new(open_sprinkler.get_water_scale(), chrono::Utc::now()));
+    //}
 }
 
 #[cfg(test)]
