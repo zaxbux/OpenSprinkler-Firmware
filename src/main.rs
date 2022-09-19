@@ -4,6 +4,8 @@ mod opensprinkler;
 mod utils;
 pub mod timer;
 
+include!(concat!(env!("OUT_DIR"), "/build_constants.rs"));
+
 use clap::Parser;
 use core::time;
 use std::{
@@ -78,6 +80,7 @@ fn main() {
 
     #[cfg(feature = "demo")]
     tracing::info!("DEMO MODE");
+    tracing::info!("MAX_EXT_BOARDS={}", constants::MAX_EXT_BOARDS);
     // endregion TRACING
 
     let mut open_sprinkler = if let Some(config) = args.config {

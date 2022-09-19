@@ -12,5 +12,13 @@ pub const SHIFT_REGISTER_DATA: u8 = 27;
 /// Sensor pins
 pub const SENSOR: [u8; sensor::MAX_SENSORS] = [14, 23];
 /// RF transmitter pin
-#[cfg(feature = "station-rf")]
+/// #[cfg(feature = "station-rf")]
 pub const RF_TX: u8 = 15;
+
+pub const GPIO_PINS_USED: [u8; 5] = [
+    SHIFT_REGISTER_OE,
+    SHIFT_REGISTER_LATCH,
+    SHIFT_REGISTER_CLOCK,
+    SHIFT_REGISTER_DATA,
+    RF_TX,
+];

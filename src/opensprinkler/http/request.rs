@@ -3,7 +3,7 @@ use serde::{Serialize, Serializer};
 
 use crate::opensprinkler::station;
 
-include!(concat!(env!("OUT_DIR"), "/user_agent_header.rs"));
+include!(concat!(env!("OUT_DIR"), "/build_constants.rs"));
 
 #[derive(Debug, Serialize)]
 pub struct RemoteStationRequestParametersV2_1_9 {
@@ -42,7 +42,7 @@ where
     })
 }
 
-const USER_AGENT_VALUE: header::HeaderValue = header::HeaderValue::from_static(USER_AGENT_STRING);
+const USER_AGENT_VALUE: header::HeaderValue = header::HeaderValue::from_static(constants::USER_AGENT_STRING);
 
 pub fn build_client() -> reqwest::Result<reqwest::blocking::Client> {
     let mut headers = header::HeaderMap::new();

@@ -1,14 +1,16 @@
-use std::net::IpAddr;
+include!(concat!(env!("OUT_DIR"), "/build_constants.rs"));
+
+use std::{net::{IpAddr, Ipv4Addr}, cmp, num::ParseIntError, fmt::Display};
 
 use serde::{Deserialize, Serialize};
 
-use crate::utils;
+use crate::{utils, server::legacy::IntoLegacyFormat};
 
 use super::sensor;
 
 pub type StationIndex = usize;
 
-pub const MAX_EXT_BOARDS: usize = 24;
+pub const MAX_EXT_BOARDS: usize = constants::MAX_EXT_BOARDS;
 
 /// maximum number of 8-zone boards including expanders
 pub const MAX_NUM_BOARDS: usize = 1 + MAX_EXT_BOARDS;
@@ -20,6 +22,9 @@ pub const SHIFT_REGISTER_LINES: usize = 8;
 pub const MAX_NUM_STATIONS: usize = MAX_NUM_BOARDS * SHIFT_REGISTER_LINES as usize;
 
 pub const MAX_MASTER_STATIONS: usize = 2;
+
+/// Maximum water time (seconds) = 18 hours.
+pub const MAX_WATER_TIME: u16 = 64800;
 
 pub type Stations = Vec<Station>;
 
@@ -41,12 +46,14 @@ impl MasterStationConfig {
         utils::water_time_decode_signed(self.adjusted_off).into()
     }
 
+    /// Values outside the range of [0, 600] will be limited
     pub fn set_adjusted_on_time_secs(&mut self, value: i16) {
-        self.adjusted_on = utils::water_time_encode_signed(value);
+        self.adjusted_on = utils::water_time_encode_signed(cmp::max(0, value));
     }
 
+    /// Values outside the range of [-600, 0] will be limited
     pub fn set_adjusted_off_time_secs(&mut self, value: i16) {
-        self.adjusted_off = utils::water_time_encode_signed(value);
+        self.adjusted_off = utils::water_time_encode_signed(cmp::min(0, value));
     }
 }
 

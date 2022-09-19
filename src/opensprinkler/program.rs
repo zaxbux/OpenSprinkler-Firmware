@@ -9,15 +9,18 @@ use chrono::{Datelike, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
-use super::{data_log, station};
+use super::{events, station};
 
 const SECS_PER_MIN: u32 = 60;
 const SECS_PER_HOUR: i64 = 3600;
-const SECS_PER_DAY: i64 = SECS_PER_HOUR * 24;
+pub const SECS_PER_DAY: i64 = SECS_PER_HOUR * 24;
 
-const MAX_NUM_PROGRAMS: usize = 40;
+pub const MAX_NUM_PROGRAMS: usize = 40;
 pub const MAX_NUM_START_TIMES: usize = 4;
-const PROGRAM_NAME_SIZE: usize = 32;
+/// Constant from legacy implementation
+///
+/// @todo validate user input
+pub const PROGRAM_NAME_SIZE: usize = 32;
 const RUNTIME_QUEUE_SIZE: usize = station::MAX_NUM_STATIONS;
 
 const START_TIME_SUNRISE_BIT: u8 = 14;
@@ -32,9 +35,32 @@ pub const MANUAL_PROGRAM_ID: usize = 254;
 
 pub type Programs = Vec<Program>;
 
-#[derive(Clone, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum ProgramType {
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ProgramStartType {
+    /// Test program (60 seconds per station)
+    Test,
+    /// Short test program (two seconds per station)
+    TestShort,
+    // Run-once program
+    RunOnce,
+    /// User program
+    User,
+}
+
+#[derive(PartialEq, Clone, Serialize, Deserialize)]
+pub enum ProgramStartTime {
+    /// repeating (give start time, repeat every, number of repeats)
+    /// 
+    /// Legacy: `0`
+    Repeating = 0,
+    /// fixed start time (give arbitrary start times up to [MAX_NUM_STARTTIME]s)
+    /// 
+    /// Legacy: `1`
+    Fixed = 1,
+}
+
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
+pub enum ProgramScheduleType {
     Weekly = 0,
     #[deprecated]
     BiWeekly = 1,
@@ -49,14 +75,17 @@ pub struct Program {
     /// Weather data
     pub use_weather: bool,
     /// Odd/Even day restriction
+    ///
+    /// - `0` = No restriction
+    /// - `1` = Odd-day
+    /// - `2` = Even-day
+    ///
+    /// @todo Convert to Enum
     pub odd_even: u8,
     /// Schedule type
-    pub schedule_type: ProgramType,
+    pub schedule_type: ProgramScheduleType,
     /// Start time type
-    ///
-    /// - `0` = repeating (give start time, repeat every, number of repeats)
-    /// - `1` = fixed start time (give arbitrary start times up to MAX_NUM_STARTTIMEs)
-    pub start_time_type: u8,
+    pub start_time_type: ProgramStartTime,
     pub days: [u8; 2],
     pub start_times: [i16; MAX_NUM_START_TIMES],
     #[serde(with = "BigArray")]
@@ -70,8 +99,8 @@ impl Program {
             enabled: false,
             use_weather: false,
             odd_even: 0,
-            schedule_type: ProgramType::Interval,
-            start_time_type: 1,
+            schedule_type: ProgramScheduleType::Interval,
+            start_time_type: ProgramStartTime::Fixed,
             days: [0, 0],
             start_times: [-1; MAX_NUM_START_TIMES],
             durations: [duration; station::MAX_NUM_STATIONS],
@@ -122,7 +151,7 @@ impl Program {
         }
 
         // to proceed, program has to be repeating type, and interval and repeat must be non-zero
-        if self.start_time_type != 0 || interval == 0 {
+        if self.start_time_type != ProgramStartTime::Repeating || interval == 0 {
             return false;
         }
 
@@ -195,10 +224,10 @@ impl Program {
 
         // check day match
         let day_match = match self.schedule_type {
-            ProgramType::Weekly => self.match_weekly_program((ti.weekday().num_days_from_monday() as u8 + 5) % 7),
-            ProgramType::BiWeekly => None,
-            ProgramType::Monthly => self.match_monthly_program(ti.day().try_into().unwrap()),
-            ProgramType::Interval => self.match_interval_program(t),
+            ProgramScheduleType::Weekly => self.match_weekly_program((ti.weekday().num_days_from_monday() as u8 + 5) % 7),
+            ProgramScheduleType::BiWeekly => None,
+            ProgramScheduleType::Monthly => self.match_monthly_program(ti.day().try_into().unwrap()),
+            ProgramScheduleType::Interval => self.match_interval_program(t),
         };
 
         if day_match.unwrap_or(true) == false {
@@ -239,7 +268,29 @@ impl Program {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
+impl Default for Program {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            use_weather: true,
+            odd_even: 0,
+            schedule_type: ProgramScheduleType::Weekly, // This default was chosen since it had a value of 0 in the original implementation
+            start_time_type: ProgramStartTime::Repeating, // This default was chosen since it had a value of 0 in the original implementation
+            days: [0, 0],
+            start_times: [0i16; MAX_NUM_START_TIMES],
+            durations: [0u16; station::MAX_NUM_STATIONS],
+            name: String::from("Program"),
+        }
+    }
+}
+
+impl AsMut<Program> for Program {
+    fn as_mut(&mut self) -> &mut Self {
+        self
+    }
+}
+
+/* #[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ProgramStart {
     /// Test program (60 seconds per station)
     Test,
@@ -249,7 +300,7 @@ pub enum ProgramStart {
     RunOnce,
     /// User program
     User(usize),
-}
+} */
 
 #[derive(Clone)]
 pub struct QueueElement {
@@ -260,32 +311,34 @@ pub struct QueueElement {
     /// Station
     pub station_index: station::StationIndex,
     /// Program
-    pub program_index: ProgramStart,
+    pub program_index: Option<usize>,
+    pub program_start_type: ProgramStartType,
 }
 
 impl QueueElement {
-    pub fn new(start_time: i64, water_time: i64, station_index: station::StationIndex, program_index: ProgramStart) -> Self {
+    pub fn new(start_time: i64, water_time: i64, station_index: station::StationIndex, program_index: Option<usize>, program_start_type: ProgramStartType) -> Self {
         Self {
             start_time,
             water_time,
             station_index,
             program_index,
+            program_start_type,
         }
     }
 }
 
-pub type QueueElements = collections::VecDeque<QueueElement>;
-
 pub struct ProgramQueue {
-    pub queue: QueueElements,
+    pub queue: collections::VecDeque<QueueElement>,
     /// this array stores the queue element index for each scheduled station
     pub station_qid: [Option<usize>; station::MAX_NUM_STATIONS],
     /// Number of programs
-    pub last_run: Option<data_log::StationData>,
+    //pub last_run: Option<data_log::StationData>,
+    pub last_run: Option<events::StationEvent>,
     // the last stop time of a sequential station
     pub last_seq_stop_time: Option<i64>,
 }
 impl ProgramQueue {
+
     pub fn new() -> Self {
         ProgramQueue {
             queue: collections::VecDeque::new(),
@@ -299,12 +352,12 @@ impl ProgramQueue {
         self.last_seq_stop_time = None;
         self.station_qid = [None; station::MAX_NUM_STATIONS];
     }
-
-    // this returns a pointer to the next available slot in the queue
-    pub fn enqueue(&mut self, value: QueueElement) -> result::Result<&mut QueueElement> {
+    
+    /// this returns a pointer to the next available slot in the queue
+    pub fn enqueue(&mut self, value: QueueElement) -> result::Result<Option<&mut QueueElement>> {
         if self.queue.len() < RUNTIME_QUEUE_SIZE {
             self.queue.push_back(value);
-            return Ok(self.queue.back_mut().unwrap());
+            return Ok(self.queue.back_mut());
         }
 
         Err(result::ProgramError {
@@ -313,13 +366,15 @@ impl ProgramQueue {
     }
 
     /// Remove an element from the queue
-    pub fn dequeue(&mut self, qid: usize) {
+    pub fn dequeue(&mut self, qid: usize) -> Option<QueueElement> {
         if qid >= self.queue.len() {
-            return;
+            return None;
         }
         if qid < self.queue.len() - 1 {
-            let _ = self.queue.remove(qid);
+            return self.queue.remove(qid);
         }
+
+        None
     }
 
     /// Clean Queue
@@ -329,9 +384,10 @@ impl ProgramQueue {
     /// - if current time is greater than element duration
     pub fn clean_queue(&mut self, now_seconds: i64) {
         for qi in 0..self.queue.len() {
-            let q = self.queue.get(qi).unwrap();
-            if !(q.water_time > 0) || now_seconds >= q.start_time + q.water_time {
-                self.dequeue(qi);
+            if let Some(q) = self.queue.get(qi) {
+                if !(q.water_time > 0) || now_seconds >= q.start_time + q.water_time {
+                    self.dequeue(qi);
+                }
             }
         }
     }
@@ -381,24 +437,6 @@ impl ProgramQueue {
     pub fn erase_all(&mut self) {
         todo!();
     }
-}
-
-/// days remaining - absolute to relative reminder conversion
-/// convert absolute remainder (reference time 1970 01-01) to relative remainder (reference time today)
-/// absolute remainder is stored in flash, relative remainder is presented to web
-/// @todo move into server module
-pub fn drem_to_relative(days: &mut [u8; 2]) {
-    let [rem_abs, inv] = days;
-    let now: u8 = (chrono::Utc::now().timestamp() / SECS_PER_DAY).try_into().unwrap();
-    days[0] = ((*rem_abs) + (*inv) - now % (*inv)) % (*inv);
-}
-
-/// days remaining - relative to absolute reminder conversion
-/// @todo move into server module
-pub fn drem_to_absolute(days: &mut [u8; 2]) {
-    let [rem_rel, inv] = days;
-    let now: u8 = (chrono::Utc::now().timestamp() / SECS_PER_DAY).try_into().unwrap();
-    days[0] = (now + (*rem_rel)) % (*inv);
 }
 
 pub mod result {

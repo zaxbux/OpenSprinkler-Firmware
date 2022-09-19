@@ -38,7 +38,7 @@ const SPECIAL_CMD_REBOOT_NOW: &'static str = ":>reboot_now";
 /// Flow Count Window (seconds)
 ///
 /// For computing real-time flow rate.
-const FLOW_COUNT_REALTIME_WINDOW: i64 = 30;
+pub const FLOW_COUNT_REALTIME_WINDOW: i64 = 30;
 
 pub struct OpenSprinkler {
     pub config: config::Config,
@@ -58,7 +58,6 @@ impl OpenSprinkler {
             state: state::ControllerState::default(),
             events: events::Events::new().unwrap(),
             gpio: None,
-            data_logger: data_log::DataLogger::new("./logs"),
         }
     }
 
@@ -67,6 +66,7 @@ impl OpenSprinkler {
         // Read configuration from file
         if !self.config.exists() {
             tracing::debug!("Config file does not exist");
+            self.config.write_default()?;
         }
 
         // Check reset conditions
@@ -162,7 +162,9 @@ impl OpenSprinkler {
     /// Will return [None] if the uptime could not be obtained.
     pub fn get_system_uptime() -> Option<std::time::Duration> {
         #[cfg(unix)]
-        return std::time::Duration::from(nix::time::clock_gettime(nix::time::ClockId::CLOCK_MONOTONIC)?);
+        if let Ok(timespec) = nix::time::clock_gettime(nix::time::ClockId::CLOCK_MONOTONIC) {
+            return Some(std::time::Duration::from(timespec));
+        }
 
         None
     }
@@ -264,7 +266,7 @@ impl OpenSprinkler {
         self.state.weather.checkwt_success_lasttime = Some(chrono::Utc::now().timestamp());
     }
 
-    pub fn get_flow_log_count(&self) -> i64 {
+    pub fn get_flow_log_count(&self) -> i32 {
         self.state.flow.get_flow_count() - self.state.flow.count_log_start
     }
 
@@ -307,6 +309,11 @@ impl OpenSprinkler {
         return now + 3600 / 4 * (self.iopts.tz - 48) as u64;
     } */
 
+    pub fn now_tz_seconds(&self) -> i64 {
+        let now = chrono::Utc::now().timestamp();
+        return now + 3600 / 4 * (self.config.timezone as i64 - 48);
+    }
+
     /// @todo Define primary interface e.g. `eth0` and check status (IFF_UP).
     pub fn network_connected(&self) -> bool {
         if cfg!(not(feature = "demo")) {
@@ -317,9 +324,11 @@ impl OpenSprinkler {
         return true;
     }
 
-    pub fn load_hardware_mac() {
+    pub fn get_hw_mac(&self) -> Option<mac_address::MacAddress> {
         // Use primary interface and get mac from it.
-        todo!();
+        let primary_iface = "eth0";
+
+        mac_address::mac_address_by_name(primary_iface).unwrap_or(None)
     }
 
     pub fn reboot_dev(&mut self, cause: config::RebootCause) -> config::result::Result<()> {
@@ -335,7 +344,7 @@ impl OpenSprinkler {
     }
 
     /// Update software
-    pub fn update_dev() {
+    pub fn update_dev(&self) -> config::result::Result<()> {
         todo!();
     }
 
@@ -396,7 +405,8 @@ impl OpenSprinkler {
 
                 // start flow count
                 //if open_sprinkler.is_flow_sensor_enabled() {
-                if self.config.sensors[0].sensor_type == Some(sensor::SensorType::Flow) { // if flow sensor is connected
+                if self.config.sensors[0].sensor_type == Some(sensor::SensorType::Flow) {
+                    // if flow sensor is connected
                     //self.start_flow_log_count();
                     self.state.flow.count_log_start = self.state.flow.get_flow_count();
                     self.state.sensor.set_timestamp_activated(0, Some(now_seconds));
@@ -561,7 +571,9 @@ impl OpenSprinkler {
         } else {
             if self.config.rain_delay_stop_time.unwrap_or(0) > now_seconds {
                 // rain delay starts now
-                self.rain_delay_start();
+                //self.rain_delay_start();
+                self.state.rain_delay.active_previous = false;
+                self.state.rain_delay.active_now = true;
             }
         }
 
@@ -892,7 +904,12 @@ impl OpenSprinkler {
     }
 
     pub fn get_available_gpio_pins(&self) {
+        // get free pins, minus pins used by firmware
         todo!();
+    }
+
+    pub fn is_gpio_pin_used(&self, pin: &u8) -> bool {
+        gpio::GPIO_PINS_USED.contains(pin) || gpio::SENSOR.contains(pin)
     }
 
     /// "Factory Reset
@@ -900,29 +917,38 @@ impl OpenSprinkler {
     /// This function should be called if the config does not exist.
     pub fn reset_to_defaults(&self) -> config::result::Result<()> {
         tracing::info!("Resetting controller to defaults.");
-        Ok(self.config.write_default()?)
+        self.config.write_default()
     }
 
     /// Enable controller operation
-    pub fn enable(&mut self) {
+    ///
+    /// Saves config.
+    pub fn enable(&mut self) -> config::result::Result<()> {
+        tracing::info!("Controller enabled");
         self.config.enable_controller = true;
-        self.config.write().unwrap();
+        self.config.write()
     }
 
     /// Disable controller operation
-    pub fn disable(&mut self) {
+    ///
+    /// Saves config.
+    pub fn disable(&mut self) -> config::result::Result<()> {
+        tracing::info!("Controller disabled");
         self.config.enable_controller = false;
-        self.config.write().unwrap();
+        self.config.write()
     }
 
     /// Start rain delay
-    pub fn rain_delay_start(&mut self) {
+    pub fn rain_delay_start(&mut self, rain_delay_stop_time: chrono::DateTime<chrono::Utc>) {
         self.state.rain_delay.active_previous = self.state.rain_delay.active_now;
         self.state.rain_delay.active_now = true;
+        self.config.rain_delay_stop_time = Some(rain_delay_stop_time.timestamp());
         //self.config.write().unwrap();
     }
 
     /// Stop rain delay
+    ///
+    /// Saves config.
     pub fn rain_delay_stop(&mut self) {
         self.state.rain_delay.active_previous = self.state.rain_delay.active_now;
         self.state.rain_delay.active_now = false;
@@ -999,26 +1025,26 @@ impl OpenSprinkler {
 
                 // If this is a normal program (not a run-once or test program) and either the controller is disabled, or if raining and ignore rain bit is cleared
                 if let Some(qid) = self.state.program.queue.station_qid[station_index] {
-                    let q = self.state.program.queue.queue.get(qid).unwrap();
+                    if let Some(q) = self.state.program.queue.queue.get(qid).cloned() {
+                        if q.program_start_type != program::ProgramStartType::User {
+                            // This is a manually started program, skip
+                            continue;
+                        }
 
-                    if q.program_index == program::ProgramStart::Test || q.program_index == program::ProgramStart::TestShort || q.program_index == program::ProgramStart::RunOnce {
-                        // This is a manually started program, skip
-                        continue;
-                    }
-
-                    // If system is disabled, turn off zone
-                    if !self.config.enable_controller {
-                        self.turn_off_station(now_seconds, station_index);
-                    }
-
-                    // if rain delay is on and zone does not ignore rain delay, turn it off
-                    if self.state.rain_delay.active_now && !self.config.stations[station_index].attrib.ignore_rain_delay {
-                        self.turn_off_station(now_seconds, station_index);
-                    }
-
-                    for i in 0..sensor::MAX_SENSORS {
-                        if sn[i] && !self.config.stations[station_index].attrib.ignore_sensor[i] {
+                        // If system is disabled, turn off zone
+                        if !self.config.enable_controller {
                             self.turn_off_station(now_seconds, station_index);
+                        }
+
+                        // if rain delay is on and zone does not ignore rain delay, turn it off
+                        if self.state.rain_delay.active_now && !self.config.stations[station_index].attrib.ignore_rain_delay {
+                            self.turn_off_station(now_seconds, station_index);
+                        }
+
+                        for i in 0..sensor::MAX_SENSORS {
+                            if sn[i] && !self.config.stations[station_index].attrib.ignore_sensor[i] {
+                                self.turn_off_station(now_seconds, station_index);
+                            }
                         }
                     }
                 }
@@ -1027,21 +1053,21 @@ impl OpenSprinkler {
     }
 
     /// Manually start a program
-    pub fn manual_start_program(&mut self, program_start: program::ProgramStart, use_water_scale: bool) {
+    pub fn manual_start_program(&mut self, program_index: Option<usize>, program_start_type: program::ProgramStartType, use_water_scale: bool) {
         let mut match_found = false;
         self.reset_all_stations_immediate();
 
-        let program = match program_start {
-            program::ProgramStart::Test => program::Program::test_program(60),
-            program::ProgramStart::TestShort => program::Program::test_program(2),
-            program::ProgramStart::RunOnce => todo!(),
-            program::ProgramStart::User(index) => self.config.programs[index].clone(),
+        let program = match program_start_type {
+            program::ProgramStartType::Test => program::Program::test_program(60),
+            program::ProgramStartType::TestShort => program::Program::test_program(2),
+            program::ProgramStartType::RunOnce => todo!(),
+            program::ProgramStartType::User => self.config.programs[program_index.unwrap()].clone(),
         };
 
         let water_scale = if use_water_scale { self.config.water_scale } else { 1.0 };
 
-        if let program::ProgramStart::User(index) = program_start {
-            self.push_event(events::ProgramStartEvent::new(index, program.name, water_scale));
+        if program_start_type == program::ProgramStartType::User {
+            self.push_event(&events::ProgramStartEvent::new(program_index.unwrap(), program.name, water_scale));
         }
 
         for station_index in 0..self.get_station_count() {
@@ -1050,18 +1076,17 @@ impl OpenSprinkler {
                 continue;
             }
 
-            let water_time = water_scale
-                * match program_start {
-                    program::ProgramStart::Test => 60.0,
-                    program::ProgramStart::TestShort => 2.0,
-                    program::ProgramStart::RunOnce => todo!(),
-                    program::ProgramStart::User(_) => utils::water_time_resolve(program.durations[station_index], self.get_sunrise_time(), self.get_sunset_time()),
-                };
+            let water_time = match program_start_type {
+                program::ProgramStartType::Test => 60.0,
+                program::ProgramStartType::TestShort => 2.0,
+                program::ProgramStartType::RunOnce => todo!(),
+                program::ProgramStartType::User => utils::water_time_resolve(program.durations[station_index], self.get_sunrise_time(), self.get_sunset_time()),
+            };
 
-            //water_time = water_time * water_scale;
+            let water_time = water_time * water_scale;
 
             if water_time > 0.0 && !self.config.stations.get(station_index).unwrap().attrib.is_disabled {
-                if self.state.program.queue.enqueue(program::QueueElement::new(0, water_time as i64, station_index, program::ProgramStart::Test)).is_ok() {
+                if let Ok(Some(_)) = self.state.program.queue.enqueue(program::QueueElement::new(0, water_time as i64, station_index, None, program::ProgramStartType::Test)) {
                     match_found = true;
                 }
             }
