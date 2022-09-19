@@ -22,3 +22,7 @@ While porting the codebase to Rust, some changes were made to align with languag
 * Options that used `0` as a none/null value now use the native `None` type.
 * TLS
 * IPv6
+
+## Building
+
+`glibc-source`, `cmake`, `libssl-dev` are required.
