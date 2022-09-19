@@ -3,6 +3,7 @@
 mod opensprinkler;
 mod utils;
 pub mod timer;
+pub mod server;
 
 include!(concat!(env!("OUT_DIR"), "/build_constants.rs"));
 
@@ -12,7 +13,7 @@ use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
-        Mutex,
+        Mutex, mpsc,
     },
     thread,
 };
@@ -118,10 +119,25 @@ fn main() {
     }
 
     // Push reboot notification on startup
-    open_sprinkler.push_event(events::RebootEvent::new(true));
+    open_sprinkler.push_event(&events::RebootEvent::new(true));
 
-    let open_sprinkler = Mutex::new(open_sprinkler);
-    let open_sprinkler = Arc::new(open_sprinkler);
+    let open_sprinkler_mutex = Mutex::new(open_sprinkler);
+    let open_sprinkler_arc = Arc::new(open_sprinkler_mutex);
+
+    // Web server
+    let (web_tx, web_rx) = mpsc::channel();
+    
+    {
+        let open_sprinkler_web = Arc::clone(&open_sprinkler_arc);
+        
+        thread::spawn(move || {
+            let web_server_future = server::run_app(web_tx, open_sprinkler_web);
+            actix_web::rt::System::new().block_on(web_server_future)
+        });
+    }
+
+    let web_server_handle = web_rx.recv().unwrap();
+
 
     // Time-keeping
     let mut now_seconds: i64;
@@ -133,12 +149,12 @@ fn main() {
     #[cfg(not(feature = "demo"))]
     let mut last_millis = 0;
 
-    let open_sprinkler = Arc::clone(&open_sprinkler);
+    let open_sprinkler_loop = Arc::clone(&open_sprinkler_arc);
 
     // Main loop
     while running.load(Ordering::SeqCst) {
-        
-        let mut open_sprinkler = open_sprinkler.lock().unwrap();
+        let mut open_sprinkler = open_sprinkler_loop.lock().unwrap();
+
         // handle flow sensor using polling every 1ms (maximum freq 1/(2*1ms)=500Hz)
         #[cfg(not(feature = "demo"))]
         if open_sprinkler.is_flow_sensor_enabled() {
@@ -157,7 +173,6 @@ fn main() {
             last_seconds = now_seconds;
             now_minute = now_seconds / 60;
 
-            #[cfg(feature = "mqtt")]
             open_sprinkler.try_mqtt_connect();
             
             open_sprinkler.check_rain_delay_status(now_seconds);
@@ -181,7 +196,7 @@ fn main() {
                     if open_sprinkler.config.external_ip != Some(ip) {
                         open_sprinkler.config.external_ip = Some(ip);
                         open_sprinkler.config.write().unwrap();
-                        tracing::trace!("External IP: {}", ip);
+                        tracing::trace!("External IP (STUN): {}", ip);
                     }
                 }
             }
@@ -218,4 +233,6 @@ fn main() {
     }
 
     tracing::info!("Got Ctrl-C, exiting...");
+
+    actix_web::rt::System::new().block_on(web_server_handle.stop(true));
 }

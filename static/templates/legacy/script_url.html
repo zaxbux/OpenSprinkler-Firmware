@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>OpenSprinkler</title>
+</head>
+
+<body>
+	<form name="of" action="/cu" method="get">
+		<table cellspacing="12">
+			<tr>
+				<td><b>JavaScript</b>:</td>
+				<td><input type="text" size="40" maxlength="40" value="{{ javascript_url }}" name="jsp"></td>
+			</tr>
+			<tr>
+				<td>Default:</td>
+				<td>{{ default_javascript_url }}</td>
+			</tr>
+			<tr>
+				<td><b>Weather</b>:</td>
+				<td><input type="text" size="40" maxlength="40" value="{{ weather_service }}" name="wsp"></td>
+			</tr>
+			<tr>
+				<td>Default:</td>
+				<td>{{ default_weather_service }}</td>
+			</tr>
+			<tr>
+				<td><b>Password</b>:</td>
+				<td><input type="password" size="32" name="pw"> <input type="submit"></td>
+			</tr>
+		</table>
+	</form>
+	<script src="https://ui.opensprinkler.com/js/hasher.js"></script>
+</body>
+
+</html>

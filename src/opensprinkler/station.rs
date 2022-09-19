@@ -75,22 +75,28 @@ enum StationOption {
 }
 
 #[repr(u8)]
-#[derive(Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum StationType {
     /// Standard station
     Standard = 0x00,
     /// RF station
-    #[cfg(feature = "station-rf")]
+    //#[cfg(feature = "station-rf")]
     RadioFrequency = 0x01,
     /// Remote OpenSprinkler station
     Remote = 0x02,
     /// GPIO station
-    #[cfg(feature = "station-gpio")]
+    //#[cfg(feature = "station-gpio")]
     GPIO = 0x03,
     /// HTTP station
     HTTP = 0x04,
     /// Other station
     Other = 0xFF,
+}
+
+impl Into<u8> for StationType {
+    fn into(self) -> u8 {
+        self as u8
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -141,9 +147,15 @@ pub struct StationAttrib {
     pub ignore_rain_delay: bool,
 }
 
+pub trait TryFromLegacyString: Sized {
+    type Error;
+
+    fn try_from_legacy_string(data: &str) -> Result<Self, Self::Error>;
+}
+
 /// RF station data structures
-#[derive(Clone, Serialize, Deserialize)]
-#[cfg(feature = "station-rf")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+//#[cfg(feature = "station-rf")]
 pub struct RFStationData {
     /// 24-bit value
     pub on: u32,
@@ -153,19 +165,80 @@ pub struct RFStationData {
     pub timing: u16,
 }
 
+//#[cfg(feature = "station-rf")]
+impl TryFromLegacyString for RFStationData {
+    type Error = ParseIntError;
+
+    /// Special data for RF Station is 16 characters of hex
+    /// 
+    /// * First 6 chars (3 bytes; u24) is on
+    /// * Next  6 chars (3 bytes; u24) is off
+    /// * Last  4 chars (2 bytes; u16) is the timing
+    /// 
+    /// ```text
+    ///  0               1
+    ///  0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
+    /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    /// |    ON     |    OFF    | TIME  |
+    /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    /// ```
+    fn try_from_legacy_string(data: &str) -> Result<Self, Self::Error> {
+        // @todo check data length
+        let data = format!("{:0>16}", data);
+
+        let on = &data[0..6];
+        let off = &data[6..12];
+        let timing = &data[12..16];
+
+        Ok(Self {
+            on: u32::from_str_radix(on, 16)?,
+            off: u32::from_str_radix(off, 16)?,
+            timing: u16::from_str_radix(timing, 16)?,
+        })
+    }
+}
+
 /// Remote station data structures
 ///
 /// @todo: Support for IPv6, string hostname, path, and custom password (or deprecate in favour of HTTP station type?)
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RemoteStationData {
     pub host: IpAddr,
     pub port: u16,
     pub station_index: StationIndex,
 }
 
+impl TryFromLegacyString for RemoteStationData {
+    type Error = ParseIntError; //ParseError;
+
+    /// Special data for Remote Station is 14 characters of hex.
+    /// 
+    /// * First 8 chars (4 bytes) is the IP address
+    /// * Next  4 chars (2 bytes) is the port number
+    /// * Last  2 chars (1 bytes) is the station index
+    /// 
+    /// ```text
+    ///  0               1
+    ///  0 1 2 3 4 5 6 7 0 1 2 3 4 5
+    /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    /// |  IP ADDRESS   | PORT  | I |
+    /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    /// ```
+    fn try_from_legacy_string(data: &str) -> Result<Self, Self::Error> {
+        let ip_addr = &data[0..8];
+        let port = &data[8..12];
+        let station_index = &data[12..14];
+        Ok(Self {
+            host: IpAddr::V4(Ipv4Addr::from(u32::from_str_radix(ip_addr, 16)?)),
+            port: u16::from_str_radix(port, 16)?,
+            station_index: usize::from_str_radix(station_index, 16)?,
+        })
+    }
+}
+
 /// GPIO station data structures
-#[derive(Clone, Serialize, Deserialize)]
-#[cfg(feature = "station-gpio")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+//#[cfg(feature = "station-gpio")]
 pub struct GPIOStationData {
     /// GPIO Pin (BCM #)
     pub pin: u8,
@@ -175,7 +248,7 @@ pub struct GPIOStationData {
     pub active: bool,
 }
 
-#[cfg(feature = "station-gpio")]
+//#[cfg(feature = "station-gpio")]
 impl GPIOStationData {
     pub fn active_level(&self) -> rppal::gpio::Level {
         match self.active {
@@ -185,25 +258,86 @@ impl GPIOStationData {
     }
 }
 
+//#[cfg(feature = "station-gpio")]
+impl TryFromLegacyString for GPIOStationData {
+    type Error = (); //ParseError;
+
+    /// Special data for GPIO Station is three bytes of ascii decimal (not hex).
+    /// 
+    /// * First two bytes is the GPIO pin number (zero padded)
+    /// * Third byte is either `0` for active low (GND), or `1` for high (+5V) relays.
+    /// 
+    /// ```text
+    ///    0     1     2
+    /// +-----+-----+-----+
+    /// | GPIO PIN  | STA |
+    /// +-----+-----+-----+
+    /// ```
+    fn try_from_legacy_string(data: &str) -> Result<Self, Self::Error> {
+        let pin_str = &data[0..2];
+        let active_str = &data[2..3];
+
+        let pin = pin_str.parse::<u8>().map_err(|_| ())?;
+        let active: bool = (match active_str {
+            "0" => Ok(false),
+            "1" => Ok(true),
+            _ => Err(()),
+        })?;
+        
+        Ok(Self { pin, active })
+    }
+}
+
 /// HTTP station data structures
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HTTPStationData {
     pub uri: String,
     pub cmd_on: String,
     pub cmd_off: String,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+impl TryFromLegacyString for HTTPStationData {
+    type Error = &'static str; //ParseError;
+
+    /// Special data for HTTP Station is up to 240 characters
+    /// (limitation of legacy firmware) of the comma-separated values:
+    /// 
+    /// * host
+    /// * port
+    /// * on command
+    /// * off command
+    fn try_from_legacy_string(data: &str) -> Result<Self, Self::Error> {
+        let data: Vec<&str> = data.splitn(4, ',').collect();
+        Ok(Self {
+            uri: format!("http://{}:{}", data[0], data[1]),
+            cmd_on: data[2].into(),
+            cmd_off: data[3].into(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SpecialStationData {
-    #[cfg(feature = "station-rf")]
+    NONE(()),
     RF(RFStationData),
     REMOTE(RemoteStationData),
-    #[cfg(feature = "station-gpio")]
     GPIO(GPIOStationData),
     HTTP(HTTPStationData),
 }
 
-#[cfg(feature = "station-rf")]
+impl Display for SpecialStationData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SpecialStationData::NONE(data) => write!(f, "{:?}", data),
+            SpecialStationData::RF(data) => write!(f, "{:?}", data),
+            SpecialStationData::REMOTE(data) => write!(f, "{:?}", data),
+            SpecialStationData::GPIO(data) => write!(f, "{:?}", data),
+            SpecialStationData::HTTP(data) => write!(f, "{:?}", data),
+        }
+    }
+}
+
+
 impl TryFrom<&SpecialStationData> for RFStationData {
     type Error = &'static str;
 
@@ -226,7 +360,6 @@ impl TryFrom<&SpecialStationData> for RemoteStationData {
     }
 }
 
-#[cfg(feature = "station-gpio")]
 impl TryFrom<&SpecialStationData> for GPIOStationData {
     type Error = &'static str;
 
@@ -245,6 +378,41 @@ impl TryFrom<&SpecialStationData> for HTTPStationData {
         match value {
             SpecialStationData::HTTP(data) => Ok(data.clone()),
             _ => Err("Cannot convert to HTTPStationData"),
+        }
+    }
+}
+
+impl IntoLegacyFormat for SpecialStationData {
+    type Format = Option<String>;
+
+    fn into_legacy_format(&self) -> Self::Format {
+        match self {
+            SpecialStationData::NONE(_) => None,
+            SpecialStationData::RF(data) => {
+                // sd (16 characters) stores the 16-digit hex RF code
+                // on [6]; off [6]; timing [4];
+                Some(format!("{:06x}{:06x}{:04x}", data.on, data.off, data.timing))
+            }
+            SpecialStationData::REMOTE(data) => {
+                // ip address (8 bytes), port number (4 bytes), station index (2 bytes)
+                if let IpAddr::V4(addr) = data.host {
+                    Some(format!("{:08x}{:04x}{:02x}", u32::from(addr), data.port, data.station_index))
+                } else {
+                    None
+                }
+            }
+            SpecialStationData::GPIO(data) => {
+                // 3 bytes: the first two define the GPIO index (as zero-padded decimal), the third byte indicates active state (1 or 0)
+                Some(format!("{:02}{:}", data.pin, if data.active { 1 } else { 0 }))
+            }
+            SpecialStationData::HTTP(data) => {
+                // up to 240 bytes, comma separated HTTP GET command with the following data: server name (can be either a domain name or IP address), port number, on command, off command
+                if let Ok(uri) = url::Url::parse(data.uri.as_str()) {
+                    Some(format!("{},{},{},{}", uri.host_str().unwrap(), uri.port().unwrap_or(80), data.cmd_on, data.cmd_off))
+                } else {
+                    None
+                }
+            }
         }
     }
 }
