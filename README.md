@@ -1,18 +1,8 @@
-============================================
-==== OpenSprinkler RPI Firmware ====
-============================================
+# OpenSprinkler RPI Firmware
 
-This is a unified OpenSprinkler firmware for and Linux-based OpenSprinklers such as OpenSprinkler Pi.
+This is a OpenSprinkler firmware for Linux-based OpenSprinklers such as OpenSprinkler Pi.
 
-For OSPi or other Linux-based OpenSprinkler:
-https://openthings.freshdesk.com/support/solutions/articles/5000631599-installing-and-updating-the-unified-firmware
-
-============================================
-Questions and comments:
-http://www.opensprinkler.com
-============================================
-
-## Changes
+# Changes
 
 While porting the codebase to Rust, some changes were made to align with language principals. Other changes were simply quality of life improvements.
 
@@ -23,6 +13,6 @@ While porting the codebase to Rust, some changes were made to align with languag
 * TLS
 * IPv6
 
-## Building
+# Building
 
 `glibc-source`, `cmake`, `libssl-dev` are required.

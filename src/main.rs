@@ -1,33 +1,28 @@
 #![allow(dead_code)]
 
 mod opensprinkler;
-mod utils;
-pub mod timer;
 pub mod server;
+pub mod timer;
+mod utils;
 
 include!(concat!(env!("OUT_DIR"), "/build_constants.rs"));
 
 use clap::Parser;
 use core::time;
 use std::{
+    convert::Infallible,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc,
-        Mutex, mpsc,
+        mpsc, Arc, Mutex,
     },
     thread,
 };
-use tracing_subscriber::FmtSubscriber;
 use tracing_log::LogTracer;
+use tracing_subscriber::{fmt, prelude::*, EnvFilter, FmtSubscriber};
 
-use opensprinkler::{
-    events,
-    //program,
-    weather,
-    OpenSprinkler,
-};
+use opensprinkler::{events, weather, OpenSprinkler};
 
-use crate::opensprinkler::{scheduler, config};
+use crate::opensprinkler::{config, scheduler};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -49,18 +44,22 @@ struct Args {
     reset: bool,
 }
 
-pub fn setup_tracing() {
+pub fn setup_tracing() -> Result<(), tracing::log::SetLoggerError> {
     // a builder for `FmtSubscriber`.
-    let subscriber = FmtSubscriber::builder()
+    /* let subscriber = FmtSubscriber::builder()
         // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.) will be written to stdout.
         .with_max_level(tracing::Level::TRACE)
         // completes the builder.
         .finish();
 
-    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed"); */
+
+    tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
 
     // Convert [log::Record] to [tracing::Event]
-    LogTracer::init().expect("Init log tracer failed");
+    LogTracer::init()?;
+
+    Ok(())
 }
 
 fn main() {
@@ -84,11 +83,7 @@ fn main() {
     tracing::info!("MAX_EXT_BOARDS={}", constants::MAX_EXT_BOARDS);
     // endregion TRACING
 
-    let mut open_sprinkler = if let Some(config) = args.config {
-        OpenSprinkler::with_config_path(config)
-    } else {
-        OpenSprinkler::new()
-    };
+    let mut open_sprinkler = if let Some(config) = args.config { OpenSprinkler::with_config_path(config) } else { OpenSprinkler::new() };
 
     // Setup options
     if let Err(ref error) = open_sprinkler.setup() {
@@ -126,10 +121,10 @@ fn main() {
 
     // Web server
     let (web_tx, web_rx) = mpsc::channel();
-    
+
     {
         let open_sprinkler_web = Arc::clone(&open_sprinkler_arc);
-        
+
         thread::spawn(move || {
             let web_server_future = server::run_app(web_tx, open_sprinkler_web);
             actix_web::rt::System::new().block_on(web_server_future)
@@ -137,7 +132,6 @@ fn main() {
     }
 
     let web_server_handle = web_rx.recv().unwrap();
-
 
     // Time-keeping
     let mut now_seconds: i64;
@@ -174,7 +168,7 @@ fn main() {
             now_minute = now_seconds / 60;
 
             open_sprinkler.try_mqtt_connect();
-            
+
             open_sprinkler.check_rain_delay_status(now_seconds);
 
             #[cfg(not(feature = "demo"))]
@@ -183,7 +177,6 @@ fn main() {
                 open_sprinkler.check_program_switch_status();
             }
 
-            
             if now_minute > last_minute {
                 last_minute = now_minute;
 
@@ -207,7 +200,7 @@ fn main() {
             if open_sprinkler.state.program.busy {
                 opensprinkler::scheduler::do_time_keeping(&mut open_sprinkler, now_seconds);
             }
-            
+
             open_sprinkler.activate_master_stations(now_seconds);
 
             // Process dynamic events
