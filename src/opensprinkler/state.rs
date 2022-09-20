@@ -1,7 +1,8 @@
-use super::{gpio, sensor, station, weather, program};
+use std::net::IpAddr;
+
+use super::{gpio, program, sensor, station, weather};
 
 pub type StationBits = [bool; station::SHIFT_REGISTER_LINES];
-
 
 #[derive(PartialEq)]
 pub enum StationChange {
@@ -93,7 +94,7 @@ impl Default for ProgramState {
 }
 
 /// Rain Delay state
-/// 
+///
 /// @todo: Use timestamp / config.stop_time instead of active flags
 pub struct RainDelayState {
     /// time when the most recent rain delay started (seconds)
@@ -158,7 +159,7 @@ impl Default for SensorState {
 }
 
 pub struct SensorStateVec {
-	vec: Vec<SensorState>,
+    vec: Vec<SensorState>,
 }
 
 impl SensorStateVec {
@@ -169,7 +170,9 @@ impl SensorStateVec {
         Self {
             vec,
         } */
-        Self { vec: vec![SensorState::default(); sensor::MAX_SENSORS] }
+        Self {
+            vec: vec![SensorState::default(); sensor::MAX_SENSORS],
+        }
     }
 
     pub fn detected(&self, i: usize) -> bool {
@@ -253,7 +256,6 @@ impl SensorStateVec {
     }
 }
 
-
 /// State for recording/logging realtime flow count
 #[derive(Debug)]
 pub struct FlowState {
@@ -325,7 +327,7 @@ impl FlowState {
     }
 
     /// last flow rate measured (averaged over flow_gallons) from last valve stopped (used to write to log file).
-    /// 
+    ///
     /// L/min
     pub fn measure(&mut self) -> f64 {
         if self.volume > 1 {
@@ -392,6 +394,8 @@ pub struct ControllerState {
     pub rain_delay: RainDelayState,
     pub sensor: SensorStateVec,
     pub flow: FlowState,
+    /// External IP Address
+    pub external_ip: Option<IpAddr>,
     /// Weather service status
     pub weather: WeatherState,
     /// time when controller is powered up most recently (seconds)
@@ -414,6 +418,7 @@ impl Default for ControllerState {
             rain_delay: RainDelayState::default(),
             sensor: SensorStateVec::new(),
             flow: FlowState::default(),
+            external_ip: None,
             weather: WeatherState::default(),
             startup_time: chrono::Utc::now(),
             reboot_request: false,
@@ -428,9 +433,8 @@ mod tests {
 
     use crate::opensprinkler::gpio;
 
-
     /// Test Flow Pulse
-    /// 
+    ///
     /// Simulation:
     /// - Sensor: 1L/pulse
     /// - Duration: 10 seconds.

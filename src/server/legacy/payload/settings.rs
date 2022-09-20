@@ -2,7 +2,10 @@ use std::net::IpAddr;
 
 use serde::Serialize;
 
-use crate::{opensprinkler::{program, weather, OpenSprinkler, FLOW_COUNT_REALTIME_WINDOW}, server::legacy::{utils, values::options::MqttConfigJson}};
+use crate::{
+    opensprinkler::{program, weather, OpenSprinkler, FLOW_COUNT_REALTIME_WINDOW},
+    server::legacy::{utils, values::options::MqttConfigJson},
+};
 
 #[derive(Serialize)]
 pub struct Payload {
@@ -91,7 +94,7 @@ impl Payload {
             rdst: open_sprinkler.config.rain_delay_stop_time.unwrap_or(-1),
             sunrise: open_sprinkler.config.sunrise_time,
             sunset: open_sprinkler.config.sunset_time,
-            eip: open_sprinkler.config.external_ip,
+            eip: open_sprinkler.state.external_ip,
             lwc: open_sprinkler.state.weather.checkwt_lasttime.unwrap_or(-1),
             lswc: open_sprinkler.state.weather.checkwt_success_lasttime.unwrap_or(-1),
             lupt: open_sprinkler.state.reboot_timestamp,

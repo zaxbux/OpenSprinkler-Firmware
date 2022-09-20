@@ -186,9 +186,8 @@ fn main() {
 
                 // STUN: Get external IP
                 if let Ok(Some(ip)) = open_sprinkler.get_external_ip() {
-                    if open_sprinkler.config.external_ip != Some(ip) {
-                        open_sprinkler.config.external_ip = Some(ip);
-                        open_sprinkler.config.write().unwrap();
+                    if open_sprinkler.state.external_ip != Some(ip) {
+                        open_sprinkler.state.external_ip = Some(ip);
                         tracing::trace!("External IP (STUN): {}", ip);
                     }
                 }

@@ -1,6 +1,6 @@
 pub mod cli;
 
-use super::{program, sensor, station, weather, events};
+use super::{events, program, sensor, station, weather};
 use serde::{Deserialize, Serialize};
 use std::{
     fmt,
@@ -11,7 +11,7 @@ use std::{
     str::FromStr,
 };
 
-use crate::opensprinkler::events::{mqtt, ifttt};
+use crate::opensprinkler::events::{ifttt, mqtt};
 
 #[cfg(unix)]
 const CONFIG_FILE_PATH: &'static str = "/etc/opt/opensprinkler/config.dat";
@@ -133,10 +133,6 @@ pub struct Config {
     pub reboot_cause: RebootCause,
     /// Device key AKA password
     pub device_key: String,
-    /// External IP Address
-    /// 
-    /// @todo move into state?
-    pub external_ip: Option<IpAddr>,
     /// Javascript URL for the web app
     pub js_url: String,
     /// Device location (decimal coordinates)
@@ -184,10 +180,7 @@ pub struct Config {
 
 impl Config {
     pub fn new(path: PathBuf) -> Self {
-        Self {
-            path,
-            ..Self::default()
-        }
+        Self { path, ..Self::default() }
     }
 
     pub fn exists(&self) -> bool {
@@ -233,7 +226,6 @@ impl Default for Config {
             event_log: events::log::Config::default(),
             reboot_cause: RebootCause::Reset,                              // If the config file does not exist, these defaults will be used. Therefore, this is the relevant reason.
             device_key: format!("{:x}", md5::compute(b"opendoor")).into(), // @todo Use modern hash like Argon2
-            external_ip: None,
             js_url: core::option_env!("JAVASCRIPT_URL").unwrap_or("https://ui.opensprinkler.com/js").into(),
             location: Location::default(),
             timezone: 48, // UTC
@@ -266,8 +258,8 @@ impl fmt::Display for Config {
 }
 
 pub mod result {
-    use core::{num, fmt};
-    use std::{sync::Arc, io, error};
+    use core::{fmt, num};
+    use std::{error, io, sync::Arc};
 
     pub type Result<T> = core::result::Result<T, Error>;
 

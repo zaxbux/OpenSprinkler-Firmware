@@ -419,11 +419,11 @@ fn parse_plain_response(open_sprinkler: &mut OpenSprinkler, params: HashMap<Stri
         let ip_uint = params.get("eip").unwrap().parse::<u32>();
         if ip_uint.is_ok() {
             let eip = Ipv4Addr::from(ip_uint.unwrap());
-            if eip != open_sprinkler.config.external_ip.unwrap_or_else(|| IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))) {
+            if eip != open_sprinkler.state.external_ip.unwrap_or_else(|| IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))) {
                 // Only save if the value has changed
-                open_sprinkler.config.external_ip = Some(std::net::IpAddr::V4(eip));
+                open_sprinkler.state.external_ip = Some(std::net::IpAddr::V4(eip));
                 save_nvdata = true;
-                open_sprinkler.push_event(&events::IpAddrChangeEvent::new(open_sprinkler.config.external_ip.unwrap()));
+                open_sprinkler.push_event(&events::IpAddrChangeEvent::new(open_sprinkler.state.external_ip.unwrap()));
 
                 tracing::trace!("External IP: {}", eip);
             }
@@ -474,7 +474,7 @@ fn parse_plain_response(open_sprinkler: &mut OpenSprinkler, params: HashMap<Stri
     //open_sprinkler.write_log_message(data_log::WaterScaleData::new(open_sprinkler.get_water_scale(), open_sprinkler.state.weather.checkwt_success_lasttime.unwrap_or(0)));
     //if let Some(timestamp) = open_sprinkler.state.weather.checkwt_success_lasttime {
     //    let timestamp = chrono::DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(timestamp, 0), chrono::Utc);
-        open_sprinkler.push_event(&events::WaterScaleChangeEvent::new(open_sprinkler.get_water_scale(), chrono::Utc::now()));
+    open_sprinkler.push_event(&events::WaterScaleChangeEvent::new(open_sprinkler.get_water_scale(), chrono::Utc::now()));
     //}
 }
 
@@ -514,12 +514,12 @@ fn parse_json_response(open_sprinkler: &mut OpenSprinkler, data: WeatherServiceR
     }
 
     if let Some(external_ip) = data.external_ip {
-        if Some(external_ip) != open_sprinkler.config.external_ip {
-            open_sprinkler.config.external_ip = Some(external_ip);
+        if Some(external_ip) != open_sprinkler.state.external_ip {
+            open_sprinkler.state.external_ip = Some(external_ip);
 
             open_sprinkler.push_event(&events::IpAddrChangeEvent::new(external_ip));
 
-            tracing::trace!("External IP: {}", open_sprinkler.config.external_ip.unwrap());
+            tracing::trace!("External IP: {}", open_sprinkler.state.external_ip.unwrap());
         }
     }
 
@@ -549,7 +549,7 @@ fn parse_json_response(open_sprinkler: &mut OpenSprinkler, data: WeatherServiceR
     //open_sprinkler.write_log_message(data_log::WaterScaleData::new(open_sprinkler.get_water_scale(), open_sprinkler.state.weather.checkwt_success_lasttime.unwrap()));
     //if let Some(timestamp) = open_sprinkler.state.weather.checkwt_success_lasttime {
     //    let timestamp = chrono::DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(timestamp, 0), chrono::Utc);
-        open_sprinkler.push_event(&events::WaterScaleChangeEvent::new(open_sprinkler.get_water_scale(), chrono::Utc::now()));
+    open_sprinkler.push_event(&events::WaterScaleChangeEvent::new(open_sprinkler.get_water_scale(), chrono::Utc::now()));
     //}
 }
 
@@ -695,7 +695,7 @@ mod tests {
         assert_eq!(open_sprinkler.config.sunrise_time, test_data.sunrise_time, "Testing sunrise time");
         assert_eq!(open_sprinkler.config.sunset_time, test_data.sunset_time, "Testing sunset time");
         assert_eq!(open_sprinkler.config.timezone, test_data.timezone, "Testing timezone");
-        assert_eq!(open_sprinkler.config.external_ip, Some(test_data.ext_ip), "Testing external IP");
+        assert_eq!(open_sprinkler.state.external_ip, Some(test_data.ext_ip), "Testing external IP");
 
         open_sprinkler.check_rain_delay_status(chrono::Utc::now().timestamp());
         assert_eq!(open_sprinkler.state.rain_delay.active_now, true, "Testing rain delay is active");
