@@ -3,7 +3,7 @@ use std::net::IpAddr;
 use serde::Serialize;
 
 use crate::{
-    opensprinkler::{program, weather, OpenSprinkler, FLOW_COUNT_REALTIME_WINDOW},
+    opensprinkler::{program, weather, Controller, FLOW_COUNT_REALTIME_WINDOW},
     server::legacy::{utils, values::options::MqttConfigJson},
 };
 
@@ -40,10 +40,10 @@ pub struct Payload {
 }
 
 impl Payload {
-    pub fn new(open_sprinkler: &OpenSprinkler) -> Self {
+    pub fn new(open_sprinkler: &Controller) -> Self {
         let curr_time = chrono::Utc::now().timestamp();
 
-        let station_count = open_sprinkler.get_station_count();
+        let station_count = open_sprinkler.config.get_station_count();
 
         let mut ps = Vec::with_capacity(station_count);
 
@@ -74,7 +74,7 @@ impl Payload {
             }
         }
 
-        let mut sbits = Vec::with_capacity(open_sprinkler.get_board_count());
+        let mut sbits = Vec::with_capacity(open_sprinkler.config.get_board_count());
 
         for board_state in open_sprinkler.state.station.active {
             let mut b = 0;
@@ -84,8 +84,11 @@ impl Payload {
             sbits.push(b);
         }
 
+        // Calculate local time (UTC time plus time zone offset)
+        let devt = chrono::Utc::now().with_timezone(&chrono::FixedOffset::west(3600 / 4 * (open_sprinkler.config.timezone as i32 - 48)));
+
         Self {
-            devt: open_sprinkler.now_tz_seconds(),
+            devt: devt.timestamp(),
             nbrd: open_sprinkler.config.extension_board_count + 1,
             en: utils::bool_to_u8(open_sprinkler.config.enable_controller),
             sn1: utils::bool_to_u8(open_sprinkler.state.sensor.state(0)),
@@ -95,10 +98,10 @@ impl Payload {
             sunrise: open_sprinkler.config.sunrise_time,
             sunset: open_sprinkler.config.sunset_time,
             eip: open_sprinkler.state.external_ip,
-            lwc: open_sprinkler.state.weather.checkwt_lasttime.unwrap_or(-1),
-            lswc: open_sprinkler.state.weather.checkwt_success_lasttime.unwrap_or(-1),
+            lwc: open_sprinkler.state.weather.last_request_timestamp.unwrap_or(-1),
+            lswc: open_sprinkler.state.weather.last_request_success_timestamp.unwrap_or(-1),
             lupt: open_sprinkler.state.reboot_timestamp,
-            lrbtc: open_sprinkler.config.reboot_cause as u8,
+            lrbtc: open_sprinkler.state.last_reboot_cause as u8,
             lrun: if let Some(ref last_run) = open_sprinkler.state.program.queue.last_run {
                 [
                     last_run.station_index as i64,

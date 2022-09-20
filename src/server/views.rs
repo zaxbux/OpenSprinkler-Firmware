@@ -1,11 +1,7 @@
-use std::sync;
-
 use actix_web::{body::BoxBody, dev::ServiceResponse, http::header::ContentType, web, HttpResponse};
 
 use handlebars::Handlebars;
 use serde_json::json;
-
-use crate::opensprinkler::OpenSprinkler;
 
 /// Generic error handler.
 pub fn error<B>(res: &ServiceResponse<B>, error: &str) -> HttpResponse<BoxBody> {
@@ -17,17 +13,10 @@ pub fn error<B>(res: &ServiceResponse<B>, error: &str) -> HttpResponse<BoxBody> 
     let hb = request.app_data::<web::Data<Handlebars>>().map(|t| t.get_ref());
     match hb {
         Some(hb) => {
-            // @todo: use compiled firmware version (this code is just proof-of-concept)
-            let firmware_version = if let Some(open_sprinkler) = request.app_data::<web::Data<sync::Arc<sync::Mutex<OpenSprinkler>>>>() {
-                Some(open_sprinkler.lock().unwrap().config.firmware_version.to_string())
-            } else {
-                None
-            };
-
             let data = json!({
                 "error": error,
                 "status_code": res.status().as_str(),
-                "firmware_version": firmware_version
+                "firmware_version": semver::Version::parse(core::env!("CARGO_PKG_VERSION")).unwrap(),
             });
             let body = hb.render("error", &data);
 

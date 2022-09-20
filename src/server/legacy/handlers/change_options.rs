@@ -1,8 +1,8 @@
 use std::sync;
 
 use crate::{
-    opensprinkler::{config, sensor, station, weather, OpenSprinkler},
-    server::legacy::{self, error, values::options::MqttConfigJson},
+    opensprinkler::{config, sensor, station, weather, Controller},
+    server::legacy::{self, error, values::options::MqttConfigJson, FromLegacyFormat},
 };
 
 use actix_web::{web, Responder, Result};
@@ -187,7 +187,7 @@ pub struct ChangeOptionsRequest {
 }
 
 /// URI: `/co`
-pub async fn handler(open_sprinkler: web::Data<sync::Arc<sync::Mutex<OpenSprinkler>>>, parameters: web::Query<ChangeOptionsRequest>) -> Result<impl Responder> {
+pub async fn handler(open_sprinkler: web::Data<sync::Arc<sync::Mutex<Controller>>>, parameters: web::Query<ChangeOptionsRequest>) -> Result<impl Responder> {
     let mut open_sprinkler = open_sprinkler.lock().map_err(|_| error::InternalError::SyncError)?;
 
     let tracing_span = tracing::trace_span!("server_change_options");
@@ -258,6 +258,11 @@ pub async fn handler(open_sprinkler: web::Data<sync::Arc<sync::Mutex<OpenSprinkl
         let algorithm = uwt & !(1 << 7);
 
         let _restriction = ((uwt >> 7) & 1) != 0; // @todo
+
+        // @todo
+        /* if open_sprinkler.config.weather.algorithm.unwrap().get_id() as u8 != algorithm {
+            open_sprinkler.state.weather.request_update();
+        } */
 
         open_sprinkler.config.weather.set_algorithm(Some(algorithm));
         tracing::trace!("uwt: {}", uwt);
@@ -373,6 +378,10 @@ pub async fn handler(open_sprinkler: web::Data<sync::Arc<sync::Mutex<OpenSprinkl
 
     if let Some(ref location_str) = parameters.location {
         if let Ok(location) = config::Location::try_from(location_str.as_ref()) {
+            if open_sprinkler.config.location != location {
+                open_sprinkler.state.weather.request_update();
+            }
+
             open_sprinkler.config.location = location;
             tracing::trace!("loc: {}", location_str);
         } else {
@@ -382,34 +391,17 @@ pub async fn handler(open_sprinkler: web::Data<sync::Arc<sync::Mutex<OpenSprinkl
     }
 
     if let Some(ref wto) = parameters.weather_options {
-        open_sprinkler.config.weather.options = Some(wto.to_string());
+        let options = Some(wto.to_string());
+        if open_sprinkler.config.weather.options != options {
+            open_sprinkler.state.weather.request_update();
+        }
+
+        open_sprinkler.config.weather.options = options;
         tracing::trace!("wto: {}", wto);
     }
 
     if let Some(ife) = parameters.enable_ifttt_flags {
-        // Program scheduled
-        open_sprinkler.config.ifttt.events.program_start = (ife & 0b00000001) != 0;
-
-        // Sensor 1
-        open_sprinkler.config.ifttt.events.sensor1 = (ife & 0b00000010) != 0;
-
-        // Flow Sensor
-        open_sprinkler.config.ifttt.events.flow_sensor = (ife & 0b00000100) != 0;
-
-        // Weather update (IP or water scale change)
-        open_sprinkler.config.ifttt.events.weather_update = (ife & 0b00001000) != 0;
-
-        // Reboot
-        open_sprinkler.config.ifttt.events.reboot = (ife & 0b00010000) != 0;
-
-        // Station run
-        open_sprinkler.config.ifttt.events.station_off = (ife & 0b00100000) != 0;
-
-        // Sensor 2
-        open_sprinkler.config.ifttt.events.sensor2 = (ife & 0b01000000) != 0;
-
-        // Rain delay
-        open_sprinkler.config.ifttt.events.rain_delay = (ife & 0b10000000) != 0;
+        open_sprinkler.config.ifttt.events = config::EventsEnabled::from_legacy_format(ife);
 
         tracing::trace!("ife: {}", ife);
     }
@@ -431,6 +423,13 @@ pub async fn handler(open_sprinkler: web::Data<sync::Arc<sync::Mutex<OpenSprinkl
     if let Some(ttt) = parameters.set_time {
         let datetime = chrono::DateTime::<chrono::Utc>::from_utc(chrono::NaiveDateTime::from_timestamp(ttt as i64, 0), chrono::Utc);
         tracing::debug!("ttt: {}", datetime);
+    }
+
+    // if weather config has changed, reset state
+    if open_sprinkler.state.weather.last_request_timestamp == None {
+        open_sprinkler.config.set_water_scale(1.0);
+        open_sprinkler.state.weather.raw_data = None;
+        open_sprinkler.state.weather.last_response_code = Some(weather::ErrorCode::Unknown(-1));
     }
 
     Ok(error::ReturnErrorCode::Success)

@@ -1,4 +1,4 @@
-use crate::{opensprinkler::OpenSprinkler, server::legacy::error};
+use crate::{opensprinkler::Controller, server::legacy::error};
 
 use actix_web::{web, Responder, Result};
 use serde::Deserialize;
@@ -12,7 +12,7 @@ pub struct ProgramMoveUpRequest {
 }
 
 /// URI: `/up`
-pub async fn handler(open_sprinkler: web::Data<sync::Arc<sync::Mutex<OpenSprinkler>>>, parameters: web::Query<ProgramMoveUpRequest>) -> Result<impl Responder> {
+pub async fn handler(open_sprinkler: web::Data<sync::Arc<sync::Mutex<Controller>>>, parameters: web::Query<ProgramMoveUpRequest>) -> Result<impl Responder> {
     let mut open_sprinkler = open_sprinkler.lock().map_err(|_| error::InternalError::SyncError)?;
 
     // Validate program_index

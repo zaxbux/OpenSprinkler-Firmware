@@ -18,7 +18,6 @@ pub mod state;
 pub mod system;
 
 use std::cmp::max;
-use std::net::{self, ToSocketAddrs};
 use std::path::PathBuf;
 
 use crate::utils;
@@ -40,14 +39,14 @@ const SPECIAL_CMD_REBOOT_NOW: &'static str = ":>reboot_now";
 /// For computing real-time flow rate.
 pub const FLOW_COUNT_REALTIME_WINDOW: i64 = 30;
 
-pub struct OpenSprinkler {
+pub struct Controller {
     pub config: config::Config,
     pub state: state::ControllerState,
     gpio: Option<gpio::Gpio>,
     pub events: events::Events,
 }
 
-impl OpenSprinkler {
+impl Controller {
     pub fn new() -> Self {
         Self::default()
     }
@@ -71,7 +70,7 @@ impl OpenSprinkler {
 
         // Check reset conditions
         if let Ok(config) = self.config.read() {
-            if self.check_config(&config)? {
+            if config.check()? {
                 // Replace defaults with config from file.
                 self.config = config;
             }
@@ -83,28 +82,14 @@ impl OpenSprinkler {
         self.events.setup(&self.config);
 
         // Store the last reboot cause in memory and set the new cause
-        self.config.last_reboot_cause = self.config.reboot_cause;
+        self.state.last_reboot_cause = self.config.reboot_cause;
         self.config.reboot_cause = config::RebootCause::PowerOn;
         self.config.write()?;
 
         Ok(())
     }
 
-    fn check_config(&self, config: &config::Config) -> config::result::Result<bool> {
-        // @todo What about higher version numbers?
-        if config.firmware_version < self.config.firmware_version {
-            // @todo Migrate config based on existing version
-            tracing::debug!("Invalid firmware version: {:?}", config.firmware_version);
-            return Ok(false);
-        }
-
-        tracing::debug!("Config is OK");
-        Ok(true)
-    }
-
     /// Setup GPIO peripheral and pins
-    ///
-    /// @todo: Check hardware version and determine which GPIO peripheral to use.
     #[cfg(not(feature = "demo"))]
     fn setup_gpio(&mut self) {
         // Setup GPIO peripheral
@@ -150,68 +135,12 @@ impl OpenSprinkler {
     /// Starts the MQTT client if it is enabled, configured, and the network is connected.
 
     pub fn try_mqtt_connect(&self) {
-        if self.network_connected() && self.is_mqtt_enabled() && self.config.mqtt.uri().is_some() && !self.events.mqtt_client.is_connected() {
+        if self.network_connected() && self.config.is_mqtt_enabled() && self.config.mqtt.uri().is_some() && !self.events.mqtt_client.is_connected() {
             self.events.mqtt_client.connect(events::Events::mqtt_connect_options(&self.config.mqtt));
         }
     }
 
     // region: GETTERS
-
-    /// Get the uptime of the system
-    ///
-    /// Will return [None] if the uptime could not be obtained.
-    pub fn get_system_uptime() -> Option<std::time::Duration> {
-        #[cfg(unix)]
-        if let Ok(timespec) = nix::time::clock_gettime(nix::time::ClockId::CLOCK_MONOTONIC) {
-            return Some(std::time::Duration::from(timespec));
-        }
-
-        None
-    }
-    pub fn is_logging_enabled(&self) -> bool {
-        self.config.enable_log
-    }
-
-    pub fn is_mqtt_enabled(&self) -> bool {
-        self.config.mqtt.enabled
-    }
-
-    pub fn is_remote_extension(&self) -> bool {
-        self.config.enable_remote_ext_mode
-    }
-
-    /// Gets the weather service URL (with adjustment method)
-    pub fn get_weather_service_url(&self) -> Result<Option<reqwest::Url>, url::ParseError> {
-        if let Some(algorithm) = &self.config.weather.algorithm {
-            let mut url = url::Url::parse(&self.config.weather.service_url)?;
-            if let Ok(mut path_seg) = url.path_segments_mut() {
-                path_seg.push(&algorithm.get_id().to_string());
-            }
-            return Ok(Some(url));
-        }
-        return Ok(None);
-    }
-
-    pub fn get_water_scale(&self) -> f32 {
-        self.config.water_scale
-    }
-
-    pub fn get_sunrise_time(&self) -> u16 {
-        self.config.sunrise_time
-    }
-
-    pub fn get_sunset_time(&self) -> u16 {
-        self.config.sunset_time
-    }
-
-    /// Number of eight-zone station boards (including master controller)
-    pub fn get_board_count(&self) -> usize {
-        self.config.extension_board_count + 1
-    }
-
-    pub fn get_station_count(&self) -> usize {
-        self.get_board_count() * station::SHIFT_REGISTER_LINES
-    }
 
     pub fn is_station_running(&self, station_index: station::StationIndex) -> bool {
         /* let bid = station_index >> 3;
@@ -220,64 +149,14 @@ impl OpenSprinkler {
         self.state.station.is_active(station_index)
     }
 
-    pub fn get_sensor_type(&self, i: usize) -> Option<sensor::SensorType> {
-        self.config.sensors[i].sensor_type
-    }
-
-    pub fn get_sensor_normal_state(&self, i: usize) -> sensor::NormalState {
-        self.config.sensors[i].normal_state
-    }
-
-    pub fn get_sensor_on_delay(&self, i: usize) -> u8 {
-        self.config.sensors[i].delay_on
-    }
-
-    pub fn get_sensor_off_delay(&self, i: usize) -> u8 {
-        self.config.sensors[i].delay_off
-    }
-
-    pub fn get_flow_pulse_rate(&self) -> u16 {
-        self.config.flow_pulse_rate
-    }
-
-    /// Returns a master station
-    /// @todo move into [config::Config]
-    pub fn get_master_station(&self, i: usize) -> station::MasterStationConfig {
-        self.config.master_stations[i]
-    }
-
-    /// Returns the index (0-indexed) of a master station
-    /// @todo move into [config::Config]
-    pub fn get_master_station_index(&self, i: usize) -> Option<station::StationIndex> {
-        self.config.master_stations[i].station
-    }
-
-    /// @todo move into [config::Config]
-    pub fn is_master_station(&self, station_index: station::StationIndex) -> bool {
-        self.get_master_station_index(0) == Some(station_index) || self.get_master_station_index(1) == Some(station_index)
-    }
-
-    pub fn set_water_scale(&mut self, scale: f32) {
-        self.config.water_scale = scale;
-    }
-
     /// Update the weather service request success timestamp
     pub fn update_check_weather_success_timestamp(&mut self) {
-        self.state.weather.checkwt_success_lasttime = Some(chrono::Utc::now().timestamp());
-    }
-
-    pub fn get_flow_log_count(&self) -> i32 {
-        self.state.flow.get_flow_count() - self.state.flow.count_log_start
-    }
-
-    /// @todo move into [config::Config]
-    pub fn is_flow_sensor_enabled(&self) -> bool {
-        self.get_sensor_type(0) == Some(sensor::SensorType::Flow)
+        self.state.weather.last_request_success_timestamp = Some(chrono::Utc::now().timestamp());
     }
 
     /// Realtime flow count
     pub fn update_realtime_flow_count(&mut self, now_seconds: i64) {
-        if self.is_flow_sensor_enabled() && now_seconds % FLOW_COUNT_REALTIME_WINDOW == 0 {
+        if self.config.is_flow_sensor_enabled() && now_seconds % FLOW_COUNT_REALTIME_WINDOW == 0 {
             self.state.flow.count_realtime_now = max(0, self.state.flow.get_flow_count() - self.state.flow.count_realtime_start);
             self.state.flow.count_realtime_start = self.state.flow.get_flow_count();
         }
@@ -296,22 +175,11 @@ impl OpenSprinkler {
 
     fn program_pending_soon(&self, timestamp: i64) -> bool {
         for program in self.config.programs.iter() {
-            if program.check_match(self.get_sunrise_time() as i16, self.get_sunset_time() as i16, timestamp) {
+            if program.check_match(self.config.get_sunrise_time() as i16, self.config.get_sunset_time() as i16, timestamp) {
                 return true;
             }
         }
         return false;
-    }
-
-    // Calculate local time (UTC time plus time zone offset)
-    /* pub fn now_tz(&self) -> u64 {
-        let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
-        return now + 3600 / 4 * (self.iopts.tz - 48) as u64;
-    } */
-
-    pub fn now_tz_seconds(&self) -> i64 {
-        let now = chrono::Utc::now().timestamp();
-        return now + 3600 / 4 * (self.config.timezone as i64 - 48);
     }
 
     /// @todo Define primary interface e.g. `eth0` and check status (IFF_UP).
@@ -417,7 +285,6 @@ impl OpenSprinkler {
 
     /// Turn on a station
     pub fn turn_on_station(&mut self, station_index: station::StationIndex) {
-        // RAH implementation of flow sensor
         self.state.flow.reset();
 
         if self.state.station.set_active(station_index, true) == state::StationChange::Change(true) {
@@ -430,20 +297,19 @@ impl OpenSprinkler {
     ///
     /// Turns off a scheduled station, writes a log record, and pushes a notification event.
     pub fn turn_off_station(&mut self, now_seconds: i64, station_index: station::StationIndex) {
-        //open_sprinkler.set_station_bit(station_index, false);
         self.state.station.set_active(station_index, false);
 
         if let Some(qid) = self.state.program.queue.station_qid[station_index] {
             // ignore if we are turning off a station that is not running or is not scheduled to run
             if let Some(q) = self.state.program.queue.queue.get(qid) {
                 // RAH implementation of flow sensor
-                let flow_volume = if self.is_flow_sensor_enabled() { Some(self.state.flow.measure()) } else { None };
+                let flow_volume = if self.config.is_flow_sensor_enabled() { Some(self.state.flow.measure()) } else { None };
 
                 // check if the current time is past the scheduled start time,
                 // because we may be turning off a station that hasn't started yet
                 if now_seconds > q.start_time {
                     // record lastrun log (only for non-master stations)
-                    if !self.is_master_station(station_index) {
+                    if !self.config.is_master_station(station_index) {
                         let duration = now_seconds - q.start_time;
 
                         /* // log station run
@@ -502,11 +368,7 @@ impl OpenSprinkler {
                 tracing::error!("GPIO Error (SHIFT_REGISTER_DATA): {:?}", error);
             }
 
-            if shift_register_latch.is_ok() && shift_register_clock.is_ok() && shift_register_data.is_ok() {
-                let mut shift_register_latch = shift_register_latch.unwrap();
-                let mut shift_register_clock = shift_register_clock.unwrap();
-                let mut shift_register_data = shift_register_data.unwrap();
-
+            if let (Ok(mut shift_register_latch), Ok(mut shift_register_clock), Ok(mut shift_register_data)) = (shift_register_latch, shift_register_clock, shift_register_data) {
                 shift_register_latch.set_low();
 
                 // Shift out all station bit values from the highest bit to the lowest
@@ -555,9 +417,9 @@ impl OpenSprinkler {
             self.state.station.auto_refresh_timestamp = timestamp;
             self.state.station.auto_refresh_next_index = (self.state.station.auto_refresh_next_index + 1) % station::MAX_NUM_STATIONS;
             let board_index = self.state.station.auto_refresh_next_index >> 3;
-            let s = self.state.station.auto_refresh_next_index & 0x07;
+            let line = self.state.station.auto_refresh_next_index & 0x07;
             //self.switch_special_station(self.state.station.auto_refresh_next_index, (self.station_bits[board_index] >> s) & 0x01 != 0);
-            self.switch_special_station(self.state.station.auto_refresh_next_index, self.state.station.active[board_index][s]);
+            self.switch_special_station(self.state.station.auto_refresh_next_index, self.state.station.active[board_index][line]);
         }
     }
 
@@ -594,7 +456,7 @@ impl OpenSprinkler {
     /// @todo compare to original implementation
     #[cfg(not(feature = "demo"))]
     fn detect_sensor_status(&mut self, i: usize, now_seconds: i64) {
-        if let Some(sensor::SensorType::Rain) | Some(sensor::SensorType::Soil) = self.get_sensor_type(i) {
+        if let Some(sensor::SensorType::Rain) | Some(sensor::SensorType::Soil) = self.config.get_sensor_type(i) {
             self.state.sensor.set_detected(i, self.get_sensor_detected(i));
 
             if self.state.sensor.detected(i) {
@@ -604,7 +466,7 @@ impl OpenSprinkler {
                     }
                 } else {
                     // add minimum of 5 seconds on-delay
-                    self.state.sensor.set_timestamp_on(i, Some(max(self.get_sensor_on_delay(i) * 60, MINIMUM_ON_DELAY).into()));
+                    self.state.sensor.set_timestamp_on(i, Some(max(self.config.get_sensor_on_delay(i) * 60, MINIMUM_ON_DELAY).into()));
                     self.state.sensor.set_timestamp_off(i, Some(0));
                 }
             } else {
@@ -615,7 +477,7 @@ impl OpenSprinkler {
                 } else {
                     // add minimum of 5 seconds off-delay
                     self.state.sensor.set_timestamp_on(i, None);
-                    self.state.sensor.set_timestamp_off(i, Some(max(self.get_sensor_off_delay(i) * 60, MINIMUM_OFF_DELAY).into()));
+                    self.state.sensor.set_timestamp_off(i, Some(max(self.config.get_sensor_off_delay(i) * 60, MINIMUM_OFF_DELAY).into()));
                 }
             }
         }
@@ -697,7 +559,7 @@ impl OpenSprinkler {
     /// | [sensor::NormalState::Open]   | [true]             | [false]             |
     #[cfg(not(feature = "demo"))]
     fn get_sensor_detected(&self, i: usize) -> bool {
-        let normal_state = self.get_sensor_normal_state(i);
+        let normal_state = self.config.get_sensor_normal_state(i);
 
         if let Some(ref gpio) = self.gpio {
             let sensor = gpio.get(gpio::SENSOR[i]).and_then(|pin| Ok(pin.into_input()));
@@ -727,7 +589,7 @@ impl OpenSprinkler {
         let mut detected = false /* [false; sensor::MAX_SENSORS] */;
 
         for i in 0..sensor::MAX_SENSORS {
-            if self.get_sensor_type(i) == Some(sensor::SensorType::ProgramSwitch) {
+            if self.config.get_sensor_type(i) == Some(sensor::SensorType::ProgramSwitch) {
                 //self.status_current.sensors[i].detected = self.get_sensor_detected(i);
                 //self.sensor_status[i].detected = self.get_sensor_detected(i);
                 self.state.sensor.set_detected(i, self.get_sensor_detected(i));
@@ -753,17 +615,10 @@ impl OpenSprinkler {
         detected
     }
 
+    /// Reset all sensor states
+    ///
+    /// @todo call if sensor configuration is changed
     pub fn sensor_reset_all(&mut self) {
-        /*self.sensor_status = [sensor::SensorStatus::default(); sensor::MAX_SENSORS];
-
-        for i in 0..sensor::MAX_SENSORS {
-            self.status_last.sensors[i].active = false;
-            self.status_current.sensors[i].active = false;
-        } */
-
-        /* for i in 0..sensor::MAX_SENSORS {
-            self.sensor_status[i].reset();
-        } */
         self.state.sensor.reset(None);
     }
 
@@ -777,13 +632,13 @@ impl OpenSprinkler {
     ///
     /// This function iterates over all stations and activates the necessary "master" station.
     fn activate_master_station(&mut self, master_station: usize, now_seconds: i64) {
-        let config = self.get_master_station(master_station);
+        let config = self.config.get_master_station(master_station);
 
         if let Some(station_index_master) = config.station {
             let adjusted_on = config.get_adjusted_on_time();
             let adjusted_off = config.get_adjusted_off_time();
 
-            for station_index in 0..self.get_station_count() {
+            for station_index in 0..self.config.get_station_count() {
                 // skip if this is the master station
                 if station_index_master == station_index {
                     continue;
@@ -815,23 +670,23 @@ impl OpenSprinkler {
     /// Switch Radio Frequency (RF) station
     ///
     /// This function takes an RF code, parses it into signals and timing, and sends it out through the RF transmitter.
-    #[cfg(feature = "station-rf")]
     fn switch_rf_station(&mut self, data: station::RFStationData, value: bool) {
         let code = if value { data.on } else { data.off };
 
-        if let Err(ref error) = rf::send_rf_signal(self.gpio.as_ref(), code.into(), data.timing.into()) {
-            tracing::error!("[RF Station] Error: {:?}", error);
-        }
+        #[cfg(feature = "station-rf")]
+        match rf::send_rf_signal(self.gpio.as_ref(), code.into(), data.timing.into()) {
+            Ok(_) => {}
+            Err(ref error) => tracing::error!("[RF Station] Error: {:?}", error),
+        };
     }
 
     /// Switch GPIO station
     ///
     /// Special data for GPIO Station is three bytes of ascii decimal (not hex).
-    #[cfg(feature = "station-gpio")]
     fn switch_gpio_station(&self, data: station::GPIOStationData, value: bool) {
         tracing::trace!("[GPIO Station] pin: {} state: {}", data.pin, value);
 
-        #[cfg(not(feature = "demo"))]
+        #[cfg(all(not(feature = "demo"), feature = "station-gpio"))]
         if let Some(ref gpio) = self.gpio {
             let pin = gpio.get(data.pin).and_then(|pin| Ok(pin.into_output()));
 
@@ -892,10 +747,8 @@ impl OpenSprinkler {
     pub fn switch_special_station(&mut self, station_index: station::StationIndex, value: bool) {
         if let Some(station) = self.config.stations.get(station_index) {
             match station.station_type {
-                #[cfg(feature = "station-rf")]
                 station::StationType::RadioFrequency => self.switch_rf_station(station::RFStationData::try_from(station.sped.as_ref().unwrap()).unwrap(), value),
                 station::StationType::Remote => self.switch_remote_station(station::RemoteStationData::try_from(station.sped.as_ref().unwrap()).unwrap(), value),
-                #[cfg(feature = "station-gpio")]
                 station::StationType::GPIO => self.switch_gpio_station(station::GPIOStationData::try_from(station.sped.as_ref().unwrap()).unwrap(), value),
                 station::StationType::HTTP => self.switch_http_station(station::HTTPStationData::try_from(station.sped.as_ref().unwrap()).unwrap(), value),
                 _ => (), // Nothing to do for [StationType::Standard] and [StationType::Other]
@@ -903,13 +756,21 @@ impl OpenSprinkler {
         }
     }
 
-    pub fn get_available_gpio_pins(&self) {
-        // get free pins, minus pins used by firmware
-        todo!();
-    }
+    /// get free pins, minus pins used by firmware
+    pub fn get_available_gpio_pins(&self) -> Vec<u8> {
+        let mut free: Vec<u8> = Vec::new();
 
-    pub fn is_gpio_pin_used(&self, pin: &u8) -> bool {
-        gpio::GPIO_PINS_USED.contains(pin) || gpio::SENSOR.contains(pin)
+        if let Some(ref gpio) = self.gpio {
+            for pin in u8::MIN..u8::MAX {
+                if let Ok(_) = gpio.get(pin) {
+                    if !gpio::is_pin_reserved(&pin) {
+                        free.push(pin);
+                    }
+                }
+            }
+        }
+
+        free
     }
 
     /// "Factory Reset
@@ -956,49 +817,8 @@ impl OpenSprinkler {
         self.config.write().unwrap();
     }
 
-    /*/// Set station bit
-    ///
-    /// This function sets the corresponding station bit. [apply_all_station_bits()] must be called after to apply the bits (which results in physically actuating the valves).
-    pub fn set_station_bit(&mut self, station: station::StationIndex, active: bool) -> StationBitChange {
-        // Pointer to the station byte
-        //let data = self.station_bits[(station >> 3)];
-        let data = self.state.station.board(station);
-        // Mask
-        //let mask = 1 << (station & 0x07);
-        let board_index = station & 0x07;
-
-        if active == true {
-            //if (data & mask) == 1 {
-            if data[board_index] == active {
-                // If bit is already set, return "no change"
-                return StationBitChange::NoChange;
-            } else {
-                //self.station_bits[(station >> 3)] = data | mask;
-                self.state.station.set_active(station, active);
-                // Handle special stations
-                self.switch_special_station(station, active);
-                return StationBitChange::On;
-            }
-        } else {
-            //if (data & mask) == 0 {
-            if data[board_index] == active {
-                // If bit is already set, return "no change"
-                return StationBitChange::NoChange;
-            } else {
-                //self.station_bits[(station >> 3)] = data & !mask;
-                self.state.station.set_active(station, active);
-                // Handle special stations
-                self.switch_special_station(station, active);
-                return StationBitChange::Off;
-            }
-        }
-    } */
-
     /// Clear all station bits
     pub fn clear_all_station_bits(&mut self) {
-        /* for i in 0..station::MAX_NUM_STATIONS {
-            self.set_station_bit(i, false);
-        } */
         self.state.station.clear();
     }
 
@@ -1009,17 +829,17 @@ impl OpenSprinkler {
         // Determine which rain/soil sensors are currently active
         let mut sn = [false; sensor::MAX_SENSORS];
         for i in 0..sensor::MAX_SENSORS {
-            if let Some(sensor::SensorType::Rain) | Some(sensor::SensorType::Soil) = self.get_sensor_type(i) {
+            if let Some(sensor::SensorType::Rain) | Some(sensor::SensorType::Soil) = self.config.get_sensor_type(i) {
                 sn[i] = self.state.sensor.state(i);
             }
         }
 
-        for board_index in 0..self.get_board_count() {
+        for board_index in 0..self.config.get_board_count() {
             for line in 0..station::SHIFT_REGISTER_LINES {
                 let station_index = board_index * station::SHIFT_REGISTER_LINES + line;
 
                 // Ignore master stations because they are handled separately
-                if self.is_master_station(station_index) {
+                if self.config.is_master_station(station_index) {
                     continue;
                 }
 
@@ -1070,9 +890,9 @@ impl OpenSprinkler {
             self.push_event(&events::ProgramStartEvent::new(program_index.unwrap(), program.name, water_scale));
         }
 
-        for station_index in 0..self.get_station_count() {
+        for station_index in 0..self.config.get_station_count() {
             // skip if the station is a master station (because master cannot be scheduled independently
-            if self.is_master_station(station_index) {
+            if self.config.is_master_station(station_index) {
                 continue;
             }
 
@@ -1080,7 +900,7 @@ impl OpenSprinkler {
                 program::ProgramStartType::Test => 60.0,
                 program::ProgramStartType::TestShort => 2.0,
                 program::ProgramStartType::RunOnce => todo!(),
-                program::ProgramStartType::User => utils::water_time_resolve(program.durations[station_index], self.get_sunrise_time(), self.get_sunset_time()),
+                program::ProgramStartType::User => utils::water_time_resolve(program.durations[station_index], self.config.get_sunrise_time(), self.config.get_sunset_time()),
             };
 
             let water_time = water_time * water_scale;
@@ -1095,19 +915,9 @@ impl OpenSprinkler {
             self.schedule_all_stations(chrono::Utc::now().timestamp());
         }
     }
-
-    pub fn get_external_ip(&mut self) -> Result<Option<net::IpAddr>, stunclient::Error> {
-        if let Some(stun_server) = "openrelay.metered.ca:80".to_socket_addrs()?.filter(|x| x.is_ipv4()).next() {
-            let udp = net::UdpSocket::bind(net::SocketAddr::new(net::IpAddr::V4(net::Ipv4Addr::new(0, 0, 0, 0)), 0))?;
-            let client = stunclient::StunClient::new(stun_server);
-            return Ok(Some(client.query_external_address(&udp)?.ip()));
-        }
-
-        Ok(None)
-    }
 }
 
-impl Default for OpenSprinkler {
+impl Default for Controller {
     fn default() -> Self {
         Self {
             config: config::Config::default(),
@@ -1118,7 +928,7 @@ impl Default for OpenSprinkler {
     }
 }
 
-impl Drop for OpenSprinkler {
+impl Drop for Controller {
     fn drop(&mut self) {
         if self.events.mqtt_client.is_connected() {
             self.events

@@ -11,7 +11,7 @@ pub use settings::Payload as Settings;
 pub use stations::Payload as Stations;
 pub use status::Payload as Status;
 
-use crate::opensprinkler::OpenSprinkler;
+use crate::opensprinkler::Controller;
 
 #[derive(Serialize)]
 pub struct All {
@@ -23,7 +23,7 @@ pub struct All {
 }
 
 impl All {
-    pub fn new(open_sprinkler: &OpenSprinkler) -> Self {
+    pub fn new(open_sprinkler: &Controller) -> Self {
         Self {
             settings: Settings::new(open_sprinkler),
             options: Options::new(open_sprinkler),

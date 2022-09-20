@@ -3,7 +3,7 @@ use serde::Deserialize;
 use std::sync;
 
 use crate::{
-    opensprinkler::{program, station, OpenSprinkler},
+    opensprinkler::{program, station, Controller},
     server::legacy::{self, error},
 };
 
@@ -23,7 +23,7 @@ pub struct ChangeManualRequest {
 /// Test station.
 ///
 /// URI: `/cm`
-pub async fn handler(open_sprinkler: web::Data<sync::Arc<sync::Mutex<OpenSprinkler>>>, parameters: web::Query<ChangeManualRequest>) -> Result<impl Responder> {
+pub async fn handler(open_sprinkler: web::Data<sync::Arc<sync::Mutex<Controller>>>, parameters: web::Query<ChangeManualRequest>) -> Result<impl Responder> {
     let mut open_sprinkler = open_sprinkler.lock().map_err(|_| error::InternalError::SyncError)?;
 
     // validate station_index

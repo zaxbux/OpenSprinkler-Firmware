@@ -2,7 +2,7 @@ use std::sync;
 
 use actix_web::{dev::ServiceRequest, web, Error};
 
-use crate::opensprinkler::OpenSprinkler;
+use crate::opensprinkler::Controller;
 
 use self::{errors::AuthenticationError, extractors::DeviceKeyExtractor};
 
@@ -11,7 +11,7 @@ pub mod extractors;
 pub mod middleware;
 
 pub async fn validator(req: ServiceRequest, credentials: DeviceKeyExtractor) -> Result<ServiceRequest, Error> {
-    let device_key = if let Some(open_sprinkler) = req.app_data::<web::Data<sync::Arc<sync::Mutex<OpenSprinkler>>>>() {
+    let device_key = if let Some(open_sprinkler) = req.app_data::<web::Data<sync::Arc<sync::Mutex<Controller>>>>() {
         let open_sprinkler = open_sprinkler.lock().unwrap();
         Some(open_sprinkler.config.device_key.clone())
     } else {

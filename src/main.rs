@@ -10,7 +10,6 @@ include!(concat!(env!("OUT_DIR"), "/build_constants.rs"));
 use clap::Parser;
 use core::time;
 use std::{
-    convert::Infallible,
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc, Arc, Mutex,
@@ -18,11 +17,12 @@ use std::{
     thread,
 };
 use tracing_log::LogTracer;
-use tracing_subscriber::{fmt, prelude::*, EnvFilter, FmtSubscriber};
+use tracing_subscriber::FmtSubscriber;
+use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
-use opensprinkler::{events, weather, OpenSprinkler};
+use opensprinkler::{events, weather, Controller};
 
-use crate::opensprinkler::{config, scheduler};
+use crate::opensprinkler::{config, scheduler, system};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -83,7 +83,7 @@ fn main() {
     tracing::info!("MAX_EXT_BOARDS={}", constants::MAX_EXT_BOARDS);
     // endregion TRACING
 
-    let mut open_sprinkler = if let Some(config) = args.config { OpenSprinkler::with_config_path(config) } else { OpenSprinkler::new() };
+    let mut open_sprinkler = if let Some(config) = args.config { Controller::with_config_path(config) } else { Controller::new() };
 
     // Setup options
     if let Err(ref error) = open_sprinkler.setup() {
@@ -151,7 +151,7 @@ fn main() {
 
         // handle flow sensor using polling every 1ms (maximum freq 1/(2*1ms)=500Hz)
         #[cfg(not(feature = "demo"))]
-        if open_sprinkler.is_flow_sensor_enabled() {
+        if open_sprinkler.config.is_flow_sensor_enabled() {
             now_millis = chrono::Utc::now().timestamp_millis();
 
             if now_millis > last_millis {
@@ -185,7 +185,7 @@ fn main() {
                 scheduler::check_program_schedule(&mut open_sprinkler, now_seconds);
 
                 // STUN: Get external IP
-                if let Ok(Some(ip)) = open_sprinkler.get_external_ip() {
+                if let Ok(Some(ip)) = system::get_external_ip() {
                     if open_sprinkler.state.external_ip != Some(ip) {
                         open_sprinkler.state.external_ip = Some(ip);
                         tracing::trace!("External IP (STUN): {}", ip);

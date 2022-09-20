@@ -115,7 +115,7 @@ impl<'de> de::Deserialize<'de> for ProgramData {
 pub struct LegacyProgramFlags {
     pub enabled: bool,
     pub use_weather: bool,
-    pub odd_even: u8,
+    pub odd_even: program::DayRestriction,
     pub schedule_type: program::ProgramScheduleType,
     pub start_time_type: program::ProgramStartTime,
 }
@@ -125,7 +125,7 @@ impl From<&program::Program> for LegacyProgramFlags {
         Self {
             enabled: program.enabled,
             use_weather: program.use_weather,
-            odd_even: program.odd_even,
+            odd_even: program.odd_even.to_owned(),
             schedule_type: program.schedule_type.to_owned(),
             start_time_type: program.start_time_type.to_owned(),
         }
@@ -137,7 +137,13 @@ impl From<u8> for LegacyProgramFlags {
         Self {
             enabled: utils::get_bit_flag_bool(flag, 0),
             use_weather: utils::get_bit_flag_bool(flag, 1),
-            odd_even: utils::get_bit_flag(flag, 2, 0b11),
+            odd_even: match utils::get_bit_flag(flag, 2, 0b11) {
+                0 => program::DayRestriction::None,
+                1 => program::DayRestriction::Odd,
+                2 => program::DayRestriction::Even,
+                3 => program::DayRestriction::None,
+                _ => unreachable!("3 is the greatest value that can be represented by 2 bits"),
+            },
             schedule_type: match utils::get_bit_flag(flag, 4, 0b11) {
                 0 => program::ProgramScheduleType::Weekly,
                 1 => program::ProgramScheduleType::BiWeekly,
@@ -166,7 +172,15 @@ impl Into<u8> for LegacyProgramFlags {
             flags = utils::apply_bit_flag(flags, 1, 1);
         }
 
-        flags = utils::apply_bit_flag(flags, 2, self.odd_even);
+        flags = utils::apply_bit_flag(
+            flags,
+            2,
+            match self.odd_even {
+                program::DayRestriction::None => 0,
+                program::DayRestriction::Odd => 1,
+                program::DayRestriction::Even => 2,
+            },
+        );
 
         flags = utils::apply_bit_flag(
             flags,

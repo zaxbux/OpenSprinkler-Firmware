@@ -9,13 +9,19 @@ pub mod utils;
 pub mod values;
 pub mod views;
 
-pub use self::serde::ser;
 pub use self::serde::de;
+pub use self::serde::ser;
 
 pub trait IntoLegacyFormat {
     type Format;
 
     fn into_legacy_format(&self) -> Self::Format;
+}
+
+pub trait FromLegacyFormat {
+    type Format;
+
+    fn from_legacy_format(_: Self::Format) -> Self;
 }
 
 struct Error;

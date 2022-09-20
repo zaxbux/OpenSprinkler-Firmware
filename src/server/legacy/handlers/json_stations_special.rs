@@ -7,7 +7,7 @@ use actix_web::{web, Responder, Result};
 use serde::Serialize;
 
 use crate::{
-    opensprinkler::{station, OpenSprinkler},
+    opensprinkler::{station, Controller},
     server::legacy::{error, IntoLegacyFormat},
 };
 
@@ -57,13 +57,13 @@ impl TryInto<LegacyFormat> for station::Station {
 /// Get Special Station Data
 ///
 /// URI: `/je`
-pub async fn handler(open_sprinkler: web::Data<Arc<Mutex<OpenSprinkler>>>) -> Result<impl Responder> {
+pub async fn handler(open_sprinkler: web::Data<Arc<Mutex<Controller>>>) -> Result<impl Responder> {
     let open_sprinkler = open_sprinkler.lock().map_err(|_| error::InternalError::SyncError)?;
 
     // Format: JSON object where keys are the station index
     let mut special: HashMap<String, LegacyFormat> = HashMap::new();
 
-    for i in 0..open_sprinkler.get_station_count() {
+    for i in 0..open_sprinkler.config.get_station_count() {
         if let Some(station) = open_sprinkler.config.stations.get(i) {
             if station.station_type != station::StationType::Standard {
                 if let Ok(payload) = station.to_owned().try_into() {

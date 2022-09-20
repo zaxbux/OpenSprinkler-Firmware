@@ -4,9 +4,9 @@ use reqwest::StatusCode;
 use serde_json::json;
 use std::sync::{Arc, Mutex};
 
-use crate::opensprinkler::OpenSprinkler;
+use crate::opensprinkler::Controller;
 
-pub async fn index(hb: web::Data<Handlebars<'_>>, open_sprinkler: web::Data<Arc<Mutex<OpenSprinkler>>>) -> Result<impl Responder> {
+pub async fn index(hb: web::Data<Handlebars<'_>>, open_sprinkler: web::Data<Arc<Mutex<Controller>>>) -> Result<impl Responder> {
     let open_sprinkler = open_sprinkler.lock().unwrap();
 
     let data = json!({
@@ -19,7 +19,7 @@ pub async fn index(hb: web::Data<Handlebars<'_>>, open_sprinkler: web::Data<Arc<
     Ok(HttpResponse::build(StatusCode::OK).content_type(ContentType::html()).body(body))
 }
 
-pub async fn script_url(hb: web::Data<Handlebars<'_>>, open_sprinkler: web::Data<Arc<Mutex<OpenSprinkler>>>) -> Result<impl Responder> {
+pub async fn script_url(hb: web::Data<Handlebars<'_>>, open_sprinkler: web::Data<Arc<Mutex<Controller>>>) -> Result<impl Responder> {
     let open_sprinkler = open_sprinkler.lock().unwrap();
 
     let defaults = crate::config::Config::default();

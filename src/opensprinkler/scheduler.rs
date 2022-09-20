@@ -1,8 +1,8 @@
 use crate::utils;
 
-use super::{events, program, station, OpenSprinkler};
+use super::{events, program, station, Controller};
 
-pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, now_seconds: i64) {
+pub fn do_time_keeping(open_sprinkler: &mut Controller, now_seconds: i64) {
     // first, go through run time queue to assign queue elements to stations
     let mut qid = 0;
     for q in open_sprinkler.state.program.queue.queue.iter() {
@@ -21,14 +21,14 @@ pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, now_seconds: i64) {
         qid += 1;
     }
     // next, go through the stations and perform time keeping
-    for board_index in 0..open_sprinkler.get_board_count() {
+    for board_index in 0..open_sprinkler.config.get_board_count() {
         //let bitvalue = open_sprinkler.station_bits[board_index];
         let board_active = open_sprinkler.state.station.active[board_index];
         for s in 0..station::SHIFT_REGISTER_LINES {
             let station_index = board_index * 8 + s;
 
             // skip master station
-            if open_sprinkler.is_master_station(station_index) {
+            if open_sprinkler.config.is_master_station(station_index) {
                 continue;
             }
 
@@ -72,7 +72,7 @@ pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, now_seconds: i64) {
         let sequential_stop_time = (q.start_time + q.water_time) as i64;
         if sequential_stop_time > now_seconds {
             // only need to update last_seq_stop_time for sequential stations
-            if open_sprinkler.config.stations[station_index].attrib.is_sequential && !open_sprinkler.is_remote_extension() {
+            if open_sprinkler.config.stations[station_index].attrib.is_sequential && !open_sprinkler.config.is_remote_extension() {
                 open_sprinkler.state.program.queue.last_seq_stop_time = if sequential_stop_time > open_sprinkler.state.program.queue.last_seq_stop_time.unwrap_or(0) {
                     Some(sequential_stop_time)
                 } else {
@@ -92,9 +92,9 @@ pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, now_seconds: i64) {
         // reset program busy bit
         open_sprinkler.state.program.busy = false;
         // log flow sensor reading if flow sensor is used
-        if open_sprinkler.is_flow_sensor_enabled() {
+        if open_sprinkler.config.is_flow_sensor_enabled() {
             //open_sprinkler.write_log_message(data_log::FlowData::new(open_sprinkler.get_flow_log_count(), now_seconds));
-            let mut event = events::FlowSensorEvent::new(open_sprinkler.get_flow_log_count(), open_sprinkler.get_flow_pulse_rate());
+            let mut event = events::FlowSensorEvent::new(open_sprinkler.state.get_flow_log_count(), open_sprinkler.config.get_flow_pulse_rate());
 
             if let Some(timestamp_off) = open_sprinkler.state.sensor.timestamp_off(0) {
                 event.duration(chrono::Duration::seconds(now_seconds - timestamp_off));
@@ -106,14 +106,14 @@ pub fn do_time_keeping(open_sprinkler: &mut OpenSprinkler, now_seconds: i64) {
     }
 }
 
-pub fn check_program_schedule(open_sprinkler: &mut OpenSprinkler, now_seconds: i64) {
+pub fn check_program_schedule(open_sprinkler: &mut Controller, now_seconds: i64) {
     tracing::trace!("Checking program schedule");
     let mut match_found = false;
 
     // check through all programs
     let programs = open_sprinkler.config.programs.clone();
     for (program_index, program) in programs.iter().enumerate() {
-        if program.check_match(open_sprinkler.get_sunrise_time() as i16, open_sprinkler.get_sunset_time() as i16, now_seconds) {
+        if program.check_match(open_sprinkler.config.get_sunrise_time() as i16, open_sprinkler.config.get_sunset_time() as i16, now_seconds) {
             // program match found
             // check and process special program command
             if open_sprinkler.process_special_program_command(now_seconds, &program.name) {
@@ -123,16 +123,16 @@ pub fn check_program_schedule(open_sprinkler: &mut OpenSprinkler, now_seconds: i
             let water_scale = if program.use_weather { open_sprinkler.config.water_scale } else { 1.0 };
 
             // process all selected stations
-            for station_index in 0..open_sprinkler.get_station_count() {
+            for station_index in 0..open_sprinkler.config.get_station_count() {
                 // skip if the station is a master station (because master cannot be scheduled independently
-                if open_sprinkler.is_master_station(station_index) {
+                if open_sprinkler.config.is_master_station(station_index) {
                     continue;
                 }
 
                 // if station has non-zero water time and the station is not disabled
                 if program.durations[station_index] > 0 && !open_sprinkler.config.stations[station_index].attrib.is_disabled {
                     // water time is scaled by watering percentage
-                    let mut water_time = water_scale * utils::water_time_resolve(program.durations[station_index], open_sprinkler.get_sunrise_time(), open_sprinkler.get_sunset_time());
+                    let mut water_time = water_scale * utils::water_time_resolve(program.durations[station_index], open_sprinkler.config.get_sunrise_time(), open_sprinkler.config.get_sunset_time());
                     // if the program is set to use weather scaling
                     if program.use_weather {
                         if water_scale < 0.2 && water_time < 10.0 {

@@ -50,11 +50,11 @@ pub enum ProgramStartType {
 #[derive(PartialEq, Clone, Serialize, Deserialize)]
 pub enum ProgramStartTime {
     /// repeating (give start time, repeat every, number of repeats)
-    /// 
+    ///
     /// Legacy: `0`
     Repeating = 0,
     /// fixed start time (give arbitrary start times up to [MAX_NUM_STARTTIME]s)
-    /// 
+    ///
     /// Legacy: `1`
     Fixed = 1,
 }
@@ -68,6 +68,13 @@ pub enum ProgramScheduleType {
     Interval = 3,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum DayRestriction {
+    None,
+    Odd,
+    Even,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Program {
     /// Program enabled
@@ -75,13 +82,7 @@ pub struct Program {
     /// Weather data
     pub use_weather: bool,
     /// Odd/Even day restriction
-    ///
-    /// - `0` = No restriction
-    /// - `1` = Odd-day
-    /// - `2` = Even-day
-    ///
-    /// @todo Convert to Enum
-    pub odd_even: u8,
+    pub odd_even: DayRestriction,
     /// Schedule type
     pub schedule_type: ProgramScheduleType,
     /// Start time type
@@ -98,7 +99,7 @@ impl Program {
         Program {
             enabled: false,
             use_weather: false,
-            odd_even: 0,
+            odd_even: DayRestriction::None,
             schedule_type: ProgramScheduleType::Interval,
             start_time_type: ProgramStartTime::Fixed,
             days: [0, 0],
@@ -195,7 +196,7 @@ impl Program {
     /// Returns `true` if the odd/even restriction is satisfied
     /// @todo Test
     fn check_odd_even(&self, day: u32, month: u32) -> Option<bool> {
-        if self.odd_even == 1 {
+        if self.odd_even == DayRestriction::Odd {
             // Odd-numbered day restriction
 
             if day == 31 {
@@ -207,7 +208,7 @@ impl Program {
             }
 
             return Some((day % 2) == 1);
-        } else if self.odd_even == 2 {
+        } else if self.odd_even == DayRestriction::Even {
             // Even-numbered day restriction
 
             return Some((day % 2) == 0);
@@ -273,8 +274,8 @@ impl Default for Program {
         Self {
             enabled: false,
             use_weather: true,
-            odd_even: 0,
-            schedule_type: ProgramScheduleType::Weekly, // This default was chosen since it had a value of 0 in the original implementation
+            odd_even: DayRestriction::None,
+            schedule_type: ProgramScheduleType::Weekly,   // This default was chosen since it had a value of 0 in the original implementation
             start_time_type: ProgramStartTime::Repeating, // This default was chosen since it had a value of 0 in the original implementation
             days: [0, 0],
             start_times: [0i16; MAX_NUM_START_TIMES],
@@ -338,7 +339,6 @@ pub struct ProgramQueue {
     pub last_seq_stop_time: Option<i64>,
 }
 impl ProgramQueue {
-
     pub fn new() -> Self {
         ProgramQueue {
             queue: collections::VecDeque::new(),
@@ -352,7 +352,7 @@ impl ProgramQueue {
         self.last_seq_stop_time = None;
         self.station_qid = [None; station::MAX_NUM_STATIONS];
     }
-    
+
     /// this returns a pointer to the next available slot in the queue
     pub fn enqueue(&mut self, value: QueueElement) -> result::Result<Option<&mut QueueElement>> {
         if self.queue.len() < RUNTIME_QUEUE_SIZE {
@@ -401,41 +401,6 @@ impl ProgramQueue {
         for q in self.queue.iter_mut() {
             q.water_time = 0;
         }
-    }
-
-    /// Add a program
-    ///
-    /// @todo used by web server
-    pub fn add(&mut self, _program: Program) {
-        todo!();
-    }
-
-    /// Delete a program
-    ///
-    /// @todo used by web server
-    pub fn remove(&mut self, _index: usize) {
-        todo!();
-    }
-
-    /// Modify a program
-    ///
-    /// @todo used by web server
-    pub fn modify(&self, _index: usize, _value: Program) {
-        todo!();
-    }
-
-    /// Move a program up (i.e. swap a program with the one above it)
-    ///
-    /// @todo used by web server
-    pub fn move_up(&self, _index: usize) {
-        todo!();
-    }
-
-    /// Delete all programs
-    ///
-    /// @todo used by web server
-    pub fn erase_all(&mut self) {
-        todo!();
     }
 }
 

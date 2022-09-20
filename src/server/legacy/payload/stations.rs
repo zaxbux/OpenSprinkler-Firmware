@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::opensprinkler::{station, OpenSprinkler};
+use crate::opensprinkler::{station, Controller};
 
 const STATION_NAME_MAX_LEN: u8 = 32;
 
@@ -19,8 +19,8 @@ pub struct Payload {
 }
 
 impl Payload {
-    pub fn new(open_sprinkler: &OpenSprinkler) -> Self {
-        let station_count = open_sprinkler.get_station_count();
+    pub fn new(open_sprinkler: &Controller) -> Self {
+        let station_count = open_sprinkler.config.get_station_count();
 
         let mut snames = Vec::<String>::with_capacity(station_count);
         let mut masop = vec![0; station_count];

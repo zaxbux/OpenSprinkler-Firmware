@@ -6,12 +6,15 @@ use std::{
     fmt,
     fs::OpenOptions,
     io::{self, Write},
-    net::IpAddr,
     path::PathBuf,
     str::FromStr,
 };
 
-use crate::opensprinkler::events::{ifttt, mqtt};
+use crate::{
+    opensprinkler::events::{ifttt, mqtt},
+    server::legacy::{FromLegacyFormat, IntoLegacyFormat},
+    utils,
+};
 
 #[cfg(unix)]
 const CONFIG_FILE_PATH: &'static str = "/etc/opt/opensprinkler/config.dat";
@@ -51,7 +54,7 @@ impl Default for RebootCause {
     }
 }
 
-#[derive(Default, Clone, Serialize, Deserialize)]
+#[derive(Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Location {
     lat: f32,
     lng: f32,
@@ -113,6 +116,66 @@ pub struct EventsEnabled {
     pub station_on: bool,
 }
 
+impl FromLegacyFormat for EventsEnabled {
+    type Format = u8;
+
+    fn from_legacy_format(flags: Self::Format) -> Self {
+        Self {
+            program_start: utils::get_bit_flag_bool(flags, 0),
+            sensor1: utils::get_bit_flag_bool(flags, 1),
+            flow_sensor: utils::get_bit_flag_bool(flags, 2),
+            weather_update: utils::get_bit_flag_bool(flags, 3),
+            reboot: utils::get_bit_flag_bool(flags, 4),
+            station_off: utils::get_bit_flag_bool(flags, 5),
+            sensor2: utils::get_bit_flag_bool(flags, 6),
+            rain_delay: utils::get_bit_flag_bool(flags, 7),
+            station_on: false,
+        }
+    }
+}
+
+impl IntoLegacyFormat for EventsEnabled {
+    type Format = u8;
+
+    fn into_legacy_format(&self) -> Self::Format {
+        let mut flags = 0;
+
+        if self.program_start {
+            flags = utils::apply_bit_flag(flags, 0, 1);
+        }
+
+        if self.sensor1 {
+            flags = utils::apply_bit_flag(flags, 1, 1);
+        }
+
+        if self.flow_sensor {
+            flags = utils::apply_bit_flag(flags, 2, 1);
+        }
+
+        if self.weather_update {
+            flags = utils::apply_bit_flag(flags, 3, 1);
+        }
+
+        if self.reboot {
+            flags = utils::apply_bit_flag(flags, 4, 1);
+        }
+
+        if self.station_off {
+            flags = utils::apply_bit_flag(flags, 5, 1);
+        }
+
+        if self.sensor2 {
+            flags = utils::apply_bit_flag(flags, 6, 1);
+        }
+
+        if self.rain_delay {
+            flags = utils::apply_bit_flag(flags, 7, 1);
+        }
+
+        flags
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Config {
     /// firmware version
@@ -172,10 +235,6 @@ pub struct Config {
     /// Config path
     #[serde(skip)]
     path: PathBuf,
-
-    /// Cause of last reboot
-    #[serde(skip)]
-    pub last_reboot_cause: RebootCause,
 }
 
 impl Config {
@@ -212,6 +271,105 @@ impl Config {
         let buf = bson::to_vec(&Self::default())?;
         Ok(io::BufWriter::new(OpenOptions::new().write(true).create(true).truncate(true).open(&path)?).write_all(&buf)?)
     }
+
+    pub fn check(&self) -> result::Result<bool> {
+        // @todo What about higher version numbers?
+        if self.firmware_version < Config::default().firmware_version {
+            // @todo Migrate config based on existing version
+            tracing::debug!("Invalid firmware version: {:?}", self.firmware_version);
+            return Ok(false);
+        }
+
+        tracing::debug!("Config is OK");
+        Ok(true)
+    }
+
+    /// Returns a master station
+    pub fn get_master_station(&self, i: usize) -> station::MasterStationConfig {
+        self.master_stations[i]
+    }
+
+    /// Returns the index (0-indexed) of a master station
+    pub fn get_master_station_index(&self, i: usize) -> Option<station::StationIndex> {
+        self.master_stations[i].station
+    }
+
+    pub fn is_master_station(&self, station_index: station::StationIndex) -> bool {
+        self.get_master_station_index(0) == Some(station_index) || self.get_master_station_index(1) == Some(station_index)
+    }
+
+    pub fn is_logging_enabled(&self) -> bool {
+        self.enable_log
+    }
+
+    pub fn is_mqtt_enabled(&self) -> bool {
+        self.mqtt.enabled
+    }
+
+    pub fn is_remote_extension(&self) -> bool {
+        self.enable_remote_ext_mode
+    }
+
+    pub fn set_water_scale(&mut self, scale: f32) {
+        self.water_scale = scale;
+    }
+
+    pub fn get_water_scale(&self) -> f32 {
+        self.water_scale
+    }
+
+    /// Gets the weather service URL (with adjustment method)
+    pub fn get_weather_service_url(&self) -> Result<Option<reqwest::Url>, url::ParseError> {
+        if let Some(algorithm) = &self.weather.algorithm {
+            let mut url = url::Url::parse(&self.weather.service_url)?;
+            if let Ok(mut path_seg) = url.path_segments_mut() {
+                path_seg.push(&algorithm.get_id().to_string());
+            }
+            return Ok(Some(url));
+        }
+        return Ok(None);
+    }
+
+    pub fn get_sunrise_time(&self) -> u16 {
+        self.sunrise_time
+    }
+
+    pub fn get_sunset_time(&self) -> u16 {
+        self.sunset_time
+    }
+
+    /// Number of eight-zone station boards (including master controller)
+    pub fn get_board_count(&self) -> usize {
+        self.extension_board_count + 1
+    }
+
+    pub fn get_station_count(&self) -> usize {
+        self.get_board_count() * station::SHIFT_REGISTER_LINES
+    }
+
+    pub fn get_sensor_type(&self, i: usize) -> Option<sensor::SensorType> {
+        self.sensors[i].sensor_type
+    }
+
+    pub fn get_sensor_normal_state(&self, i: usize) -> sensor::NormalState {
+        self.sensors[i].normal_state
+    }
+
+    pub fn get_sensor_on_delay(&self, i: usize) -> u8 {
+        self.sensors[i].delay_on
+    }
+
+    pub fn get_sensor_off_delay(&self, i: usize) -> u8 {
+        self.sensors[i].delay_off
+    }
+
+    pub fn get_flow_pulse_rate(&self) -> u16 {
+        self.flow_pulse_rate
+    }
+
+    pub fn is_flow_sensor_enabled(&self) -> bool {
+        self.get_sensor_type(0) == Some(sensor::SensorType::Flow)
+    }
 }
 
 impl Default for Config {
@@ -246,7 +404,6 @@ impl Default for Config {
 
             /* Fields that are never serialized/deserialized */
             path: PathBuf::from_str(CONFIG_FILE_PATH).unwrap(),
-            last_reboot_cause: RebootCause::None,
         }
     }
 }

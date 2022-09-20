@@ -4,7 +4,7 @@ use actix_web::{web, Responder, Result};
 use serde::Deserialize;
 
 use crate::{
-    opensprinkler::{program, OpenSprinkler},
+    opensprinkler::{program, Controller},
     server::legacy::{
         self, error,
         values::programs::{LegacyProgramFlags, ProgramData},
@@ -32,7 +32,7 @@ pub struct ChangeProgramRequest {
 }
 
 /// URI: `/cp`
-pub async fn handler(open_sprinkler: web::Data<sync::Arc<sync::Mutex<OpenSprinkler>>>, parameters: web::Query<ChangeProgramRequest>) -> Result<impl Responder> {
+pub async fn handler(open_sprinkler: web::Data<sync::Arc<sync::Mutex<Controller>>>, parameters: web::Query<ChangeProgramRequest>) -> Result<impl Responder> {
     let mut open_sprinkler = open_sprinkler.lock().map_err(|_| error::InternalError::SyncError)?;
 
     // validate program_index
@@ -137,7 +137,7 @@ mod tests {
         let program = program::Program {
             enabled: true,
             use_weather: true,
-            odd_even: 0,
+            odd_even: program::DayRestriction::None,
             schedule_type: program::ProgramScheduleType::Weekly,
             start_time_type: program::ProgramStartTime::Repeating,
             days: [127, 0],

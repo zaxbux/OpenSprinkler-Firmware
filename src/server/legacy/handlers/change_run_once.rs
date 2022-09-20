@@ -1,5 +1,5 @@
 use crate::{
-    opensprinkler::{program, OpenSprinkler},
+    opensprinkler::{program, Controller},
     server::legacy::{self, error},
     utils,
 };
@@ -15,7 +15,7 @@ pub struct ChangeRunOnceRequest {
 }
 
 /// URI: `/cr`
-pub async fn handler(open_sprinkler: web::Data<sync::Arc<sync::Mutex<OpenSprinkler>>>, parameters: web::Query<ChangeRunOnceRequest>) -> Result<impl Responder> {
+pub async fn handler(open_sprinkler: web::Data<sync::Arc<sync::Mutex<Controller>>>, parameters: web::Query<ChangeRunOnceRequest>) -> Result<impl Responder> {
     let mut open_sprinkler = open_sprinkler.lock().map_err(|_| error::InternalError::SyncError)?;
 
     // reset all stations and prepare to run one-time program
@@ -25,7 +25,7 @@ pub async fn handler(open_sprinkler: web::Data<sync::Arc<sync::Mutex<OpenSprinkl
     let sunrise_time = open_sprinkler.config.sunrise_time;
     let sunset_time = open_sprinkler.config.sunset_time;
 
-    for station_index in 0..open_sprinkler.get_station_count() {
+    for station_index in 0..open_sprinkler.config.get_station_count() {
         let water_time = parameters.times[station_index];
 
         if water_time > 0 && !open_sprinkler.config.stations[station_index].attrib.is_disabled {

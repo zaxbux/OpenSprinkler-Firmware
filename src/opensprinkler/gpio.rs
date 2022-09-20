@@ -1,5 +1,5 @@
-pub use rppal::gpio::{Gpio, Level};
 use super::sensor;
+pub use rppal::gpio::{Gpio, Level};
 
 /// Shift register **OE** (output enable) pin
 pub const SHIFT_REGISTER_OE: u8 = 17;
@@ -15,10 +15,8 @@ pub const SENSOR: [u8; sensor::MAX_SENSORS] = [14, 23];
 /// #[cfg(feature = "station-rf")]
 pub const RF_TX: u8 = 15;
 
-pub const GPIO_PINS_USED: [u8; 5] = [
-    SHIFT_REGISTER_OE,
-    SHIFT_REGISTER_LATCH,
-    SHIFT_REGISTER_CLOCK,
-    SHIFT_REGISTER_DATA,
-    RF_TX,
-];
+pub const GPIO_PINS_USED: [u8; 5] = [SHIFT_REGISTER_OE, SHIFT_REGISTER_LATCH, SHIFT_REGISTER_CLOCK, SHIFT_REGISTER_DATA, RF_TX];
+
+pub fn is_pin_reserved(pin: &u8) -> bool {
+    GPIO_PINS_USED.contains(pin) || SENSOR.contains(pin)
+}

@@ -7,11 +7,11 @@ use std::sync::{mpsc, Arc, Mutex};
 use actix_web::{dev::ServerHandle, middleware, web, App, HttpServer};
 use handlebars::Handlebars;
 
-use crate::opensprinkler::OpenSprinkler;
+use crate::opensprinkler::Controller;
 
 //pub type OpenSprinklerMutex = web::Data<Arc<Mutex<OpenSprinkler>>>;
 
-pub async fn run_app(tx: mpsc::Sender<ServerHandle>, open_sprinkler: Arc<Mutex<OpenSprinkler>>) -> std::io::Result<()> {
+pub async fn run_app(tx: mpsc::Sender<ServerHandle>, open_sprinkler: Arc<Mutex<Controller>>) -> std::io::Result<()> {
     // Handlebars uses a repository for the compiled templates. This object must be
     // shared between the application threads, and is therefore passed to the
     // Application Builder as an atomic reference-counted pointer.

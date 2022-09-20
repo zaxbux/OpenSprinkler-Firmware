@@ -4,7 +4,7 @@ use actix_web::{web, Responder, Result};
 
 use serde::{de, Deserialize, Deserializer};
 
-use crate::{opensprinkler::OpenSprinkler, server::legacy::error};
+use crate::{opensprinkler::Controller, server::legacy::error};
 
 enum DeleteLogDay {
     All,
@@ -28,7 +28,7 @@ pub struct DeleteLogsRequest {
     day: DeleteLogDay,
 }
 
-pub async fn handler(open_sprinkler: web::Data<sync::Arc<sync::Mutex<OpenSprinkler>>>, parameters: web::Query<DeleteLogsRequest>) -> Result<impl Responder> {
+pub async fn handler(open_sprinkler: web::Data<sync::Arc<sync::Mutex<Controller>>>, parameters: web::Query<DeleteLogsRequest>) -> Result<impl Responder> {
     let open_sprinkler = open_sprinkler.lock().map_err(|_| error::InternalError::SyncError)?;
 
     // delete log

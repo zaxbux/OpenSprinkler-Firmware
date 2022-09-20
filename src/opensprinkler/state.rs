@@ -1,6 +1,6 @@
 use std::net::IpAddr;
 
-use super::{gpio, program, sensor, station, weather};
+use super::{config::RebootCause, gpio, program, sensor, station, weather};
 
 pub type StationBits = [bool; station::SHIFT_REGISTER_LINES];
 
@@ -35,6 +35,7 @@ impl StationState {
         self.active[board][board_index]
     }
 
+    /// Sets the corresponding station bit. [apply_all_station_bits()] must be called after to apply the bits (which results in physically actuating the valves).
     pub fn set_active(&mut self, station_index: station::StationIndex, active: bool) -> StationChange {
         if self.is_active(station_index) == active {
             return StationChange::NoChange;
@@ -370,10 +371,10 @@ impl Default for FlowState {
 #[derive(Default)]
 pub struct WeatherState {
     /// time when weather was checked (seconds)
-    pub checkwt_lasttime: Option<i64>,
+    pub last_request_timestamp: Option<i64>,
 
     /// time when weather check was successful (seconds)
-    pub checkwt_success_lasttime: Option<i64>,
+    pub last_request_success_timestamp: Option<i64>,
 
     /// Result of the most recent request to the weather service
     pub last_response_code: Option<weather::ErrorCode>,
@@ -383,6 +384,10 @@ pub struct WeatherState {
 }
 
 impl WeatherState {
+    pub fn request_update(&mut self) {
+        self.last_request_timestamp = None;
+    }
+
     pub fn last_response_was_successful(&self) -> bool {
         self.last_response_code == Some(weather::ErrorCode::Success)
     }
@@ -403,11 +408,20 @@ pub struct ControllerState {
     /// When the process was started
     pub startup_time: chrono::DateTime<chrono::Utc>,
 
+    /// Cause of last reboot
+    pub last_reboot_cause: RebootCause,
+
     /// A safe reboot has been requested
     pub reboot_request: bool,
 
     /// Timestamp to reboot
     pub reboot_timestamp: i64,
+}
+
+impl ControllerState {
+    pub fn get_flow_log_count(&self) -> i32 {
+        self.flow.get_flow_count() - self.flow.count_log_start
+    }
 }
 
 impl Default for ControllerState {
@@ -421,6 +435,7 @@ impl Default for ControllerState {
             external_ip: None,
             weather: WeatherState::default(),
             startup_time: chrono::Utc::now(),
+            last_reboot_cause: RebootCause::None,
             reboot_request: false,
             reboot_timestamp: 0,
         }

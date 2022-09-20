@@ -1,5 +1,5 @@
 use crate::{
-    opensprinkler::{program, OpenSprinkler},
+    opensprinkler::{program, Controller},
     server::legacy::{self, error},
 };
 
@@ -18,7 +18,7 @@ pub struct ManualProgramRequest {
 }
 
 /// URI: `/mp`
-pub async fn handler(open_sprinkler: web::Data<sync::Arc<sync::Mutex<OpenSprinkler>>>, parameters: web::Query<ManualProgramRequest>) -> Result<impl Responder> {
+pub async fn handler(open_sprinkler: web::Data<sync::Arc<sync::Mutex<Controller>>>, parameters: web::Query<ManualProgramRequest>) -> Result<impl Responder> {
     let mut open_sprinkler = open_sprinkler.lock().map_err(|_| error::InternalError::SyncError)?;
 
     // Validate program_index

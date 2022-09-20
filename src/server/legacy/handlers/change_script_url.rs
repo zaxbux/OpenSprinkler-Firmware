@@ -1,4 +1,4 @@
-use crate::{opensprinkler::OpenSprinkler, server::legacy::error};
+use crate::{opensprinkler::Controller, server::legacy::error};
 
 use actix_web::{http, web, HttpResponse, Responder, Result};
 use serde::Deserialize;
@@ -15,7 +15,7 @@ pub struct ChangeScriptUrlRequest {
 }
 
 /// URI: `/cu`
-pub async fn handler(open_sprinkler: web::Data<sync::Arc<sync::Mutex<OpenSprinkler>>>, params: web::Query<ChangeScriptUrlRequest>) -> Result<impl Responder> {
+pub async fn handler(open_sprinkler: web::Data<sync::Arc<sync::Mutex<Controller>>>, params: web::Query<ChangeScriptUrlRequest>) -> Result<impl Responder> {
     let mut open_sprinkler = open_sprinkler.lock().map_err(|_| error::InternalError::SyncError)?;
 
     if let Some(ref js_url) = params.jsp {

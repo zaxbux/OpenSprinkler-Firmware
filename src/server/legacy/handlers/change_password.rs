@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use actix_web::{web, Responder, Result};
 use serde::Deserialize;
 
-use crate::{opensprinkler::OpenSprinkler, server::legacy::error};
+use crate::{opensprinkler::Controller, server::legacy::error};
 
 #[derive(Debug, Deserialize)]
 pub struct ChangePasswordRequest {
@@ -18,7 +18,7 @@ pub struct ChangePasswordRequest {
 /// Change Password
 ///
 /// URI: `/sp`
-pub async fn handler(_open_sprinkler: web::Data<Arc<Mutex<OpenSprinkler>>>, _params: web::Query<ChangePasswordRequest>) -> Result<impl Responder> {
+pub async fn handler(_open_sprinkler: web::Data<Arc<Mutex<Controller>>>, _params: web::Query<ChangePasswordRequest>) -> Result<impl Responder> {
     // Prohibit password changes for Demo
     #[cfg(not(feature = "demo"))]
     {

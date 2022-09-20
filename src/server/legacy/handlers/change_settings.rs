@@ -4,7 +4,7 @@ use actix_web::{web, Responder, Result};
 use serde::Deserialize;
 
 use crate::{
-    opensprinkler::{config::RebootCause, OpenSprinkler},
+    opensprinkler::{config::RebootCause, Controller},
     server::legacy::{self, error},
 };
 
@@ -47,7 +47,7 @@ impl Default for ChangeVariablesRequest {
 }
 
 /// URI: `/cv`
-pub async fn handler(open_sprinkler: web::Data<Arc<Mutex<OpenSprinkler>>>, parameters: web::Query<ChangeVariablesRequest>) -> Result<impl Responder> {
+pub async fn handler(open_sprinkler: web::Data<Arc<Mutex<Controller>>>, parameters: web::Query<ChangeVariablesRequest>) -> Result<impl Responder> {
     let mut open_sprinkler = open_sprinkler.lock().map_err(|_| error::InternalError::SyncError)?;
 
     if parameters.reset_stations {

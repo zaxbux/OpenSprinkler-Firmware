@@ -1,6 +1,9 @@
 use serde::Serialize;
 
-use crate::opensprinkler::{sensor, OpenSprinkler, station};
+use crate::{
+    opensprinkler::{sensor, station, Controller},
+    server::legacy::IntoLegacyFormat,
+};
 
 #[derive(Debug, Serialize)]
 pub struct Payload {
@@ -45,7 +48,7 @@ pub struct Payload {
 }
 
 impl Payload {
-    pub fn new(open_sprinkler: &OpenSprinkler) -> Self {
+    pub fn new(open_sprinkler: &Controller) -> Self {
         let web_port: u16 = 0;
 
         // Convert [u16] HTTP port to legacy encoded format
@@ -65,7 +68,7 @@ impl Payload {
             mas: open_sprinkler.config.master_stations[0].station.and_then(|i| Some(i + 1)).unwrap_or(0) as u8,
             mton: open_sprinkler.config.master_stations[0].get_adjusted_on_time() as u8,
             mtof: open_sprinkler.config.master_stations[0].get_adjusted_off_time() as u8,
-            wl: (open_sprinkler.get_water_scale() * 100.0) as u8,
+            wl: (open_sprinkler.config.get_water_scale() * 100.0) as u8,
             den: if open_sprinkler.config.enable_controller { 1 } else { 0 },
             uwt: open_sprinkler.config.weather.algorithm.as_ref().and_then(|algo| Some(algo.get_id() as u8)).unwrap_or_else(|| 0),
             lg: if open_sprinkler.config.enable_log { 1 } else { 0 },
@@ -76,7 +79,7 @@ impl Payload {
             fpr1,
             re: if open_sprinkler.config.enable_remote_ext_mode { 1 } else { 0 },
             sar: if open_sprinkler.config.enable_special_stn_refresh { 1 } else { 0 },
-            ife: 0, // @todo
+            ife: open_sprinkler.config.ifttt.events.into_legacy_format(),
             sn1t: open_sprinkler.config.sensors[0].sensor_type.unwrap_or(sensor::SensorType::None) as u8,
             sn1o: open_sprinkler.config.sensors[0].normal_state as u8,
             sn1on: open_sprinkler.config.sensors[0].delay_on,

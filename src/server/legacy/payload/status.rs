@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::opensprinkler::OpenSprinkler;
+use crate::opensprinkler::Controller;
 
 #[derive(Serialize)]
 pub struct Payload {
@@ -9,8 +9,8 @@ pub struct Payload {
 }
 
 impl Payload {
-    pub fn new(open_sprinkler: &OpenSprinkler) -> Self {
-        let nstations = open_sprinkler.get_station_count();
+    pub fn new(open_sprinkler: &Controller) -> Self {
+        let nstations = open_sprinkler.config.get_station_count();
 
         let mut sn: Vec<u8> = Vec::with_capacity(nstations);
 

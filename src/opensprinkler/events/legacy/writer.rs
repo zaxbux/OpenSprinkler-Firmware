@@ -1,11 +1,15 @@
-use std::{path::PathBuf, fs, io::{self, Seek, Write}};
+use std::{
+    fs,
+    io::{self, Seek, Write},
+    path::PathBuf,
+};
 
-use crate::opensprinkler::{OpenSprinkler};
+use crate::opensprinkler::Controller;
 
 use super::LogEvent;
 
-pub fn write_log(open_sprinkler: &OpenSprinkler, event: impl LogEvent) -> io::Result<()> {
-    if !open_sprinkler.is_logging_enabled() {
+pub fn write_log(open_sprinkler: &Controller, event: impl LogEvent) -> io::Result<()> {
+    if !open_sprinkler.config.is_logging_enabled() {
         return Ok(());
     }
 

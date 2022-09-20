@@ -1,36 +1,40 @@
-use std::{sync, fs, io::{self, BufRead}};
+use std::{
+    fs,
+    io::{self, BufRead},
+    sync,
+};
 
-use actix_web::{web, Responder, Result, HttpResponse, Error, HttpRequest};
+use actix_web::{web, Error, HttpRequest, HttpResponse, Responder, Result};
 
 use serde::Deserialize;
 
-use crate::{opensprinkler::OpenSprinkler, server::legacy::error};
+use crate::{opensprinkler::Controller, server::legacy::error};
 
 #[derive(Deserialize)]
 #[serde(default)]
 pub struct JsonLogRequest {
     /// Filter log record type
-    /// 
+    ///
     /// Can be one of: `s1`, `rd`, `wl`, `fl`, `s2`, `cu`
-    /// 
+    ///
     /// If not provided, all records will be returned (excluding "wl" and "fl")
     #[serde(rename = "type")]
     filter_type: Option<String>,
     /// History (past *N* days)
-    /// 
+    ///
     /// If set, `start` and `end` are ignored.
-    /// 
+    ///
     /// Range: \[`0`, `365`\]
     #[serde(rename = "hist")]
     days: Option<u64>,
     /// Start (UTC timestamp)
-    /// 
+    ///
     /// Unit: seconds
     start: Option<u64>,
     /// End (UTC timestamp)
-    /// 
+    ///
     /// Unit: seconds
-    /// 
+    ///
     /// Must be a timestamp greater than `start`.
     end: Option<u64>,
 }
@@ -47,9 +51,9 @@ impl Default for JsonLogRequest {
 }
 
 /// URI: `/jl`
-/// 
-/// 
-pub async fn handler(open_sprinkler: web::Data<sync::Arc<sync::Mutex<OpenSprinkler>>>, parameters: web::Query<JsonLogRequest>, req: HttpRequest) -> Result<impl Responder> {
+///
+///
+pub async fn handler(open_sprinkler: web::Data<sync::Arc<sync::Mutex<Controller>>>, parameters: web::Query<JsonLogRequest>, req: HttpRequest) -> Result<impl Responder> {
     let open_sprinkler = open_sprinkler.lock().map_err(|_| error::InternalError::SyncError)?;
 
     let (start, end) = if let Some(days) = parameters.days {
@@ -107,7 +111,7 @@ pub async fn handler(open_sprinkler: web::Data<sync::Arc<sync::Mutex<OpenSprinkl
                 yield Ok::<web::Bytes, Error>(byte)
             }
 
-            
+
 
             /* match serde_json::to_string(&task) {
                 Ok(task) => {
@@ -124,7 +128,5 @@ pub async fn handler(open_sprinkler: web::Data<sync::Arc<sync::Mutex<OpenSprinkl
         yield Ok::<web::Bytes, Error>(byte);
     };
 
-    Ok(HttpResponse::Ok()
-        .content_type("application/json")
-        .streaming(Box::pin(stream_log)))
+    Ok(HttpResponse::Ok().content_type("application/json").streaming(Box::pin(stream_log)))
 }
