@@ -318,7 +318,7 @@ impl OpenSprinkler {
     pub fn network_connected(&self) -> bool {
         if cfg!(not(feature = "demo")) {
             #[cfg(target_os = "linux")]
-            return system::is_interface_online("eth0");
+            return system::is_interface_online("eth0").unwrap_or(false);
         }
 
         return true;
@@ -513,11 +513,11 @@ impl OpenSprinkler {
                 for board_index in 0..station::MAX_EXT_BOARDS {
                     //let sbits = if self.config.enable_controller { self.station_bits[station::MAX_EXT_BOARDS - board_index] } else { 0 };
                     let sbits = match self.config.enable_controller {
-                        false => [false; controller::SHIFT_REGISTER_LINES],
+                        false => [false; station::SHIFT_REGISTER_LINES],
                         true => self.state.station.active[station::MAX_EXT_BOARDS - board_index],
                     };
 
-                    for s in 0..controller::SHIFT_REGISTER_LINES {
+                    for s in 0..station::SHIFT_REGISTER_LINES {
                         shift_register_clock.set_low();
 
                         //if sbits & (1 << (7 - s)) != 0 {
@@ -636,7 +636,7 @@ impl OpenSprinkler {
                     /*let message = data_log::SensorData::new(i, now_seconds);
                     self.write_log_message(message, now_seconds);*/
                 }
-                self.push_event(events::BinarySensorEvent::new(i, self.state.sensor.state(i), now_seconds, self.state.sensor.timestamp_activated(i)));
+                self.push_event(&events::BinarySensorEvent::new(i, self.state.sensor.state(i), now_seconds, self.state.sensor.timestamp_activated(i)));
             }
             self.state.sensor.set_state_equal(i);
         }
@@ -653,7 +653,7 @@ impl OpenSprinkler {
         for i in 0..sensor::MAX_SENSORS {
             if self.config.programs.len() > i {
                 // Program switch sensors start the same program index
-                self.manual_start_program(self, program::ProgramStart::User(i), false);
+                self.manual_start_program(Some(i), program::ProgramStartType::User, false);
             }
         }
     }
